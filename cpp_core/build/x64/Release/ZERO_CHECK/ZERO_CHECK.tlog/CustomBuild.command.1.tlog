@@ -1,0 +1,10 @@
+^D:\PROJECT\ZEERAY_AMBILIGHT\CPP_CORE\BUILD\CMAKEFILES\92CD0D6C5E42977A825027A58DA814B8\GENERATE.STAMP.RULE
+setlocal
+"D:\Program Files\CMake\bin\cmake.exe" -SD:/Project/zeeray_ambilight/cpp_core -BD:/Project/zeeray_ambilight/cpp_core/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file D:/Project/zeeray_ambilight/cpp_core/build/ZeerayCore.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,3 @@
+D:/Project/zeeray_ambilight/cpp_core/build/CMakeFiles/zeeray_core.dir
+D:/Project/zeeray_ambilight/cpp_core/build/CMakeFiles/ALL_BUILD.dir
+D:/Project/zeeray_ambilight/cpp_core/build/CMakeFiles/ZERO_CHECK.dir
