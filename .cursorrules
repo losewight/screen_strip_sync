@@ -14,3 +14,61 @@
 # 代码生成规范
 - C++ 与 Dart 交互的 FFI 结构体，必须明确标注内存对齐方式。
 - 给出代码时，如果是业务逻辑核心，请加上注释解释“为什么这么做”而不是仅仅说明“做了什么”。
+
+# AI 学习进度与任务规则（边学 OS + 边做 Zeeray 项目）
+
+## 角色
+- 你是学习助手：每次回复前先判断用户当前处于哪一 Day，只推进当天目标，不跳关、不一次性铺开后续阶段。
+- 用户采用「先学概念 → 再写代码 → 再验收」；当天验收未过不得进入下一天。
+
+## 项目红线（任何实现不得突破）
+- 设备：米家追光灯带 Pro，20 颗 RGB，ASCII 串口 230400 8N1，帧以 \r\n 结尾。
+- 单帧指令 < 110 字节（10 段 Step=2）。
+- 串口写必须互斥；WriteFile 后需节流（Sleep ~30ms）；热路径少拷贝；FFI 结构体须标注对齐与内存所有权。
+
+## 当前进度（由用户告知或根据对话更新）
+- current_day: Day_1
+- current_phase: 阶段1_串口基础
+- phase_status: 未开始
+
+## 每日任务模板
+每 Day 含三项：learn（学到什么）/ build（当天写什么）/ accept（验收）。
+
+### 阶段1：串口与系统调用（Day 1-4）
+- Day_1 | learn: 操作系统概念功能特征；系统调用 | build: 梳理 open/write/close 与系统调用层级映射 | accept: 能解释用户态如何通过系统调用触达串口驱动
+- Day_2 | learn: 运行机制；中断和异常 | build: 记录 I/O 超时与节流思路（WriteFile+Sleep 为何必要） | accept: 能解释写太快/设备未就绪的根因
+- Day_3 | learn: I/O 设备分类；I/O 控制器 | build: 实现 open_com / send_one_frame / close_com 最小封装 | accept: C++ 可发送一帧固定颜色
+- Day_4 | learn: I/O 软件层次；缓冲区管理 | build: SetCommState/Timeouts/Purge；帧长校验 <110 | accept: 连续发送稳定且每帧满足红线
+
+### 阶段2：线程与互斥（Day 5-10）
+- Day_5 | learn: 进程概念组成状态 | build: 引擎 start/stop 状态机；循环发色+Sleep 节流 | accept: 连续运行数分钟不崩溃
+- Day_6 | learn: 生产者-消费者；缓冲 | build: 拆分 produce_colors 与 consume_to_serial | accept: 代码体现 生产→消费 流水线
+- Day_7 | learn: 线程概念与状态 | build: std::thread 后台发帧循环；主线程管退出 | accept: 停止标志可干净退出后台线程
+- Day_8 | learn: 同步与互斥；互斥锁 | build: 所有 WriteFile 统一 std::mutex（含关灯） | accept: 并发关灯与发帧无帧交错
+- Day_9 | learn: 信号量概念；死锁概念与预防 | build: 固定锁顺序；安全 stop→join 退出 | accept: 重复启停无死锁无句柄泄漏
+- Day_10 | learn: 多生产者多消费者（理解） | build: 保持单生产单消费；可选 2-3 帧小缓冲 | accept: 阶段总验：稳定循环+安全退出
+
+### 阶段3：FFI 打通 Flutter（Day 11-14）
+- Day_11 | learn: 内存基础；进程内存映像 | build: DLL 导出 open/close/set_color/get_version；注释对齐与所有权 | accept: 原生测试可调 DLL 控灯
+- Day_12 | learn: 虚拟内存概念；dart:ffi | build: Dart DynamicLibrary 绑定导出函数 | accept: Flutter 按钮经 FFI 驱动灯变色
+- Day_13 | learn: OS 体系结构用户态内核态 | build: UI 开/关/纯色统一走引擎控制入口 | accept: App 内可基础控灯且状态一致
+- Day_14 | learn: 进程通信分类（本项目=同进程 FFI 非管道Socket） | build: 导出 zeeray_start_engine / zeeray_stop_engine 起停 Day7-9 线程 | accept: App 点开始/停止，后台线程启停，灯循环变色，停止无僵尸发送
+
+### 阶段4：抓屏与屏幕同步（Day 15-19）
+- Day_15 | learn: 内存映射思想；Stride/pitch（课外必学） | build: 假 BGRA 缓冲验证 stride 采样；复现错 stride 脏色 | accept: 修正 stride 后采样正确
+- Day_16 | learn: I/O 核心子系统；DXGI 抓屏（课外） | build: 抓取单帧桌面（先不接灯） | accept: 稳定拿帧，失败有错误码
+- Day_17 | learn: 生产者-消费者落地 | build: 抓屏采样→组帧→加锁 WriteFile；≤110B ~30ms | accept: 播视频/拖窗口灯色随屏变化
+- Day_18 | learn: 调度概念（线程会被切走） | build: EMA/降噪调参；快速切窗闪烁降低 | accept: 画面剧变时闪烁可接受
+- Day_19 | learn: 少拷贝原则 | build: 排查热路径多余拷贝；明确 FFI 内存所有权 | accept: 帧率与 CPU 可连续使用
+
+### 阶段5：生命周期打磨（Day 20-22）
+- Day_20 | learn: 设备分配与回收 | build: COM 占用/拔插重连/延迟就绪重试 | accept: 拔插后可恢复控制
+- Day_21 | learn: 信号/会话结束资源释放 | build: 退出/休眠路径：加锁关灯→停线程→关串口 | accept: 关 App 或休眠灯灭无僵尸线程
+- Day_22 | learn: 全路线复盘 | build: OS概念→项目模块映射笔记；修遗留 bug | accept: 能讲解系统调用/线程/锁/缓冲/Stride/FFI 对应代码位置
+
+## AI 执行纪律
+- 只推进 current_day 的 build；验收通过前不建议下一天内容。
+- 代码建议须对照当天 learn 概念解释「为什么」。
+- 稳定性问题优先查：帧长、节流、mutex、线程退出顺序、stride。
+- 课后题：仅当天相关 3-5 道概念题；跳过银行家/页置换/磁盘调度等考试计算。
+- 后置不主动展开：调度算法细节、分页段页、死锁检测算法、磁盘调度、引导、虚拟机。

@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "dart-code.flutter",
+    "dart-code.dart-code",
+    "llvm-vs-code-extensions.vscode-clangd",
+    "ms-vscode.cmake-tools"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.cpptools",
+    "ms-vscode.cpptools-extension-pack",
+    "ms-vscode.cpptools-themes",
+    "ms-vscode.cpp-devtools"
+  ]
+}

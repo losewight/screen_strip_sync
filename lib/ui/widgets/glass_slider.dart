@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -13,14 +13,14 @@ class GlassSlider extends StatefulWidget {
   final IconData? icon; // 左侧显示的图标
 
   const GlassSlider({
-    Key? key,
+    super.key,
     required this.value,
     this.onChanged,
     this.height = 60.0,
     this.width = double.infinity,
     this.label = '',
     this.icon,
-  }) : super(key: key);
+  });
 
   @override
   State<GlassSlider> createState() => _GlassSliderState();
@@ -65,7 +65,7 @@ class _GlassSliderState extends State<GlassSlider> {
                   BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
                     child: Container(
-                      color: Colors.white.withOpacity(0.1), // 半透明底色
+                      color: Colors.white.withValues(alpha: 0.1), // 半透明底色
                     ),
                   ),
 
@@ -81,8 +81,8 @@ class _GlassSliderState extends State<GlassSlider> {
                         // 填充颜色，这里用了一个渐变色增强质感
                         gradient: LinearGradient(
                           colors: [
-                            Colors.blueAccent.withOpacity(0.6),
-                            Colors.purpleAccent.withOpacity(0.6),
+                            Colors.blueAccent.withValues(alpha: 0.6),
+                            Colors.purpleAccent.withValues(alpha: 0.6),
                           ],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,

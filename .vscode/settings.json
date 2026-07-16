@@ -1,0 +1,27 @@
+{
+  "cmake.sourceDirectory": "${workspaceFolder}/cpp_core",
+  "python.languageServer": "None",
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+  "C_Cpp.formatting": "disabled",
+  "C_Cpp.codeAnalysis.runAutomatically": false,
+  "C_Cpp.workspaceParsingPriority": "low",
+  "clangd.arguments": [
+    "--background-index=false",
+    "--header-insertion=never"
+  ],
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/cpp_core/build/**": true,
+    "**/.dart_tool/**": true
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/cpp_core/build": true,
+    "**/.dart_tool": true
+  },
+  "files.exclude": {
+    "**/cpp_core/build": true
+  }
+}
