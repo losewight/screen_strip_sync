@@ -9,3 +9,6 @@ project(ZeerayCore)
 add_library(zeeray_core SHARED 
     zeeray_core.cpp
 )
+
+add_executable(serial_test serial_test.cpp serial_port.cpp)
+target_link_libraries(serial_test PRIVATE kernel32)
