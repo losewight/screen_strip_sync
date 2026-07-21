@@ -28,10 +28,12 @@
 - 单帧指令工程限制 < 120 字节（含 \r\n；拒绝 >=120；设备硬上限 128，无防溢出，溢出会死机需硬件重启；10 段 Step=2）。
 - 串口写必须互斥；WriteFile 后需节流（Sleep ≥ 50ms，实测极限；再短丢帧）；热路径少拷贝；FFI 结构体须标注对齐与内存所有权。
 
-## 当前进度（由用户告知或根据对话更新）
-- current_day: Day_6
-- current_phase: 阶段2_线程与互斥
-- phase_status: 进行中
+## 当前进度（动态推断，禁止写死 Day 数字）
+- 不维护固定 current_day 字段；进度以代码为准。
+- 每次回复前：对照下方每日 build/accept 与仓库实现，找出「第一个未完成 Day」作为今天。
+- 用户口头指定「今天 Day X」时，以用户为准（可跳过已完成概念的重复讲解，但仍须核对前债）。
+- 推断依据优先看：cpp_core/serial_port.h、cpp_core/serial_port.cpp、cpp_core/serial_test.cpp；后续阶段再加 DLL 导出与 Flutter FFI 文件。
+- 回复开头可用一句话说明「据代码推断今天 = Day N」，但不要再把 N 写回本文件当固定字段；验收过自然进入 N+1（仍不写死进本文件）。
 
 ## 每日任务模板
 每 Day 含三项：learn（学到什么）/ build（当天写什么）/ accept（验收）。
@@ -71,7 +73,9 @@
 ## AI 执行纪律
 - 前债不可欠（优先于「只推当天」）：推进 Day N 前，若发现 Day 1..N-1 的实现缺项或与红线不符，先修再继续当天。
 - 发现问题立刻改：无论哪一天暴露的旧问题（帧长、节流、握手、封装等），当场修正，不攒到以后。
-- 无前债时：只推进 current_day 的一小步；验收通过前不进入下一天。
+- 进度推断（对照用，非写死）：open_com/send_one_frame/close_com + 帧长 <120 → Day3–4；start_engine/stop_engine → Day5；produce_colors + consumer_to_serial → Day6；std::thread + g_running → Day7；std::mutex 包住 WriteFile → Day8；安全 stop→join 重复启停 → Day9。
+- 有代码无验收时：可视为该 Day 已实现，优先补验收/补洞，而不是把进度锁回更早的 Day 数字。
+- 无前债时：只推进「据代码推断的今天」一小步；验收通过前不进入下一天。
 - 代码建议须对照当天 learn 概念解释「为什么」（一两句即可）。
 - 稳定性问题优先查：帧长、节流、mutex、线程退出顺序、stride。
 - 课后题：一次最多 1–2 道、仅当天相关；跳过银行家/页置换/磁盘调度等考试计算。
