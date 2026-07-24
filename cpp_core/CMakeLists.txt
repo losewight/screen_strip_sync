@@ -4,16 +4,7 @@ cmake_minimum_required(VERSION 3.10)
 # 2. 声明你的工程名称
 project(ZeerayCore)
 
-# 3. 核心指令：将源码编译为动态链接库
-# SHARED 关键字是这里的灵魂，它明确指示编译器生成 .dll（动态库），而不是 .exe（可执行文件）或静态库
-add_library(zeeray_core SHARED 
-    zeeray_core.cpp
-    serial_port.cpp
-)
-target_link_libraries(zeeray_core PRIVATE kernel32)
-
-add_executable(serial_test serial_test.cpp serial_port.cpp)
-target_link_libraries(serial_test PRIVATE kernel32)
-
-add_executable(dll_test dll_test.cpp)
-target_link_libraries(dll_test PRIVATE kernel32)
+# 3. 主线（Day 15+）：独立 helper.exe = 串口属主 + IPC 命令循环
+# 废案（同进程 DLL / serial_test / dll_test）已移至 废案_同进程FFI_Day11-14/，不再编入。
+add_executable(helper helper_main.cpp serial_port.cpp)
+target_link_libraries(helper PRIVATE kernel32 ws2_32)

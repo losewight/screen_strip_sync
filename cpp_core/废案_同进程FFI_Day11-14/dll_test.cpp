@@ -6,6 +6,8 @@ typedef int32_t (*FuncGetVersion)();
 typedef int32_t (*FnOpen)(const char *port_name);
 typedef void (*FnClose)();
 typedef int32_t (*FnSetColor)(uint8_t r, uint8_t g, uint8_t b);
+typedef int32_t (*FnStart)();
+typedef void (*FnStop)();
 
 int main() {
   HMODULE dll = LoadLibraryA("zeeray_core.dll");
@@ -36,20 +38,26 @@ int main() {
   }
   printf("zeeray_open success\n");
 
-  auto set_color = (FnSetColor)GetProcAddress(dll, "zeeray_set_color");
-  if (!set_color) {
-    printf("GetProcAddress set_color failed\n");
+  auto start = (FnStart)GetProcAddress(dll, "zeeray_start_engine");
+  auto stop = (FnStop)GetProcAddress(dll, "zeeray_stop_engine");
+  if (!start || !stop) {
+    printf("GetProcAddress start/stop failed\n");
     close();
     FreeLibrary(dll);
     return 1;
   }
-  if (!set_color(255, 0, 0)) {
-    printf("zeeray_set_color failed\n");
+
+  if (!start()) {
+    printf("start failed\n");
     close();
     FreeLibrary(dll);
     return 1;
   }
-  printf("zeeray_set_color success\n");
+  printf("engine running 3s...\n");
+  Sleep(5000);
+
+  stop();
+  printf("engine stopped\n");
   Sleep(1000);
 
   close();

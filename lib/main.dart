@@ -1,8 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
-// 1. 就像 C++ 的 #include，把那两个页面“包含”进来
-import 'ui/pages/light_control_page.dart';
-import 'ui/pages/settings_page.dart';
+import 'package:flutter/material.dart';
 
 void main() {
   runApp(const ZeerayApp());
@@ -13,62 +11,97 @@ class ZeerayApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Zeeray 氛围灯',
-      theme: ThemeData.dark(),
-      home: const MainLayout(),
+    return const MaterialApp(
+      title: 'Zeeray App',
+      home: HomePage(),
     );
   }
 }
 
-class MainLayout extends StatefulWidget {
-  const MainLayout({super.key});
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<MainLayout> createState() => _MainLayoutState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
-  int _selectedIndex = 0;
+class _HomePageState extends State<HomePage> {
+  // 存在 State 里：关掉页面前一直留着，不会每次按钮新建
+  Process? _proc;
+  Socket? _sock;
+  bool _ready = false;
+  String _status = '先点「连接」';
 
-  // 2. 重点在这里！定义一个 Widget 数组，存放所有页面
-  // 这就像 C++ 里的基类指针数组，通过索引来动态调用不同的界面实例
-  final List<Widget> _pages = const [
-    LightControlPage(), // 索引 0
-    SettingsPage(), // 索引 1
-  ];
+  // 「连接」按钮：只做一次 —— 启动 helper + 连 Socket，不关闭
+  Future<void> _connect() async {
+    if (_ready) return; // 已连过就别再开第二个 helper
+    setState(() => _status = '启动 helper…');
+    try {
+      _proc = await Process.start(
+        r'D:\Project\zeeray_ambilight\cpp_core\build\Release\helper.exe',
+        [],
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      setState(() => _status = '连接中…');
+      _sock = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        9527,
+        timeout: const Duration(seconds: 3),
+      );
+      // 等 helper 开串口、握手完
+      await Future.delayed(const Duration(seconds: 2));
+
+      setState(() {
+        _ready = true;
+        _status = '已连接，可以点下面按钮';
+      });
+    } catch (e) {
+      setState(() => _status = '失败: $e');
+    }
+  }
+
+  // 「红 / 开始 / 停止」：只往已经打开的 Socket 写一行，不关连接
+  void _send(String cmd) {
+    if (!_ready || _sock == null) {
+      setState(() => _status = '请先点「连接」');
+      return;
+    }
+    _sock!.write('$cmd\n');
+    setState(() => _status = '已发: $cmd');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.lightbulb_outline),
-                selectedIcon: Icon(Icons.lightbulb),
-                label: Text('灯效'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: Text('设置'),
-              ),
-            ],
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-
-          // 3. 右侧内容区：直接通过 _selectedIndex 从数组中读取对应的页面渲染
-          Expanded(child: _pages[_selectedIndex]),
-        ],
+      appBar: AppBar(title: const Text('Day 17 · Socket 常驻')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_status, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _ready ? null : _connect, // 连上后灰掉
+              child: const Text('连接'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _ready ? () => _send('solid ff0000') : null,
+              child: const Text('红'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _ready ? () => _send('start') : null,
+              child: const Text('开始'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _ready ? () => _send('stop') : null,
+              child: const Text('停止'),
+            ),
+          ],
+        ),
       ),
     );
   }

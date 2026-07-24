@@ -72,26 +72,24 @@ bool send_one_frame(HANDLE handle, const char *data, DWORD frame_len) {
 }
 
 bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
-  std::lock_guard<std::mutex> lock(g_serial_mtx);
+  // 为什么：读是轮询+Sleep，若占着写锁，发帧线程会被卡住几百 ms；
+  // 握手/关灯路径本就是「先 write 再 read」，同线程不会并发写读交错。
   char buf[256] = {0};
   size_t total_len = 0;
   DWORD start_time = GetTickCount();
 
   while (GetTickCount() - start_time < timeout_ms) {
     DWORD nread = 0;
-    DWORD cap = (DWORD)sizeof(buf) - total_len;
-    if (cap == 0) {
+    DWORD cap = (DWORD)(sizeof(buf) - 1 - total_len);
+    if (cap == 0)
       return false;
-    }
-    if (!ReadFile(handle, buf + total_len, cap, &nread, nullptr)) {
+    if (!ReadFile(handle, buf + total_len, cap, &nread, nullptr))
       return false;
-    }
     if (nread > 0) {
       total_len += nread;
       buf[total_len] = '\0';
-      if (strstr(buf, "ok\r\n") != nullptr) {
+      if (strstr(buf, "ok\r\n") != nullptr)
         return true;
-      }
     }
     Sleep(1);
   }

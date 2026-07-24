@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "helper (Release)",
+      "type": "cmake",
+      "request": "launch",
+      "cmakeDebugType": "run",
+      "target": "helper"
+    }
+  ]
+}
