@@ -3,9 +3,81 @@
 
 #include "serial_port.h"
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <vector>
+
+// 假 BGRA 一行，stride > W*4：模拟显存行对齐里的 padding。
+static const int kFakeW = 10;
+static const int kFakeH = 2;
+static const int kBpp = 4;
+static const int kFakeStride = kFakeW * kBpp + 16;
+
+// 缓冲总长 = 一行的跨度 × 行数（含 padding）
+static std::vector<uint8_t> g_fake_bgra(kFakeStride *kFakeH, 0);
+
+// 先填充垃圾值
+static void fill_fake_bgra() {
+  for (int i = 0; i < kFakeStride * kFakeH; i++) {
+    g_fake_bgra[i] = 0x7F;
+  }
+
+  // 改有效像素
+  for (int y = 0; y < kFakeH; ++y) {
+    for (int x = 0; x < kFakeW; ++x) {
+      uint8_t *pixel = &g_fake_bgra[y * kFakeStride + x * kBpp];
+      if (x % 2 == 0) {
+        pixel[0] = 0;
+        pixel[1] = 0;
+        pixel[2] = 255;
+        pixel[3] = 255;
+      } else {
+        pixel[0] = 255;
+        pixel[1] = 0;
+        pixel[2] = 0;
+        pixel[3] = 255;
+      }
+    }
+  }
+}
+static void sample_ok(char out_hex[][7]) {
+  const int y = 0;
+  for (int x = 0; x < kFakeW; x++) {
+    const uint8_t *pixel = &g_fake_bgra[y * kFakeStride + x * kBpp];
+    snprintf(out_hex[x], 7, "%02x%02x%02x", pixel[2], pixel[1], pixel[0]);
+  }
+}
+static void sample_wrong(char out_hex[][7]) {
+  const int y = 1;
+  const int bad_stride = kFakeW * kBpp;
+  for (int x = 0; x < kFakeW; x++) {
+    const uint8_t *pixel = &g_fake_bgra[y * bad_stride + x * kBpp];
+    snprintf(out_hex[x], 7, "%02x%02x%02x", pixel[2], pixel[1], pixel[0]);
+  }
+}
+
+// 发送采样结果
+static bool send_sampled(HANDLE h, char colors[][7]) {
+  char frame[128];
+  snprintf(frame, sizeof(frame),
+           "set_rgb_pc %04x 00 63 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
+           1, colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
+           colors[6], colors[7], colors[8], colors[9]);
+
+  DWORD len = (DWORD)strlen(frame);
+  if (len >= 120) {
+    printf("frame too long: %lu\n", (unsigned long)len);
+    return false;
+  }
+  if (!send_one_frame(h, frame, len))
+    return false;
+  Sleep(50);
+  return true;
+}
 
 // 为什么：主线程改 false，发帧线程 while 退出；Day7 的停止标志。
 static std::atomic<bool> g_running{false};
@@ -115,6 +187,21 @@ static bool is_rrggbb(const char *s) {
 
 int main(int argc, char *argv[]) {
 
+  fill_fake_bgra();
+  printf("fake filled: W=%d stride=%d\n", kFakeW, kFakeStride);
+
+  char ok[10][7], bad[10][7];
+  sample_ok(ok);
+  sample_wrong(bad);
+  printf("ok:   ");
+  for (int i = 0; i < kFakeW; i++)
+    printf("%s ", ok[i]);
+  printf("\n");
+  printf("wrong:");
+  for (int i = 0; i < kFakeW; i++)
+    printf("%s ", bad[i]);
+  printf("\n");
+
   /// 进程通信初始化
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
@@ -180,6 +267,14 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   printf("serial ready\n");
+
+  char colors[10][7];
+  sample_wrong(colors);
+  if (!send_sampled(h, colors)) {
+    printf("send_sampled failed\n");
+  } else {
+    printf("sent sample_wrong to strip\n");
+  }
 
   std::thread worker;
 

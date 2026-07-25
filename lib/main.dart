@@ -72,6 +72,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void dispose() {
+    // App/页面销毁时：先礼貌发 quit，让 helper 关灯停线程再退出
+    // （即使这步失败，关 Socket 也会触发 C++ 的 peer_gone 兜底）
+    if (_sock != null) {
+      try {
+        _sock!.write('quit\n');
+      } catch (_) {
+        // 连接已断就忽略，别让 dispose 抛异常
+      }
+      _sock!.destroy();
+      _sock = null;
+    }
+    _proc = null; // 不 kill：quit/断连后 helper 自己退
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Day 17 · Socket 常驻')),
