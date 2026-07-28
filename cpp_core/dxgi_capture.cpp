@@ -300,7 +300,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3]) {
   }
 
   const UINT stride = mapped.RowPitch;
-  const UINT y = desc.Height > 2 ? desc.Height - 2 : 0; // 底边往上 2 行
+  // 为什么：原采 Height-2（底边）；关于水平中线对称 → 顶边往下 2 行，对照 luma
+  const UINT y = desc.Height > 2 ? 2u : 0;
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
     // 为什么：水平多点平均 = 空间降噪，减少单像素闪；不另开缓冲

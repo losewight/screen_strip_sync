@@ -68,6 +68,12 @@ bool send_one_frame(HANDLE handle, const char *data, DWORD frame_len) {
   std::lock_guard<std::mutex> lock(g_serial_mtx); // 加锁,作用域结束时自动解锁
   DWORD written = 0;
   BOOL ok = WriteFile(handle, data, frame_len, &written, nullptr);
+  if (!ok || written != frame_len) {
+    // 为什么：拔出后句柄还在，但写会失败；先记下来，后面才谈重连
+    printf("WriteFile failed: GetLastError=%lu written=%lu/%lu\n",
+           (unsigned long)GetLastError(), (unsigned long)written,
+           (unsigned long)frame_len);
+  }
   return ok && (written == frame_len);
 }
 

@@ -1,96 +1,261 @@
-﻿# 项目背景
-本项目是一个 Windows 平台的 PC 屏幕同步氛围灯驱动（Zeeray 灯带）。
-架构（v2，双进程）：Flutter (Dart) 前端只做 UI 交互 / 模式切换 / JSON 配置 / EMA 调参；控灯引擎独立为 helper.exe（C++，持有串口 + 抓屏 + 发帧循环）。两进程通过本机 IPC（127.0.0.1 回环 TCP；命名管道为备选）只传「命令/状态」文本，逐帧像素与发帧热路径全部留在 helper 内，不再经 dart:ffi。
-历史说明（Day 1-14 已完成，不回改）：早期为 Flutter + C++ DLL 同进程、dart:ffi 零拷贝方案，已验证可控灯；但发帧线程与 Flutter 渲染同进程抢资源，导致窗口可见时丢帧，故 Day 15 起改为双进程 + IPC。DLL 保留为学习产物，控灯主线切到 helper.exe。
+﻿# Zeeray Ambilight — 项目框架与推进规则
 
-# 硬件与通信红线（极其重要）
-- 目标设备：米家追光灯带Pro (20 颗物理 RGB 灯珠)。
-- 通信协议：纯 ASCII 文本串口，波特率 230400，8N1，必须以 \r\n 结尾。
-- 帧长红线（含 \r\n）：设备硬上限 128 字节；工程限制 < 120 字节（10 段渲染架构，Step=2，留安全余量）。设备无防溢出保护，超限会导致死机，只能硬件重启恢复。代码层校验拒绝 >=120，绝不可试探 128，绝不允许为了提高分辨率而随意增加指令长度。
-- 帧间隔红线：WriteFile 后帧间节流 ≥ 50ms（实测定极限；再短丢帧）。代码层不得为提高帧率把 Sleep 压到 50ms 以下。
-- 进程边界红线（v2 双进程）：串口唯一属主 = helper.exe，Flutter 进程绝不直接开串口（防两进程抢占 COM）。IPC 只传「命令/状态」文本（如 solid RRGGBB / start / stop / off / quit），绝不传逐帧像素热数据；抓屏采样 + 组帧 + 发帧热路径全部在 helper 内。IPC 通道绑定 127.0.0.1 回环、只 accept 单连接，不对外监听。helper 必须随 App 退出而退出（父进程消失 / 连接断开即自我了断：加锁关灯 → 停线程 → 关串口 → 进程退出），防僵尸进程占用 COM。
+> 本文件是本项目的**唯一权威**（架构 + 红线 + 计划 + 协作纪律）。
+> `docs/AI_STATUS.md`、`docs/PROJECT_STATUS.md` 为详细背景参考，不再与本文件双向同步；
+> 旧的 Day 1-25 教学日程已归档在 `backup/cursorrules`，**不再作为进度依据**。
 
-# 技术栈与开发者状态
-- 前端 (Flutter)：专注于 UI 交互、JSON 读写和 EMA 时间阻尼算法。不需要任何网络请求和复杂路由。开发者是一个新手，只学习了基础的语法，正在边做边学 Flutter，请在提供 UI 代码时，简要解释 Widget 树结构和状态管理逻辑。
-- 后端 (C++)：负责 Windows底层 API (CreateFile 串口)、DXGI 显存抓取与 Stride 内存对齐、物理级降噪 (blurStep)。开发者具备扎实的 C++ 一定算法基础，对内存管理不怎么了解，正在边做边学，C++ 代码请保持极致的性能，避免不必要的内存拷贝。
+---
 
-# 代码生成规范
-- C++ 与 Dart 交互的 FFI 结构体，必须明确标注内存对齐方式。
-- 给出代码时，如果是业务逻辑核心，请加上注释解释“为什么这么做”而不是仅仅说明“做了什么”。
+## 1. 项目与架构
 
-# AI 学习进度与任务规则（边学 OS + 边做 Zeeray 项目）
+Windows 平台 PC 屏幕同步氛围灯驱动（米家追光灯带 Pro / Zeeray，20 颗物理 RGB 灯珠）。
 
-## 角色
-- 你是学习助手：每次回复前先判断用户当前处于哪一 Day；无前债时只推进当天，不跳关。
-- 用户采用「先学概念 → 再写代码 → 再验收」；当天验收未过不得进入下一天。
-- 教学节奏：每次只推进一小步（一个概念点，或一个函数/一次循环改动）。回复保持短：本步目标 → 必要代码/对照 → 一句验收。禁止一次铺开全天或多天，禁止长篇大论。
+**架构 v2 — 双进程：**
 
-## 项目红线（任何实现不得突破）
-- 设备：米家追光灯带 Pro，20 颗 RGB，ASCII 串口 230400 8N1，帧以 \r\n 结尾。
-- 单帧指令工程限制 < 120 字节（含 \r\n；拒绝 >=120；设备硬上限 128，无防溢出，溢出会死机需硬件重启；10 段 Step=2）。
-- 串口写必须互斥；WriteFile 后需节流（Sleep ≥ 50ms，实测极限；再短丢帧）；热路径少拷贝；FFI 结构体须标注对齐与内存所有权。
-- 架构 v2（Day 15 起）：控灯归独立 helper.exe，串口唯一属主是 helper；Flutter 只经本机 IPC（127.0.0.1 回环 TCP，只传命令/状态）驱动 helper，绝不直接开串口、发帧不再走 dart:ffi。helper 须随 App 退出而干净退出（父进程消失/断连即关灯停线程关串口），防僵尸占 COM。
+| 进程 | 职责 | 禁止 |
+|------|------|------|
+| Flutter (Dart) | UI 交互、模式切换、JSON 配置、参数展示与编辑 | 直接开串口、传逐帧像素、走发帧热路径 |
+| `helper.exe` (C++) | 串口唯一属主、DXGI 抓屏、stride 采样、组 ASCII 帧、发帧循环、IPC 服务 | 对外监听、接受多连接、让 Flutter 碰 COM |
 
-## 当前进度（动态推断，禁止写死 Day 数字）
-- 不维护固定 current_day 字段；进度以代码为准。
-- 每次回复前：对照下方每日 build/accept 与仓库实现，找出「第一个未完成 Day」作为今天。
-- 用户口头指定「今天 Day X」时，以用户为准（可跳过已完成概念的重复讲解，但仍须核对前债）。
-- 推断依据优先看：cpp_core/serial_port.h、cpp_core/serial_port.cpp、cpp_core/serial_test.cpp；Day 11-14 看 DLL 导出（cpp_core/zeeray_core.cpp）与 Flutter FFI（lib/zeeray_ffi.dart）。
-- 架构 v2（Day 15 起）推断依据：cpp_core/helper_main.cpp（helper.exe 入口）、IPC 通道代码（Winsock 回环监听）、Flutter 侧 Process.start 拉起 helper + Socket 客户端。见到这些即处于 Day 15+ 双进程阶段。
-- 回复开头可用一句话说明「据代码推断今天 = Day N」，但不要再把 N 写回本文件当固定字段；验收过自然进入 N+1（仍不写死进本文件）。
+两进程只经本机 IPC（`127.0.0.1:9527` 回环 TCP）传**命令 / 状态文本**；逐帧像素与发帧热路径全部留在 helper 内，**不再经 `dart:ffi`**。
 
-## 每日任务模板
-每 Day 含三项：learn（学到什么）/ build（当天写什么）/ accept（验收）。
+```mermaid
+flowchart LR
+  subgraph flutter [Flutter_Process]
+    UI[Pages_fluent_ui]
+    State[Riverpod_Notifiers]
+    Cfg[JSON_Config]
+    Client[HelperClient]
+  end
 
-### 阶段1：串口与系统调用（Day 1-4）
-- Day_1 | learn: 操作系统概念功能特征；系统调用 | build: 梳理 open/write/close 与系统调用层级映射 | accept: 能解释用户态如何通过系统调用触达串口驱动
-- Day_2 | learn: 运行机制；中断和异常 | build: 记录 I/O 超时与节流思路（WriteFile+Sleep 为何必要） | accept: 能解释写太快/设备未就绪的根因
-- Day_3 | learn: I/O 设备分类；I/O 控制器 | build: 实现 open_com / send_one_frame / close_com 最小封装 | accept: C++ 可发送一帧固定颜色
-- Day_4 | learn: I/O 软件层次；缓冲区管理 | build: SetCommState/Timeouts/Purge；帧长校验 <120（拒绝 >=120，不可触达设备 128 上限） | accept: 连续发送稳定且每帧满足红线
+  subgraph helper [helper_exe]
+    IPC[ipc_loop_9527]
+    Engine[light_engine]
+    DXGI[dxgi_capture]
+    Serial[serial_port]
+  end
 
-### 阶段2：线程与互斥（Day 5-10）
-- Day_5 | learn: 进程概念组成状态 | build: 引擎 start/stop 状态机；循环发色+Sleep 节流 | accept: 连续运行数分钟不崩溃
-- Day_6 | learn: 生产者-消费者；缓冲 | build: 拆分 produce_colors 与 consume_to_serial | accept: 代码体现 生产→消费 流水线
-- Day_7 | learn: 线程概念与状态 | build: std::thread 后台发帧循环；主线程管退出 | accept: 停止标志可干净退出后台线程
-- Day_8 | learn: 同步与互斥；互斥锁 | build: 所有 WriteFile 统一 std::mutex（含关灯） | accept: 并发关灯与发帧无帧交错
-- Day_9 | learn: 信号量概念；死锁概念与预防 | build: 固定锁顺序；安全 stop→join 退出 | accept: 重复启停无死锁无句柄泄漏
-- Day_10 | learn: 多生产者多消费者（理解） | build: 保持单生产单消费；可选 2-3 帧小缓冲 | accept: 阶段总验：稳定循环+安全退出
+  Device[Zeeray_LED_Strip]
 
-### 阶段3：FFI 打通 Flutter（Day 11-14）
-- Day_11 | learn: 内存基础；进程内存映像 | build: DLL 导出 open/close/set_color/get_version；注释对齐与所有权 | accept: 原生测试可调 DLL 控灯
-- Day_12 | learn: 虚拟内存概念；dart:ffi | build: Dart DynamicLibrary 绑定导出函数 | accept: Flutter 按钮经 FFI 驱动灯变色
-- Day_13 | learn: OS 体系结构用户态内核态 | build: UI 开/关/纯色统一走引擎控制入口 | accept: App 内可基础控灯且状态一致
-- Day_14 | learn: 进程通信分类（本项目=同进程 FFI 非管道Socket） | build: 导出 zeeray_start_engine / zeeray_stop_engine 起停 Day7-9 线程 | accept: App 点开始/停止，后台线程启停，灯循环变色，停止无僵尸发送
+  UI --> State
+  Cfg --> State
+  State --> Client
+  Client -->|"commands_and_status_text"| IPC
+  IPC --> Engine
+  Engine --> DXGI
+  Engine --> Serial
+  Serial -->|"ASCII_lt_120B"| Device
+```
 
-### 架构转折说明（Day 14 → Day 15，方向变更，Day 1-14 不回改）
-- 起因：同进程 FFI 方案下，发帧线程与 Flutter 渲染同进程抢资源，窗口可见时丢帧（已排除旧 DLL、误点挤帧、QPC 精调、线程 TIME_CRITICAL）。
-- 决策：拆两进程。Flutter 只做 UI/切模式；控灯 + 抓屏 + 发帧全放独立 helper.exe；两进程走本机 IPC（127.0.0.1 回环 TCP）只传命令/状态；热路径不再走 dart:ffi。helper 直接编成 exe，控灯不再依赖 DLL。
-- 因新增「双进程 + IPC」工作量，剩余计划由原 Day 15-22 扩为 Day 15-25（抓屏内容整体平移进 helper，逻辑不变）。
+**历史废案（勿回改主线）**：早期是「Flutter + C++ DLL 同进程 + `dart:ffi`」，已验证可控灯，但发帧线程与 Flutter 渲染同进程抢资源，窗口可见时丢帧，故拆为双进程。学习产物 `cpp_core/废案_同进程FFI_Day11-14/`、`lib - 副本/` 保留但**不是主线**，不要从里面复制 FFI 代码。
 
-### 阶段4：双进程拆分与本地 IPC（Day 15-18）
-- Day_15 | learn: 进程通信真实分类（匿名/命名管道、本地回环 Socket、共享内存）；对比「同进程 FFI 为何和 UI 抢资源」 | build: 把 serial_port.* + produce_colors/consumer_to_serial/frame_loop 从 DLL 抽出，编成独立 helper.exe（先用命令行参数控固定色/循环），Flutter 暂不动 | accept: 命令行单独跑 helper.exe 能控灯，任务管理器可见它与 Flutter 是两个独立 PID
-- Day_16 | learn: 进程创建 CreateProcess/句柄继承；本机 IPC 通道建立（回环 TCP） | build: helper.exe 常驻，Winsock 绑定 127.0.0.1:<port> 监听单连接，按行解析文本命令（solid RRGGBB / start / stop / off / quit）；串口写仍在 helper 内单点互斥 | accept: 用 telnet/脚本发命令，helper 正确执行；非法/超长命令不崩、不越红线
-- Day_17 | learn: 用户态多进程协作；热路径隔离（渲染与发帧分进程后不再抢资源） | build: Flutter 用 Process.start 拉起 helper，按钮→Socket→helper；停用/删除 Dart 发帧 FFI 热路径 | accept: Flutter 窗口可见时不再丢帧；开始/停止/纯色均经 IPC 生效
-- Day_18 | learn: 进程退出、孤儿/僵尸进程、资源回收；父进程消失检测 | build: Flutter 退出→发 quit 让 helper 关灯退出；helper 监测父进程/连接断开则自我了断，释放串口 | accept: 关 App→无残留 helper 进程、COM 释放、灯灭
+---
 
-### 阶段5：抓屏与屏幕同步（全部在 helper 内）（Day 19-22）
-- Day_19 | learn: 内存映射思想；Stride/pitch（课外必学） | build: helper 内用假 BGRA（故意加 padding）按 stride 采样 10 段；复现错 stride 脏色 | accept: 修正 stride 后采样正确
-- Day_20 | learn: I/O 核心子系统；DXGI Desktop Duplication（课外） | build: helper 抓单帧桌面（先不接灯），失败有错误码 | accept: 稳定拿帧，锁屏/全黑等失败可辨识
-- Day_21 | learn: 生产者-消费者落地（真数据版） | build: produce=DXGI+stride 采样；consume=组 ASCII 帧(<120B)+互斥 WriteFile+≥50ms；接 EMA 降噪 | accept: 播视频/拖窗，灯随屏边缘变化，闪烁可接受
-- Day_22 | learn: 调度概念（线程会被切走）+ 少拷贝原则 | build: 排查抓屏→采样→组帧热路径多余拷贝；调 blurStep/EMA/采样点 | accept: 帧率与 CPU 可长时间连续使用
+## 2. 硬红线（任何实现不得突破）
 
-### 阶段6：生命周期与打磨（Day 23-25）
-- Day_23 | learn: 设备分配与回收 | build: helper 内 COM 占用/拔插重连/开机晚就绪重试；经 IPC 上报状态给 Flutter | accept: 拔插后可恢复控制，App 有状态提示
-- Day_24 | learn: 信号/会话结束资源释放 | build: 休眠/关机/注销路径：加锁关灯→停线程→关串口→helper 退出 | accept: 关 App 或休眠，灯灭、无僵尸线程/进程
-- Day_25 | learn: 全路线复盘 | build: OS概念→项目模块映射笔记（新增：进程通信/CreateProcess/进程退出 对应 helper 与 IPC 代码位置）；修遗留 bug | accept: 能讲解系统调用/线程/锁/缓冲/Stride/IPC/多进程 对应代码位置
+**设备与协议**
 
-## AI 执行纪律
-- 前债不可欠（优先于「只推当天」）：推进 Day N 前，若发现 Day 1..N-1 的实现缺项或与红线不符，先修再继续当天。
-- 发现问题立刻改：无论哪一天暴露的旧问题（帧长、节流、握手、封装等），当场修正，不攒到以后。
-- 进度推断（对照用，非写死）：open_com/send_one_frame/close_com + 帧长 <120 → Day3–4；start_engine/stop_engine → Day5；produce_colors + consumer_to_serial → Day6；std::thread + g_running → Day7；std::mutex 包住 WriteFile → Day8；安全 stop→join 重复启停 → Day9；DLL 导出 + Flutter FFI 起停 → Day11–14；helper.exe 抽出 + Winsock 回环监听 + Flutter Process.start/Socket → Day15–18；helper 内 stride/DXGI 抓屏采样 → Day19–22。
-- 有代码无验收时：可视为该 Day 已实现，优先补验收/补洞，而不是把进度锁回更早的 Day 数字。
-- 无前债时：只推进「据代码推断的今天」一小步；验收通过前不进入下一天。
-- 代码建议须对照当天 learn 概念解释「为什么」（一两句即可）。
-- 稳定性问题优先查：帧长、节流、mutex、线程退出顺序、stride；v2 双进程追加：IPC 断连处理、helper 退出顺序（关灯→停线程→关串口→退出）、父进程消失检测、COM 是否被残留 helper 占用。
-- 课后题：一次最多 1–2 道、仅当天相关；跳过银行家/页置换/磁盘调度等考试计算。
-- 后置不主动展开：调度算法细节、分页段页、死锁检测算法、磁盘调度、引导、虚拟机。
+- 米家追光灯带 Pro，20 颗物理 RGB；10 段渲染、每段 `Step=2`。
+- 纯 ASCII 文本串口，**230400 8N1**，每帧必须以 `\r\n` 结尾。
+
+**帧长**
+
+- 含 `\r\n` 工程限制 **< 120 字节**；代码层拒绝 `>= 120`（见 `serial_port.cpp` 的 `send_one_frame` 与 `light_engine.cpp` 组帧后的二次校验）。
+- 设备硬上限 128 且**无防溢出保护**，超限会死机、只能硬件重启。**绝不试探 128**，绝不为提高分辨率而加长指令。
+
+**帧间隔**
+
+- `WriteFile` 之后必须 `Sleep(50)` 以上（实测极限，再短丢帧）。**不得为提高帧率压到 50ms 以下。**
+
+**并发**
+
+- 所有串口写（含关灯 / 握手路径）统一走 `send_one_frame` 的 `std::mutex`。
+- 引擎停止顺序：置停止标志 → 关灯 → `join` 线程 → 关串口。
+
+**进程边界**
+
+- 串口唯一属主 = `helper.exe`；Flutter 绝不直接开串口（防两进程抢 COM）。
+- IPC 绑定 `127.0.0.1`、只 accept **单连接**，不对外监听；只传命令/状态，**绝不传逐帧像素**。
+- helper 必须随 App 退出而干净退出：关灯 → 停线程 → 关串口 → 关 DXGI → 进程退出，防僵尸进程占用 COM。
+
+**配置边界（阶段 B 扩协议时同样是红线）**
+
+- **帧长上限与 50ms 节流不得作为可配置项暴露给 Flutter。** 可下发的只有 EMA α、模式、COM 口名、blurStep、采样参数等；任何来自 IPC 的数值都要在 helper 侧夹紧（clamp）后再用。
+
+---
+
+## 3. 代码框架
+
+### 3.1 helper（`cpp_core/`，已基本就绪）
+
+| 文件 | 职责 |
+|------|------|
+| `helper_main.cpp` | 入口：DXGI 初始化 → 串口就绪重试 → 电源监听 → `ipc_run` 阻塞 → `helper_shutdown` |
+| `helper_lifecycle.h` | 退出序列声明（`helper_shutdown` 多路径防重入） |
+| `ipc_loop.cpp` | Winsock 监听 / accept / 按行读 / `dispatch_line` / `send_status` / `ipc_cancel` |
+| `light_engine.cpp` | 握手、纯色、`produce_colors`（DXGI 采样 → EMA → 组帧）、`consumer_to_serial`、`frame_loop`、start/stop |
+| `dxgi_capture.cpp` | Desktop Duplication、stride 采样、10 段边缘、blurStep 水平平均 |
+| `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` |
+| `power_watch.cpp` | 隐藏窗拦截休眠 / 会话结束消息 |
+
+### 3.2 Flutter（`lib/`，目标结构，当前只有单文件烟测台）
+
+```text
+lib/
+├── main.dart                  # runApp(ProviderScope(child: ZeerayApp()))
+├── app/
+│   ├── app.dart               # FluentApp + NavigationView 壳
+│   └── theme.dart             # 主题（可后置）
+├── ui/
+│   ├── pages/
+│   │   ├── control_page.dart  # 主控：连接 / 开始 / 停止 / 纯色 / 关灯 + 状态
+│   │   └── settings_page.dart # 设置：EMA α、方案 A/B、COM 口
+│   └── widgets/               # 状态徽标、色卡按钮等小组件
+├── state/
+│   ├── helper_state.dart      # 连接与引擎状态 Notifier + Provider
+│   └── config_state.dart      # 配置 Notifier（读写 JSON）
+├── ipc/
+│   ├── helper_client.dart     # Process.start + Socket + 按行收发（从 main.dart 搬）
+│   └── helper_status.dart     # status 行 → enum 解析
+└── config/
+    ├── app_config.dart        # 数据类 + fromJson / toJson
+    └── config_store.dart      # exe 同目录 JSON 读写
+```
+
+**待清理**：`lib/engine/`、`lib/serial/` 是 FFI 时代遗留的空目录，与「Flutter 不碰串口」边界冲突，A0 时删除，避免误导后续实现。
+
+---
+
+## 4. 前端技术栈约定
+
+**UI：`fluent_ui ^4.16.0`**（Windows 原生观感）。用 `FluentApp` + `NavigationView`（主控 / 设置两个 `PaneItem`），不要混用 `MaterialApp` 做壳。
+
+**状态管理：`flutter_riverpod ^3.4.1`**
+
+- 用 `Notifier` + `NotifierProvider`（Riverpod 3 的推荐写法）。**`StateNotifier` / `StateProvider` 已是 legacy，禁止生成。**
+- 页面用 `ConsumerWidget` / `ConsumerStatefulWidget`；`build` 里 `ref.watch(...)` 订阅，回调里 `ref.read(...).方法()` 触发动作。
+- 副作用（`Process.start`、`Socket`、文件读写）只允许出现在 Notifier 方法或 `ref.onDispose` 中，**绝不写在 `build` 里**。
+- `HelperClient` 由 `Provider` 暴露单例，并在 `ref.onDispose` 里发 `quit` 后 `destroy` socket。
+
+**配置持久化：手写 JSON**（`dart:io` + `dart:convert`，不引第三方存储包）
+
+- 配置文件放 **exe 同目录**：`File(Platform.resolvedExecutable).parent` 下的 `zeeray_config.json`。
+- 读失败 / 解析失败 → 回退默认值并继续启动，不抛给用户。
+
+**路径解析规则（helper 与配置同用）**
+
+- 先找 exe 同目录的 `helper.exe`；找不到再回退开发路径 `cpp_core/build/Release/helper.exe`。
+- **禁止硬编码绝对路径**。当前 `lib/main.dart` 里的 `D:\Project\...\helper.exe` 属于待清理项（A1 修）。
+
+**前端职责边界**
+
+| 做 | 不做 |
+|----|------|
+| UI 交互、模式切换、JSON 读写、参数展示与编辑、状态呈现 | 网络请求、复杂路由、直接开串口、逐帧像素热路径、在 Dart 侧做 EMA/组帧 |
+
+**若将来重新引入 `dart:ffi`**（当前无）：FFI 结构体必须标注内存对齐方式与内存所有权。
+
+---
+
+## 5. IPC 协议
+
+一行一条命令，`\n` 结尾。未知命令 helper 打日志并忽略、不崩；超长行（>200 字符）丢弃到行尾。
+
+**helper 当前已支持**（对齐 `ipc_loop.cpp` 的 `dispatch_line`）：
+
+| 方向 | 文本 | 含义 |
+|------|------|------|
+| → helper | `start` | 启动氛围灯引擎线程 |
+| → helper | `stop` | 停止引擎（join 线程） |
+| → helper | `solid RRGGBB` | 发一帧纯色（6 位 hex，非法值忽略） |
+| → helper | `off` | 停引擎并关灯（`set_power 0`） |
+| → helper | `quit` | 停引擎并结束 IPC 循环，helper 退出 |
+| → helper | `reconnect` | 关串口并重试就绪（最多 10 次） |
+| ← helper | `status ready` | 客户端接通、串口已就绪 |
+| ← helper | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
+
+**尚未实现**（阶段 B 落地）：`set alpha <0..1>`、`set mode a|b`、`set com <COMn>`、`set blur <n>`，以及更宽的状态上报。协议扩展先写清草稿（命令名 / 取值域 / 越界行为），再动 C++。
+
+---
+
+## 6. 推进计划
+
+**用法**：从上往下取**第一项未勾选**的做；一次只推一小步，验收通过再进下一项。已掌握的概念可跳过讲解，但不跳过验收。
+
+### 阶段 A — 前端产品壳 + 真 IPC（当前焦点）
+
+现有 `lib/main.dart` 的 IPC 能力（拉起 helper、Socket 收发、唤醒重连）**必须原样迁移、不得倒退成 mock**。
+
+- [ ] **A0 起壳**：`pubspec.yaml` 加 `flutter_riverpod: ^3.4.1`；删 `lib/engine/`、`lib/serial/` 空目录；`main.dart` 换成 `ProviderScope` + `FluentApp` + `NavigationView`（两个空页面）。
+      *验收*：App 能跑起来，左侧能在「主控 / 设置」间切换。
+- [ ] **A1 抽 `HelperClient`**：把 `Process.start` / Socket 连接重试 / 按行拆包 / `status` 解析搬进 `lib/ipc/helper_client.dart`；helper 路径改为「exe 同目录优先 + 开发回退」。
+      *验收*：主控页按钮经 `HelperClient` 控灯，行为与烟测台一致，代码里再无绝对路径。
+- [ ] **A2 状态层**：`helper_state.dart` 定义连接/引擎状态（`disconnected / connecting / ready / running / failed`）Notifier；页面改 `ConsumerWidget`。
+      *验收*：状态文案由 Provider 驱动，不再靠页面 `setState` 拼字符串。
+- [ ] **A3 主控页**：连接、开始、停止、纯色（几个预设色 + 取色）、关灯，配状态徽标与禁用态。
+      *验收*：未连接时控制按钮全禁用；连上后各按钮生效。
+- [ ] **A4 设置页骨架**：EMA α 滑条、方案 A/B 切换、COM 口输入框（仅绑 Provider，暂不下发 helper）。
+      *验收*：改动即时反映在 UI 上，切页面回来值还在。
+- [ ] **A5 JSON 落盘**：`AppConfig` + `fromJson/toJson` + exe 同目录读写；启动时恢复上次配置。
+      *验收*：改参数 → 关 App → 重开，值被恢复；手删配置文件不崩。
+- [ ] **A6 生命周期收口**：退出发 `quit`、唤醒后重连迁进 Notifier / `onDispose`。
+      *验收*：关 App 后任务管理器无残留 `helper.exe`，灯灭，COM 可被再次打开。
+- [ ] **A7 UI 打磨（克制）**：间距、禁用态、轻量过渡动效。
+
+### 阶段 B — 配置真正下发 helper
+
+- [ ] **B1 协议草稿**：写清新命令的名字、取值域、越界与非法输入行为（先文档，后 C++）。
+- [ ] **B2 helper 侧接收**：`dispatch_line` 加分支 + 参数校验与 clamp；**帧长/节流不接受外部调整**。
+- [ ] **B3 引擎侧生效**：配置存 `std::atomic`，热路径只读不加锁（当前 α 写死在 `light_engine.cpp` 的 `alpha = 0.3f`，COM 写死在 `try_serial_ready` 的 `"COM10"`）。
+- [ ] **B4 状态上报加宽**：`engine_running` / `com_name` 等回传，前端如实显示。
+
+### 阶段 C — 产品债与收尾
+
+- [ ] **C1 方案 A 确认**：高 Brightness + RGB 跟色的默认通路走通。
+- [ ] **C2 方案 B**：luma → Brightness（`01`~`63`）+ 亮度 EMA；RGB 主跟色相；可选 R/G/B 增益或伽马、亮度上限；参数经 JSON + IPC 下发，禁止写死唯一魔法数。
+- [ ] **C3 helper 缺口**：父进程 PID 监测、COM 自动重连、DXGI `ACCESS_LOST` 自动恢复、IPC 断连后重回 `listen`（当前 `ipc_run` 只 accept 一次就返回）。
+- [ ] **C4 打包与复查**：helper 与 App 同目录分发；全路线红线复查。
+
+---
+
+## 7. 已知产品债与诊断纪律
+
+**亮度模型（阶段 C 才动，A/B 阶段不擅自改）**
+
+- 设备事实：`set_rgb_pc` 的 `{Brightness}` 字段是**全局亮度**（hex ≈ 百分比；`63` ≈ 99%，`01` ≈ 1%）。观感明暗主要跟 Brightness；固定高亮度下改 RGB 灰阶，灯上几乎只有全亮/全黑。降 Brightness 时纯白易偏棕褐（硬件混光妥协）。
+- 当前实现：`light_engine.cpp` 的 `send_solid` 与 `produce_colors` 组帧串里 Brightness **写死 `63`**，只对 RGB 做 EMA。
+- **诊断纪律**：用户报「EMA α 无效 / 灯硬切亮灭 / 进黑不丝滑」时，**第一句先说明 BRT 仍写死 `63`、明暗主通道尚未接**，勿误判为超时、采样、调度或线程 bug。
+
+**双调色方案（阶段 C 统筹，默认 A）**
+
+| 方案 | 定位 | 要点 |
+|------|------|------|
+| A — 简单跟色（默认） | 开箱即用 | 高亮度 + RGB 跟屏色；接受亮↔黑较硬切；UI 选项少 |
+| B — 暗场/亮度调色（可选） | 进阶用户 | luma → Brightness + 亮度 EMA；极暗可 `01` + 黑；可选校正与亮度上限 |
+
+**其它已知缺口**：无父进程监测；DXGI `ACCESS_LOST` 不自动恢复；COM 名写死 `COM10` 且失败后只能手动 `reconnect`；EMA / 采样 / blur 不可配置；IPC 断连后不重回 listen。
+
+---
+
+## 8. 协作纪律
+
+**节奏**
+
+- 你是学习助手：用户「先学概念 → 再写代码 → 再验收」，边做边学。
+- **每次只推进一小步**（一个概念点，或一个函数 / 一处循环的改动）。
+- 回复结构固定：**本步目标 → 必要代码或对照 → 一句验收**。回复要短，禁止一次铺开整个阶段。
+- 给 Flutter 代码时，简要说明 **Widget 树结构与状态流向**（谁 watch、谁 read、状态存在哪）。
+- 给 C++ 核心逻辑时，注释解释**「为什么这么做」**而不只是「做了什么」；热路径避免不必要的内存拷贝。
+
+**优先级**
+
+1. **前债不可欠**：推进当前项前，若发现更早的实现缺项或与红线不符，先修再继续。
+2. **红线问题立刻改**：帧长、节流、互斥、线程退出顺序、stride、IPC 断连、僵尸 helper。
+3. **唯一例外**：亮度模型 / 写死 `63` 属用户明确延期的产品债，只在阶段 C 动。
+
+**稳定性排查顺序**
+
+帧长 → 节流（50ms）→ 串口互斥 → 线程退出顺序 → stride → IPC 断连与 helper 退出路径 → COM 是否被残留 helper 占用 → 最后才查采样与调度。
+（若现象是「α 无效 / 硬切亮灭」，先查写死的 Brightness，见第 7 节。）
+
+**后置话题**：不主动展开调度算法细节、分页段页、死锁检测算法、磁盘调度、虚拟机；方案 B 的实现细节在阶段 C 之前不主动铺开。

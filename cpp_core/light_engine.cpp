@@ -16,6 +16,19 @@ static float g_ema_g[10] = {};
 static float g_ema_b[10] = {};
 static bool g_ema_inited = false;
 
+bool try_serial_ready(HANDLE *out_h) {
+  HANDLE h = INVALID_HANDLE_VALUE;
+  if (!open_com("COM10", &h))
+    return false;
+  if (!power_on(h) || !handshake(h)) {
+    power_off(h);
+    close_com(h);
+    return false;
+  }
+  *out_h = h;
+  return true;
+}
+
 bool power_on(HANDLE h) {
   if (!send_one_frame(h, "set_power 1\r\n",
                       (DWORD)(strlen("set_power 1\r\n")))) {
@@ -72,7 +85,7 @@ static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
   if (e != DxgiErr::Ok)
     return false;
 
-  // α 越大跟手越快、越闪；越小越稳、越拖影
+  // α 越小越拖影；0.3 偏跟手像硬切，先用 0.1 看拖影
   const float alpha = 0.3f;
   char colors[10][7] = {};
 
@@ -140,6 +153,8 @@ void engine_start(HANDLE h) {
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }
+
+void engine_request_stop() { g_running.store(false); }
 
 void engine_stop() {
   g_running.store(false);

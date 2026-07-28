@@ -14,5 +14,6 @@ add_executable(helper
   light_engine.cpp
   ipc_loop.cpp
   dxgi_capture.cpp
+  power_watch.cpp
 )
 target_link_libraries(helper PRIVATE kernel32 ws2_32 d3d11 dxgi)

@@ -4,9 +4,13 @@
 
 #include "ipc_loop.h"
 #include "light_engine.h"
+#include "serial_port.h"
 
 #include <cstdio>
 #include <cstring>
+
+static SOCKET g_listen_sock = INVALID_SOCKET;
+static SOCKET g_client_sock = INVALID_SOCKET;
 
 // ---------------------------------------------------------------------------
 // 1) 校验
@@ -65,10 +69,18 @@ static ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
 }
 
 // ---------------------------------------------------------------------------
-// 3) 执行一行命令；返回 false = 结束命令循环（quit）
+// 3) 状态回推 + 执行一行命令；返回 false = 结束命令循环（quit）
 // ---------------------------------------------------------------------------
 
-static bool dispatch_line(const char *line, HANDLE serial) {
+// 为什么：状态走同一条 IPC，不另开通道；App 才能显示设备分配/回收结果
+static void send_status(SOCKET client, const char *word) {
+  char buf[64];
+  int n = snprintf(buf, sizeof(buf), "status %s\n", word);
+  if (n > 0 && n < (int)sizeof(buf))
+    send(client, buf, n, 0);
+}
+
+static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "quit") == 0) {
     engine_stop();
     printf("cmd=quit\n");
@@ -77,11 +89,11 @@ static bool dispatch_line(const char *line, HANDLE serial) {
   if (strcmp(line, "off") == 0) {
     engine_stop();
     printf("cmd=off\n");
-    power_off(serial);
+    power_off(*serial);
     return true;
   }
   if (strcmp(line, "start") == 0) {
-    engine_start(serial);
+    engine_start(*serial);
     printf("cmd=start\n");
     return true;
   }
@@ -96,7 +108,36 @@ static bool dispatch_line(const char *line, HANDLE serial) {
       printf("bad solid color: [%s]\n", color);
     } else {
       printf("cmd=solid color=%s\n", color);
-      send_solid(serial, color);
+      send_solid(*serial, color);
+    }
+    return true;
+  }
+  if (strcmp(line, "reconnect") == 0) {
+    engine_stop();
+    send_status(client, "reconnecting");
+    // 为什么：旧句柄已失效，先归还再申请，避免占着坏句柄
+    if (*serial != INVALID_HANDLE_VALUE) {
+      close_com(*serial);
+      *serial = INVALID_HANDLE_VALUE;
+    }
+    HANDLE neu = INVALID_HANDLE_VALUE;
+    bool ok = false;
+    for (int i = 1; i <= 10; ++i) {
+      if (try_serial_ready(&neu)) {
+        ok = true;
+        printf("reconnect try %d ok\n", i);
+        break;
+      }
+      printf("reconnect try %d failed\n", i);
+      Sleep(500);
+    }
+    if (ok) {
+      *serial = neu;
+      printf("cmd=reconnect ok\n");
+      send_status(client, "reconnect_ok");
+    } else {
+      printf("cmd=reconnect failed\n");
+      send_status(client, "reconnect_fail");
     }
     return true;
   }
@@ -108,7 +149,7 @@ static bool dispatch_line(const char *line, HANDLE serial) {
 // 4) 对外：听端口 → accept → 命令循环 → 清理 Winsock
 // ---------------------------------------------------------------------------
 
-bool ipc_run(unsigned short port, HANDLE serial) {
+bool ipc_run(unsigned short port, HANDLE *serial) {
   WSADATA wsa;
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
     printf("WSAStartup failed: %d\n", WSAGetLastError());
@@ -141,16 +182,22 @@ bool ipc_run(unsigned short port, HANDLE serial) {
     WSACleanup();
     return false;
   }
+  // 为什么：记住 listen_sock，才能在 ipc_cancel() 里关掉 accept 阻塞
+  g_listen_sock = listen_sock;
   printf("listen ok 127.0.0.1:%u\n", (unsigned)port);
 
   SOCKET client = accept(listen_sock, NULL, NULL);
   if (client == INVALID_SOCKET) {
     printf("accept failed: %d\n", WSAGetLastError());
+    g_listen_sock = INVALID_SOCKET;
     closesocket(listen_sock);
     WSACleanup();
     return false;
   }
+  // 为什么：记住 client，才能在 ipc_cancel() 里关掉 recv 阻塞
+  g_client_sock = client;
   printf("client connected\n");
+  send_status(client, "ready"); // 串口在 main 里已就绪，IPC 接通即告 App
 
   for (;;) {
     char line[256];
@@ -159,12 +206,26 @@ bool ipc_run(unsigned short port, HANDLE serial) {
       break;
     if (rr == ReadLineResult::TooLong)
       continue;
-    if (!dispatch_line(line, serial))
+    if (!dispatch_line(line, serial, client))
       break; // quit
   }
 
   closesocket(client);
   closesocket(listen_sock);
+  g_client_sock = INVALID_SOCKET;
+  g_listen_sock = INVALID_SOCKET;
   WSACleanup();
   return true;
+}
+
+// 为什么：从其他线程（Ctrl handler）关掉两个 socket，让 accept/recv 立即
+// 失败返回，ipc_run 自然结束，从而回到 helper_main.cpp 的清理序列。
+// 关 listen_sock 打断还在等 accept 的情形；关 client 打断正在 recv 的情形。
+void ipc_cancel() {
+  SOCKET ls = g_listen_sock;
+  SOCKET cs = g_client_sock;
+  if (ls != INVALID_SOCKET)
+    closesocket(ls);
+  if (cs != INVALID_SOCKET)
+    closesocket(cs);
 }
