@@ -22,7 +22,7 @@ Windows 平台 PC 屏幕同步氛围灯驱动（米家追光灯带 Pro / Zeeray�
 ```mermaid
 flowchart LR
   subgraph flutter [Flutter_Process]
-    UI[Pages_fluent_ui]
+    UI[Pages_material3]
     State[Riverpod_Notifiers]
     Cfg[JSON_Config]
     Client[HelperClient]
@@ -104,7 +104,7 @@ flowchart LR
 lib/
 ├── main.dart                  # runApp(ProviderScope(child: ZeerayApp()))
 ├── app/
-│   ├── app.dart               # FluentApp + NavigationView 壳
+│   ├── app.dart               # MaterialApp + NavigationRail 壳
 │   └── theme.dart             # 主题（可后置）
 ├── ui/
 │   ├── pages/
@@ -128,7 +128,12 @@ lib/
 
 ## 4. 前端技术栈约定
 
-**UI：`fluent_ui ^4.16.0`**（Windows 原生观感）。用 `FluentApp` + `NavigationView`（主控 / 设置两个 `PaneItem`），不要混用 `MaterialApp` 做壳。
+**UI：Material 3（Flutter 内置）**
+
+- 用 `MaterialApp` + `ThemeData(colorScheme: ColorScheme.fromSeed(...))`，浅色/深色各一套、跟随系统；当前 Flutter 版本 Material 3 已是默认，不必再写 `useMaterial3: true`。
+- 桌面壳用 `NavigationRail`（主控 / 设置），页面主体用 `Scaffold`。**不要混用 `fluent_ui` 做壳**；`pubspec.yaml` 里的 `fluent_ui` 依赖在切换完成后移除。
+- 选 Material 3 的理由：生态与第三方扩展最全，配色、动效、组件库都能直接复用。
+- 扩展包按需引入，但**克制**：确有需要再加（如窗口/托盘用 `window_manager`、主题用 `flex_color_scheme`、转场用 `animations`），加之前先说明为什么内置能力不够。
 
 **状态管理：`flutter_riverpod ^3.4.1`**
 
@@ -186,16 +191,16 @@ lib/
 
 现有 `lib/main.dart` 的 IPC 能力（拉起 helper、Socket 收发、唤醒重连）**必须原样迁移、不得倒退成 mock**。
 
-- [ ] **A0 起壳**：`pubspec.yaml` 加 `flutter_riverpod: ^3.4.1`；删 `lib/engine/`、`lib/serial/` 空目录；`main.dart` 换成 `ProviderScope` + `FluentApp` + `NavigationView`（两个空页面）。
-      *验收*：App 能跑起来，左侧能在「主控 / 设置」间切换。
+- [ ] **A0 起壳**：`flutter_riverpod: ^3.4.1` 已加（✅）；删 `lib/engine/`、`lib/serial/` 空目录；`main.dart` 换成 `ProviderScope` + `MaterialApp`（`ColorScheme.fromSeed`）+ `NavigationRail`（两个空页面），把现有的 fluent 壳改写过来后从 `pubspec.yaml` 移除 `fluent_ui`。
+      *验收*：App 能跑起来，左侧能在「主控 / 设置」间切换，且全项目不再 import `fluent_ui`。
 - [ ] **A1 抽 `HelperClient`**：把 `Process.start` / Socket 连接重试 / 按行拆包 / `status` 解析搬进 `lib/ipc/helper_client.dart`；helper 路径改为「exe 同目录优先 + 开发回退」。
       *验收*：主控页按钮经 `HelperClient` 控灯，行为与烟测台一致，代码里再无绝对路径。
 - [ ] **A2 状态层**：`helper_state.dart` 定义连接/引擎状态（`disconnected / connecting / ready / running / failed`）Notifier；页面改 `ConsumerWidget`。
       *验收*：状态文案由 Provider 驱动，不再靠页面 `setState` 拼字符串。
-- [ ] **A3 主控页**：连接、开始、停止、纯色（几个预设色 + 取色）、关灯，配状态徽标与禁用态。
+- [ ] **A3 主控页**：连接、开始、停止、纯色（几个预设色 + 取色）、关灯，配状ProviderScope态徽标与禁用态。
       *验收*：未连接时控制按钮全禁用；连上后各按钮生效。
 - [ ] **A4 设置页骨架**：EMA α 滑条、方案 A/B 切换、COM 口输入框（仅绑 Provider，暂不下发 helper）。
-      *验收*：改动即时反映在 UI 上，切页面回来值还在。
+      *验收*：改动即时反映在 UI 上，切页面回来值还在。ProviderScope
 - [ ] **A5 JSON 落盘**：`AppConfig` + `fromJson/toJson` + exe 同目录读写；启动时恢复上次配置。
       *验收*：改参数 → 关 App → 重开，值被恢复；手删配置文件不崩。
 - [ ] **A6 生命周期收口**：退出发 `quit`、唤醒后重连迁进 Notifier / `onDispose`。
@@ -246,6 +251,12 @@ lib/
 - 回复结构固定：**本步目标 → 必要代码或对照 → 一句验收**。回复要短，禁止一次铺开整个阶段。
 - 给 Flutter 代码时，简要说明 **Widget 树结构与状态流向**（谁 watch、谁 read、状态存在哪）。
 - 给 C++ 核心逻辑时，注释解释**「为什么这么做」**而不只是「做了什么」；热路径避免不必要的内存拷贝。
+
+**工具纪律**
+
+- `user-dart` 的 `analyze_files`（及同类依赖 DTD / Analysis Server 就绪的 MCP）在本机易长时间无响应，会卡住整轮 Agent 对话。
+- **禁止**把静态检查默认走该 MCP；改用终端 `dart analyze <paths>`，或编辑器 `ReadLints` / IDE 诊断。
+- 其余 `user-dart` 能力（热重载、运行时错误等）可按需用；若同样无响应则立刻改用等价终端命令，不要空等。
 
 **优先级**
 

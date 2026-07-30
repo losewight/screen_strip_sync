@@ -1,4 +1,4 @@
-name: zeeray_ambilight
+﻿name: zeeray_ambilight
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -34,8 +34,8 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  ffi: ^2.2.0
-  fluent_ui: ^4.16.0
+  flutter_riverpod: ^3.4.1
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:
