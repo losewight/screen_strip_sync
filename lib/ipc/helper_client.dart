@@ -10,20 +10,29 @@ import 'helper_status.dart';
 const _ipcPort = 9527;
 const _stillRunning = -1;
 
-/// 解析 helper.exe：exe 同目录优先，开发时回退 `cpp_core/build/Release/`。
+/// 解析 helper.exe：exe 同目录优先；开发时从 exe 向上找仓库内
+/// `cpp_core/build/Release/helper.exe`（不依赖进程 CWD）。
 File resolveHelperExecutable() {
   final exeDir = File(Platform.resolvedExecutable).parent;
   final beside = File('${exeDir.path}${Platform.pathSeparator}helper.exe');
   if (beside.existsSync()) return beside;
 
-  final dev = File(
-    'cpp_core${Platform.pathSeparator}build'
-    '${Platform.pathSeparator}Release${Platform.pathSeparator}helper.exe',
-  );
-  if (dev.existsSync()) return dev;
+  var dir = exeDir;
+  for (var i = 0; i < 10; i++) {
+    final dev = File(
+      '${dir.path}${Platform.pathSeparator}cpp_core'
+      '${Platform.pathSeparator}build'
+      '${Platform.pathSeparator}Release'
+      '${Platform.pathSeparator}helper.exe',
+    );
+    if (dev.existsSync()) return dev;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
 
   throw StateError(
-    '找不到 helper.exe（已查 exe 同目录与 cpp_core/build/Release/）',
+    '找不到 helper.exe（已查 exe 同目录与向上遍历的 cpp_core/build/Release/）',
   );
 }
 
@@ -64,6 +73,7 @@ class HelperClient {
     }
 
     final helperFile = resolveHelperExecutable();
+    debugPrint('helper: ${helperFile.path}');
     final args = <String>[];
     final com = comPort?.trim();
     if (com != null && com.isNotEmpty) {
