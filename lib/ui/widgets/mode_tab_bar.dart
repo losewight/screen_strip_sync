@@ -36,9 +36,6 @@ class ModeTabBar extends StatelessWidget {
       height: height,
       decoration: const BoxDecoration(
         color: AppTheme.tabBarBg,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.divider),
-        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       alignment: Alignment.centerLeft,

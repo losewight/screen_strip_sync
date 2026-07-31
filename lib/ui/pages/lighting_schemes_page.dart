@@ -3,11 +3,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../../state/lighting_scheme_tab.dart';
 import '../widgets/color_swatch_button.dart';
 import '../widgets/helper_status_badge.dart';
 import '../widgets/mode_tab_bar.dart';
 
-/// 灯光方案：顶部模式页签 + 各模式面板；状态由 Provider 驱动。
+/// 灯光方案页签（壳层 [ModeTabBar] 与正文共用）。
+const lightingSchemeTabs = <ModeTabItem>[
+  ModeTabItem(
+    icon: Icons.desktop_windows_outlined,
+    selectedIcon: Icons.desktop_windows,
+    label: '屏幕同步',
+  ),
+  ModeTabItem(
+    icon: Icons.palette_outlined,
+    selectedIcon: Icons.palette,
+    label: '纯色模式',
+  ),
+  ModeTabItem(
+    icon: Icons.auto_awesome_outlined,
+    selectedIcon: Icons.auto_awesome,
+    label: '动态特效',
+  ),
+  ModeTabItem(
+    icon: Icons.music_note_outlined,
+    selectedIcon: Icons.music_note,
+    label: '音乐律动',
+  ),
+];
+
+/// 灯光方案：模式面板；顶栏与进度条由壳层统一渲染。
 class LightingSchemesPage extends ConsumerStatefulWidget {
   const LightingSchemesPage({super.key});
 
@@ -25,31 +50,6 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     ('橙', Color(0xFFFF8800)),
   ];
 
-  static const _tabs = <ModeTabItem>[
-    ModeTabItem(
-      icon: Icons.desktop_windows_outlined,
-      selectedIcon: Icons.desktop_windows,
-      label: '屏幕同步',
-    ),
-    ModeTabItem(
-      icon: Icons.palette_outlined,
-      selectedIcon: Icons.palette,
-      label: '纯色模式',
-    ),
-    ModeTabItem(
-      icon: Icons.auto_awesome_outlined,
-      selectedIcon: Icons.auto_awesome,
-      label: '动态特效',
-    ),
-    ModeTabItem(
-      icon: Icons.music_note_outlined,
-      selectedIcon: Icons.music_note,
-      label: '音乐律动',
-    ),
-  ];
-
-  int _tab = 0;
-
   Color _lastPicked = const Color(0xFFFF0000);
 
   Future<void> _pickColor(HelperStateNotifier notifier) async {
@@ -64,25 +64,13 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ModeTabBar(
-          items: _tabs,
-          selectedIndex: _tab,
-          onSelected: (i) {
-            if (i == _tab) return;
-            setState(() => _tab = i);
-          },
-        ),
-        Expanded(
-          child: switch (_tab) {
-            0 => _buildScreenSync(context),
-            1 => _buildSolid(context),
-            _ => _ComingSoonPanel(label: _tabs[_tab].label),
-          },
-        ),
-      ],
-    );
+    final tab = ref.watch(lightingSchemeTabProvider);
+
+    return switch (tab) {
+      0 => _buildScreenSync(context),
+      1 => _buildSolid(context),
+      _ => _ComingSoonPanel(label: lightingSchemeTabs[tab].label),
+    };
   }
 
   Widget _buildScreenSync(BuildContext context) {
@@ -143,7 +131,6 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 divisions: 19,
                 label: cfg.emaAlpha.toStringAsFixed(2),
                 onChanged: config.setEmaAlpha,
-                // 拖动中只改本地值，松手才下发，避免刷屏式发命令
                 onChangeEnd: notifier.sendEmaAlpha,
               ),
               const SizedBox(height: 20),

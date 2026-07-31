@@ -5,7 +5,6 @@ import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../widgets/serial_port_picker.dart';
-import '../widgets/strip_status_bar.dart';
 import '../widgets/win11_switch.dart';
 
 /// 主控：顶部灯带状态栏 + 连接操作 + 休眠 / 开关机联动开关。
@@ -32,61 +31,54 @@ class ControlPage extends ConsumerWidget {
             ui.phase == HelperPhase.failed ||
             portChanged);
 
-    return Column(
-      children: [
-        StripStatusBar(phase: ui.phase),
-        Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 16,
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 16,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ConnectBar(
+                canConnect: canConnect,
+                connectLabel: portChanged ? '换口连接' : '连接',
+                canReconnectSerial: ui.canReconnectSerial,
+                onConnect: notifier.connect,
+                onReconnectSerial: notifier.reconnectSerial,
               ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ConnectBar(
-                      canConnect: canConnect,
-                      connectLabel: portChanged ? '换口连接' : '连接',
-                      canReconnectSerial: ui.canReconnectSerial,
-                      onConnect: notifier.connect,
-                      onReconnectSerial: notifier.reconnectSerial,
-                    ),
-                    const SizedBox(height: 12),
-                    const SerialPortPicker(radius: _SwitchGroup.radius),
-                    const SizedBox(height: 16),
-                    _SwitchGroup(
-                      children: [
-                        _SwitchRow(
-                          title: '自动休眠同步',
-                          subtitle: '当显示器息屏时，灯带自动熄灭',
-                          value: cfg.autoSleepSync,
-                          onChanged: config.setAutoSleepSync,
-                        ),
-                        _SwitchRow(
-                          title: '关机时灯带自动关闭',
-                          subtitle: 'Windows 关机时自动关闭灯带',
-                          value: cfg.turnOffOnShutdown,
-                          onChanged: config.setTurnOffOnShutdown,
-                        ),
-                        _SwitchRow(
-                          title: '开机时灯带自动启动',
-                          subtitle: '需先在软件设置中开启软件开机自启动',
-                          value: cfg.startOnBoot,
-                          onChanged: config.setStartOnBoot,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              const SerialPortPicker(radius: _SwitchGroup.radius),
+              const SizedBox(height: 16),
+              _SwitchGroup(
+                children: [
+                  _SwitchRow(
+                    title: '自动休眠同步',
+                    subtitle: '当显示器息屏时，灯带自动熄灭',
+                    value: cfg.autoSleepSync,
+                    onChanged: config.setAutoSleepSync,
+                  ),
+                  _SwitchRow(
+                    title: '关机时灯带自动关闭',
+                    subtitle: 'Windows 关机时自动关闭灯带',
+                    value: cfg.turnOffOnShutdown,
+                    onChanged: config.setTurnOffOnShutdown,
+                  ),
+                  _SwitchRow(
+                    title: '开机时灯带自动启动',
+                    subtitle: '需先在软件设置中开启软件开机自启动',
+                    value: cfg.startOnBoot,
+                    onChanged: config.setStartOnBoot,
+                  ),
+                ],
               ),
-            ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

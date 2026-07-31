@@ -2,6 +2,7 @@
 
 import '../../app/theme.dart';
 import '../../state/helper_state.dart';
+import 'helper_phase_style.dart';
 
 /// 主控顶部状态栏：与 [ModeTabBar] 同高同色，展示灯带当前工作状态。
 class StripStatusBar extends StatelessWidget {
@@ -14,51 +15,15 @@ class StripStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (accent, icon, label) = switch (phase) {
-      HelperPhase.disconnected => (
-        const Color(0xFF8A93A6),
-        Icons.power_off_outlined,
-        '未连接',
-      ),
-      HelperPhase.connecting => (
-        const Color(0xFFFFC53D),
-        Icons.sync,
-        '连接中',
-      ),
-      HelperPhase.ready => (
-        const Color(0xFF6BD98A),
-        Icons.check_circle_outline,
-        '就绪',
-      ),
-      HelperPhase.running => (
-        AppTheme.accent,
-        Icons.lightbulb,
-        '运行中',
-      ),
-      HelperPhase.poweredOff => (
-        const Color(0xFFFFA05C),
-        Icons.lightbulb_outline,
-        '已熄灯',
-      ),
-      HelperPhase.noDevice => (
-        const Color(0xFFFFA05C),
-        Icons.usb_off_outlined,
-        '无设备',
-      ),
-      HelperPhase.failed => (
-        const Color(0xFFFF6B6B),
-        Icons.error_outline,
-        '连接失败',
-      ),
-    };
+    final style = HelperPhaseStyle.of(phase);
+    final accent = style.accent;
+    final icon = style.icon;
+    final label = style.label;
 
     return Container(
       height: height,
       decoration: const BoxDecoration(
         color: AppTheme.tabBarBg,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.divider),
-        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
