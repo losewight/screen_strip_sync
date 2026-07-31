@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 
 /// Win11 风格开关：胶囊轨道 + 圆滑块；开=蓝底黑钮，关=灰底白钮。
@@ -16,7 +17,7 @@ class Win11Switch extends StatelessWidget {
   static const double _w = 40;
   static const double _h = 20;
   static const double _thumb = 12;
-  static const double _pad = 4;
+  static const double _pad = AppSpacing.compact;
 
   @override
   Widget build(BuildContext context) {

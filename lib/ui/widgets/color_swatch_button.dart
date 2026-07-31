@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../app/spacing.dart';
+
 /// 纯色预设色卡：点一下发 `solid RRGGBB`。
 class ColorSwatchButton extends StatelessWidget {
   const ColorSwatchButton({
@@ -24,7 +26,10 @@ class ColorSwatchButton extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: enabled ? onPressed : null,
-        child: const SizedBox(width: 36, height: 36),
+        child: const SizedBox(
+          width: AppSpacing.page,
+          height: AppSpacing.page,
+        ),
       ),
     );
     if (tooltip == null) return child;
@@ -93,14 +98,14 @@ class _SolidColorPickerDialogState extends State<_SolidColorPickerDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              height: 48,
+              height: AppSpacing.pageSection,
               decoration: BoxDecoration(
                 color: _color,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppSpacing.control),
                 border: Border.all(color: Colors.white24),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.control),
             Text(
               colorToSolidHex(_color).toUpperCase(),
               style: Theme.of(context).textTheme.labelLarge,
@@ -158,7 +163,7 @@ class _SolidColorPickerDialogState extends State<_SolidColorPickerDialog> {
           ),
         ),
         SizedBox(
-          width: 36,
+          width: AppSpacing.page,
           child: Text('${value.round()}', textAlign: TextAlign.end),
         ),
       ],

@@ -2,13 +2,14 @@
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 
 /// 商店风格自绘顶栏：品牌 + 窗控（替代系统标题栏）。
 class StoreTitleBar extends StatefulWidget {
   const StoreTitleBar({super.key});
 
-  static const double height = 36;
+  static const double height = AppSpacing.page;
 
   @override
   State<StoreTitleBar> createState() => _StoreTitleBarState();
@@ -60,12 +61,15 @@ class _StoreTitleBarState extends State<StoreTitleBar> with WindowListener {
           children: [
             DragToMoveArea(
               child: Padding(
-                padding: const EdgeInsets.only(left: 14, right: 12),
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.text,
+                  right: AppSpacing.text,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.lightbulb, size: 20, color: AppTheme.accent),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.control),
                     const Text(
                       'Zeeray Ambilight',
                       style: TextStyle(

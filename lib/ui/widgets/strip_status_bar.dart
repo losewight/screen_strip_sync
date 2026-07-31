@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/helper_state.dart';
 import 'helper_phase_style.dart';
@@ -25,7 +26,7 @@ class StripStatusBar extends StatelessWidget {
       decoration: const BoxDecoration(
         color: AppTheme.tabBarBg,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.card),
       child: Row(
         children: [
           AnimatedContainer(
@@ -35,11 +36,11 @@ class StripStatusBar extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppSpacing.control),
             ),
             child: Icon(icon, size: 19, color: accent),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.text),
           Expanded(
             child: Text(
               '灯带$label',
@@ -53,7 +54,7 @@ class StripStatusBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.text),
           _StatusPill(color: accent, label: label),
         ],
       ),
@@ -73,7 +74,10 @@ class _StatusPill extends StatelessWidget {
     return AnimatedContainer(
       duration: AppTheme.navDuration,
       curve: AppTheme.navCurve,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.text,
+        vertical: AppSpacing.compact,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
@@ -83,11 +87,11 @@ class _StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: AppSpacing.control,
+            height: AppSpacing.control,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.control),
           Text(
             label,
             style: TextStyle(

@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/helper_state.dart';
 
@@ -50,7 +51,7 @@ class HelperStatusBadge extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.control),
             Text(
               label,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -59,9 +60,9 @@ class HelperStatusBadge extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.control),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.section),
           child: Text(
             ipcLine.isNotEmpty ? ipcLine : message,
             textAlign: TextAlign.center,

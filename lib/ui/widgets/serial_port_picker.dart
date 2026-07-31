@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
@@ -61,7 +62,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
         borderRadius: BorderRadius.circular(widget.radius),
         border: Border.all(color: AppTheme.divider),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: AppSpacing.cardInsets,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -74,7 +75,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
               color: Color.fromARGB(255, 240, 240, 240),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.text),
           Row(
             children: [
               Expanded(
@@ -103,7 +104,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.control),
               IconButton(
                 tooltip: '刷新扫描',
                 onPressed: helper.scanPorts,
@@ -111,7 +112,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.text),
           TextField(
             controller: _comController,
             decoration: const InputDecoration(
@@ -127,7 +128,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
             onChanged: ref.read(configProvider.notifier).setComPort,
             onSubmitted: helper.selectComPort,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.control),
           Text(
             ui.currentCom.isEmpty
                 ? '选好口后点上方「连接」；灯带通常是标了 CH340 的那个。'

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
@@ -33,10 +34,7 @@ class ControlPage extends ConsumerWidget {
 
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 16,
-        ),
+        padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: Column(
@@ -50,9 +48,9 @@ class ControlPage extends ConsumerWidget {
                 onConnect: notifier.connect,
                 onReconnectSerial: notifier.reconnectSerial,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.text),
               const SerialPortPicker(radius: _SwitchGroup.radius),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.card),
               _SwitchGroup(
                 children: [
                   _SwitchRow(
@@ -106,7 +104,7 @@ class _ConnectBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(_SwitchGroup.radius),
         border: Border.all(color: AppTheme.divider),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: AppSpacing.cardInsets,
       child: Row(
         children: [
           const Expanded(
@@ -120,12 +118,12 @@ class _ConnectBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.text),
           FilledButton(
             onPressed: canConnect ? onConnect : null,
             child: Text(connectLabel),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpacing.control),
           OutlinedButton(
             onPressed: canReconnectSerial ? onReconnectSerial : null,
             child: const Text('重连串口'),
@@ -203,7 +201,10 @@ class _SwitchRowState extends State<_SwitchRow> {
         duration: AppTheme.navDuration,
         curve: AppTheme.navCurve,
         color: _hover ? _hoverBg : _idleBg,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.card,
+          vertical: AppSpacing.card,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -219,7 +220,7 @@ class _SwitchRowState extends State<_SwitchRow> {
                       color: Color.fromARGB(255, 240, 240, 240),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.compact),
                   Text(
                     widget.subtitle,
                     style: const TextStyle(
@@ -231,7 +232,7 @@ class _SwitchRowState extends State<_SwitchRow> {
                 ],
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.card),
             Win11Switch(value: widget.value, onChanged: widget.onChanged),
           ],
         ),

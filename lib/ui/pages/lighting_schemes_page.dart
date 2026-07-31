@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/spacing.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
@@ -82,7 +83,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
 
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
@@ -94,12 +95,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 message: ui.message,
                 ipcLine: ui.ipcLine,
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: AppSpacing.pageSection),
               _sectionLabel(context, '引擎'),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.text),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: AppSpacing.text,
+                runSpacing: AppSpacing.text,
                 alignment: WrapAlignment.center,
                 children: [
                   FilledButton(
@@ -116,9 +117,9 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: AppSpacing.pageSection),
               _sectionLabel(context, '平滑（EMA α）'),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.compact),
               Text(
                 cfg.emaAlpha.toStringAsFixed(2),
                 textAlign: TextAlign.center,
@@ -133,9 +134,9 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 onChanged: config.setEmaAlpha,
                 onChangeEnd: notifier.sendEmaAlpha,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.section),
               _sectionLabel(context, '调色方案'),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.text),
               SegmentedButton<ColorMode>(
                 segments: const [
                   ButtonSegment(
@@ -170,7 +171,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
 
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
@@ -182,12 +183,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 message: ui.message,
                 ipcLine: ui.ipcLine,
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: AppSpacing.pageSection),
               _sectionLabel(context, '纯色'),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.text),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: AppSpacing.text,
+                runSpacing: AppSpacing.text,
                 alignment: WrapAlignment.center,
                 children: [
                   for (final (name, color) in _presets)
@@ -235,8 +236,12 @@ class _ComingSoonPanel extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.construction, size: 36, color: Colors.white24),
-          const SizedBox(height: 12),
+          const Icon(
+            Icons.construction,
+            size: AppSpacing.page,
+            color: Colors.white24,
+          ),
+          const SizedBox(height: AppSpacing.text),
           Text(
             '$label 还没做',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(

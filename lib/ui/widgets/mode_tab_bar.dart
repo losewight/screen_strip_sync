@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 
 /// 顶部模式页签的一项：图标 + 文案 + 图标专属色。
@@ -37,7 +38,7 @@ class ModeTabBar extends StatelessWidget {
       decoration: const BoxDecoration(
         color: AppTheme.tabBarBg,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.text),
       alignment: Alignment.centerLeft,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -86,7 +87,10 @@ class _ModeTabState extends State<_ModeTab> {
         : const Color.fromARGB(255, 230, 230, 230);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.compact,
+        vertical: AppSpacing.control,
+      ),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
@@ -97,8 +101,8 @@ class _ModeTabState extends State<_ModeTab> {
           child: AnimatedContainer(
             duration: AppTheme.navDuration,
             curve: AppTheme.navCurve,
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 17),
+            height: AppSpacing.pageSection,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.card),
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(6),
@@ -111,7 +115,7 @@ class _ModeTabState extends State<_ModeTab> {
                   size: 20,
                   color: fg,
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: AppSpacing.control),
                 AnimatedDefaultTextStyle(
                   duration: AppTheme.navDuration,
                   curve: AppTheme.navCurve,

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
+import '../../app/spacing.dart';
 import '../../app/theme.dart';
 
 class StoreNavItem {
@@ -37,7 +38,7 @@ class StoreSidebar extends StatefulWidget {
 class _StoreSidebarState extends State<StoreSidebar>
     with SingleTickerProviderStateMixin {
   static const double _width = 72;
-  static const double _padV = 8;
+  static const double _padV = AppSpacing.control;
   static const double _btnOuterH = 68; // 64 内容 + 上下各 2 padding
   static const double _indicatorH = 22;
   static const double _indicatorW = 5;
@@ -181,7 +182,7 @@ class _StoreSidebarState extends State<StoreSidebar>
                               )
                             : _stretchGeometry(_ctrl.value);
                         return Positioned(
-                          left: 6,
+                          left: AppSpacing.control,
                           top: geo.top,
                           child: IgnorePointer(
                             child: Container(
@@ -228,7 +229,10 @@ class _StoreNavButton extends StatelessWidget {
     final fg = selected ? AppTheme.accent : _idleFg;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.control,
+        vertical: AppSpacing.compact,
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -257,7 +261,7 @@ class _StoreNavButton extends StatelessWidget {
                         size: 22,
                         color: color,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.compact),
                       Text(
                         item.label,
                         style: TextStyle(
