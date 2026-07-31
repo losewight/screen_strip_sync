@@ -173,8 +173,9 @@ lib/
 | → helper | `start` | 启动氛围灯引擎线程 |
 | → helper | `stop` | 停止引擎（join 线程） |
 | → helper | `solid RRGGBB` | 发一帧纯色（6 位 hex，非法值忽略） |
-| → helper | `off` | 停引擎并关灯（`set_power 0`） |
-| → helper | `quit` | 停引擎并结束 IPC 循环，helper 退出 |
+| → helper | `soft_off` | UI 关灯：停引擎 + 纯黑一帧（`send_solid`，含 ≥50ms）；**不** `set_power 0` |
+| → helper | `off` | 真下电：停引擎 + `set_power 0`（UI 不用；备用） |
+| → helper | `quit` | 停引擎并结束 IPC；`helper_shutdown` 内仍 `power_off` |
 | → helper | `reconnect` | 关串口并重试就绪（最多 10 次） |
 | ← helper | `status ready` | 客户端接通、串口已就绪 |
 | ← helper | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |

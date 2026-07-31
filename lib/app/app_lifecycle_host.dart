@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
 
 /// App 级生命周期：关窗先 hide（视觉秒关）再后台清理；休眠唤醒后按需重连。
@@ -99,8 +100,9 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     }
   }
 
-  /// IPC 未接入：空操作；A1 后改为 `HelperClient.quit()`。
-  Future<void> _quitHelperIfConnected() async {}
+  Future<void> _quitHelperIfConnected() async {
+    await ref.read(helperClientProvider).quit();
+  }
 
   @override
   Widget build(BuildContext context) => widget.child;

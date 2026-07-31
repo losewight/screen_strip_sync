@@ -92,6 +92,13 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     power_off(*serial);
     return true;
   }
+  // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
+  if (strcmp(line, "soft_off") == 0) {
+    engine_stop();
+    printf("cmd=soft_off\n");
+    send_solid(*serial, "000000");
+    return true;
+  }
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
     printf("cmd=start\n");

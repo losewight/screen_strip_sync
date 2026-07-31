@@ -101,7 +101,11 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HelperStatusBadge(phase: ui.phase, message: ui.message),
+              HelperStatusBadge(
+                phase: ui.phase,
+                message: ui.message,
+                ipcLine: ui.ipcLine,
+              ),
               const SizedBox(height: 28),
               _sectionLabel(context, '引擎'),
               const SizedBox(height: 10),
@@ -119,7 +123,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                     child: const Text('停止'),
                   ),
                   OutlinedButton(
-                    onPressed: can ? () => notifier.send('off') : null,
+                    onPressed: can ? notifier.softOff : null,
                     child: const Text('关灯'),
                   ),
                 ],
@@ -186,7 +190,11 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HelperStatusBadge(phase: ui.phase, message: ui.message),
+              HelperStatusBadge(
+                phase: ui.phase,
+                message: ui.message,
+                ipcLine: ui.ipcLine,
+              ),
               const SizedBox(height: 28),
               _sectionLabel(context, '纯色'),
               const SizedBox(height: 10),

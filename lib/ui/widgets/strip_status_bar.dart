@@ -38,7 +38,7 @@ class StripStatusBar extends StatelessWidget {
       HelperPhase.poweredOff => (
         const Color(0xFFFFA05C),
         Icons.lightbulb_outline,
-        '已关灯',
+        '已熄灯',
       ),
       HelperPhase.noDevice => (
         const Color(0xFFFFA05C),
