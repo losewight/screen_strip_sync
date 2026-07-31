@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
+import 'crash_log.dart';
 
 /// App 级生命周期：关窗先 hide（视觉秒关）再后台清理；休眠唤醒后按需重连。
 class AppLifecycleHost extends ConsumerStatefulWidget {
@@ -31,7 +32,15 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
     // 为什么：不拦截则 close 立刻杀进程，quit 来不及写，helper 易僵尸占 COM
-    windowManager.setPreventClose(true);
+    unawaited(_armPreventClose());
+  }
+
+  Future<void> _armPreventClose() async {
+    try {
+      await windowManager.setPreventClose(true);
+    } catch (e, st) {
+      CrashLog.error('lifecycle', e, st);
+    }
   }
 
   @override
@@ -69,6 +78,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
   }
 
   Future<void> _hideThenShutdown() async {
+    CrashLog.event('lifecycle', 'onWindowClose -> _hideThenShutdown');
     // 为什么：用户点关闭后立刻藏窗，清理在后台做，避免等 destroy 才消失
     try {
       await windowManager.hide();
