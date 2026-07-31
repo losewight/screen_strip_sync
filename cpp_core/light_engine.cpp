@@ -5,27 +5,96 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 #include <thread>
 
 // 为什么：主线程改 false，发帧线程 while 退出；Day7 的停止标志。
 static std::atomic<bool> g_running{false};
 static std::thread g_worker;
+// 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
+static std::atomic<float> g_alpha{0.3f};
+// 为什么：'a'|'b'；阶段 C 前 produce_colors 不读，仅防配置丢失
+static std::atomic<char> g_mode{'a'};
+// 为什么：字符串不能 atomic；set/reconnect 都在 IPC 线程，启动在
+// main，仍用锁防竞态
+static std::mutex g_com_mu;
+static char g_com_name[16] = "COM10";
 // 为什么：EMA 需要「上一帧平滑结果」；10 段 × RGB
 static float g_ema_r[10] = {};
 static float g_ema_g[10] = {};
 static float g_ema_b[10] = {};
 static bool g_ema_inited = false;
 
-bool try_serial_ready(HANDLE *out_h) {
-  HANDLE h = INVALID_HANDLE_VALUE;
-  if (!open_com("COM10", &h))
+void engine_set_alpha(float alpha) {
+  // 与 Flutter AppConfig 对齐：[0.05, 1.0]
+  if (alpha < 0.05f)
+    alpha = 0.05f;
+  if (alpha > 1.f)
+    alpha = 1.f;
+  g_alpha.store(alpha);
+}
+
+void engine_set_mode(char mode) {
+  // 调用前已校验；统一存小写
+  g_mode.store(mode);
+}
+
+bool engine_set_com(const char *name) {
+  if (name == nullptr)
     return false;
+  while (*name == ' ' || *name == '\t')
+    ++name;
+
+  // 期望 COMn / comn，n 为 1～3 位数字
+  char c0 = name[0], c1 = name[1], c2 = name[2];
+  if (!((c0 == 'C' || c0 == 'c') && (c1 == 'O' || c1 == 'o') &&
+        (c2 == 'M' || c2 == 'm')))
+    return false;
+
+  const char *digits = name + 3;
+  if (*digits < '0' || *digits > '9')
+    return false;
+  int n = 0;
+  while (digits[n] >= '0' && digits[n] <= '9') {
+    ++n;
+    if (n > 3)
+      return false;
+  }
+  if (n < 1)
+    return false;
+  const char *rest = digits + n;
+  while (*rest == ' ' || *rest == '\t')
+    ++rest;
+  if (*rest != '\0')
+    return false;
+
+  char norm[16];
+  // 规范成 COM + 数字
+  snprintf(norm, sizeof(norm), "COM%.*s", n, digits);
+
+  std::lock_guard<std::mutex> lock(g_com_mu);
+  snprintf(g_com_name, sizeof(g_com_name), "%s", norm);
+  return true;
+}
+
+bool try_serial_ready(HANDLE *out_h) {
+  char name[16];
+  {
+    std::lock_guard<std::mutex> lock(g_com_mu);
+    snprintf(name, sizeof(name), "%s", g_com_name);
+  }
+  HANDLE h = INVALID_HANDLE_VALUE;
+  if (!open_com(name, &h)) {
+    printf("open_com %s failed\n", name);
+    return false;
+  }
   if (!power_on(h) || !handshake(h)) {
     power_off(h);
     close_com(h);
     return false;
   }
   *out_h = h;
+  printf("serial ready on %s\n", name);
   return true;
 }
 
@@ -85,8 +154,8 @@ static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
   if (e != DxgiErr::Ok)
     return false;
 
-  // α 越小越拖影；0.3 偏跟手像硬切，先用 0.1 看拖影
-  const float alpha = 0.3f;
+  // α 越小越拖影；由 IPC set alpha 写入 g_alpha
+  const float alpha = g_alpha.load();
   char colors[10][7] = {};
 
   for (int i = 0; i < 10; ++i) {

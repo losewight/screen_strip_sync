@@ -52,10 +52,16 @@ static BOOL WINAPI on_ctrl(DWORD type) {
 }
 
 int main(int argc, char *argv[]) {
-  (void)argc;
-  (void)argv;
-
   SetConsoleCtrlHandler(on_ctrl, TRUE);
+
+  // 为什么：Flutter 用 argv[1] 传入当前选中口，避免先死开 COM10 再 reconnect
+  if (argc >= 2) {
+    if (engine_set_com(argv[1])) {
+      printf("com from argv: %s\n", argv[1]);
+    } else {
+      printf("bad com argv [%s], keep default\n", argv[1]);
+    }
+  }
 
   // 为什么：engine 线程里会反复 grab，DXGI 必须常驻到进程结束
   DxgiErr dxgi = dxgi_init();

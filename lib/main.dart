@@ -4,39 +4,32 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app/app.dart';
 import 'app/crash_hooks.dart';
+import 'app/crash_log.dart';
 
 Future<void> main() async {
+  CrashLog.event('main', 'startup log=${CrashLog.filePath}');
+  // 为什么：binding 与 runApp 必须在同一 zone；await 插件后再 runZonedGuarded 会错位
   WidgetsFlutterBinding.ensureInitialized();
-
   installCrashHooks();
 
-  await runGuarded(() async {
-    await windowManager.ensureInitialized();
+  await windowManager.ensureInitialized();
 
-    // 为什么：系统标题栏换成自绘商店风顶栏，必须先藏原生 chrome
+  // 为什么：系统标题栏换成自绘商店风顶栏，必须先藏原生 chrome
+  const windowOptions = WindowOptions(
+    size: Size(1100, 720),
+    minimumSize: Size(800, 520),
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.hidden,
+    title: 'Zeeray Ambilight',
+  );
 
-    const windowOptions = WindowOptions(
-      size: Size(1100, 720),
-
-      minimumSize: Size(800, 520),
-
-      center: true,
-
-      backgroundColor: Colors.transparent,
-
-      skipTaskbar: false,
-
-      titleBarStyle: TitleBarStyle.hidden,
-
-      title: 'Zeeray Ambilight',
-    );
-
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-
-      await windowManager.focus();
-    });
-
-    runApp(const ProviderScope(child: ZeerayApp()));
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
   });
+
+  runApp(const ProviderScope(child: ZeerayApp()));
+  CrashLog.event('main', 'runApp done');
 }

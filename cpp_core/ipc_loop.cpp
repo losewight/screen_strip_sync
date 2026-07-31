@@ -7,6 +7,7 @@
 #include "serial_port.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 static SOCKET g_listen_sock = INVALID_SOCKET;
@@ -116,6 +117,58 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     } else {
       printf("cmd=solid color=%s\n", color);
       send_solid(*serial, color);
+    }
+    return true;
+  }
+  // 为什么：缺参/非数字忽略（与 solid 非法同风格）；合法值交 engine_set_alpha
+  // clamp
+  if (strncmp(line, "set alpha ", 10) == 0) {
+    const char *p = line + 10;
+    char *end = nullptr;
+    float v = strtof(p, &end);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set alpha: [%s]\n", p);
+    } else {
+      engine_set_alpha(v);
+      printf("cmd=set alpha\n");
+    }
+    return true;
+  }
+  // 为什么：仅 a|b；非法忽略。引擎暂不分支（阶段 C）
+  if (strncmp(line, "set mode ", 9) == 0) {
+    const char *p = line + 9;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char c = *p;
+    char norm = 0;
+    if (c == 'a' || c == 'A')
+      norm = 'a';
+    else if (c == 'b' || c == 'B')
+      norm = 'b';
+    if (norm != 0) {
+      const char *rest = p + 1;
+      while (*rest == ' ' || *rest == '\t')
+        ++rest;
+      if (*rest == '\0') {
+        engine_set_mode(norm);
+        printf("cmd=set mode %c\n", norm);
+        return true;
+      }
+    }
+    printf("bad set mode: [%s]\n", p);
+    return true;
+  }
+  // 为什么：只改配置，不自动开口；切口靠随后的 reconnect
+  if (strncmp(line, "set com ", 8) == 0) {
+    const char *p = line + 8;
+    if (!engine_set_com(p)) {
+      printf("bad set com: [%s]\n", p);
+    } else {
+      printf("cmd=set com\n");
     }
     return true;
   }

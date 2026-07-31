@@ -1,6 +1,4 @@
-﻿import 'dart:async';
-
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 
 import 'crash_log.dart';
 
@@ -17,11 +15,4 @@ void installCrashHooks() {
     CrashLog.error('PlatformDispatcher', error, stack);
     return true;
   };
-}
-
-/// 包一层 zone，兜 async gap 里漏网的未捕获错误。
-Future<void> runGuarded(Future<void> Function() body) async {
-  await runZonedGuarded(body, (error, stack) {
-    CrashLog.error('runZonedGuarded', error, stack);
-  });
 }

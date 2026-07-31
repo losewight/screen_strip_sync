@@ -29,10 +29,11 @@ class HelperUiState {
     required this.phase,
     required this.message,
     this.ipcLine = '',
-    this.allPorts = const [],
-    this.ch340Ports = const [],
+    this.ports = const [],
     this.currentCom = '',
+    this.lastGoodCom = '',
     this.hasDevice = false,
+    this.isScanningPorts = false,
   });
 
   final HelperPhase phase;
@@ -40,19 +41,28 @@ class HelperUiState {
 
   /// 最近经 Socket 发出的 IPC 行（含 `\n`），供状态徽标小字展示。
   final String ipcLine;
-  final List<String> allPorts;
-  final List<String> ch340Ports;
+
+  /// 本机扫描结果（preferred 已排前）。
+  final List<ComPortInfo> ports;
+
+  /// helper 当前打开的口；换口 quit 后会暂时清空。
   final String currentCom;
+
+  /// 最近一次成功打开的口；换口失败后仍保留，供文案 / 换口判断。
+  final String lastGoodCom;
   final bool hasDevice;
+
+  /// 正在枚举本机 COM（刷新钮改加载圈）。
+  final bool isScanningPorts;
+
+  /// 换口判断锚点：优先当前打开口，否则用上次成功口。
+  String get anchorCom => currentCom.isNotEmpty ? currentCom : lastGoodCom;
 
   /// 已接通 IPC，可发控灯命令（含关灯后的 poweredOff）。
   bool get canControl =>
       phase == HelperPhase.ready ||
       phase == HelperPhase.running ||
       phase == HelperPhase.poweredOff;
-
-  /// 除连接过程外都可点：已连通就重试串口，未连通则只刷新扫描列表。
-  bool get canReconnectSerial => phase != HelperPhase.connecting;
 }
 
 class HelperStateNotifier extends Notifier<HelperUiState> {
@@ -85,6 +95,8 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
       _statusSub?.cancel();
       _disconnectSub?.cancel();
     });
+    // 为什么：首帧不阻塞；进 App 扫一遍，有 CH340 则默认选中
+    Future.microtask(scanPorts);
     return const HelperUiState(
       phase: HelperPhase.disconnected,
       message: '未连接',
@@ -121,19 +133,21 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     String? message,
     String? ipcLine,
     HelperPhase? phase,
-    List<String>? allPorts,
-    List<String>? ch340Ports,
+    List<ComPortInfo>? ports,
     String? currentCom,
+    String? lastGoodCom,
     bool? hasDevice,
+    bool? isScanningPorts,
   }) {
     state = HelperUiState(
       phase: phase ?? state.phase,
       message: message ?? state.message,
       ipcLine: ipcLine ?? state.ipcLine,
-      allPorts: allPorts ?? state.allPorts,
-      ch340Ports: ch340Ports ?? state.ch340Ports,
+      ports: ports ?? state.ports,
       currentCom: currentCom ?? state.currentCom,
+      lastGoodCom: lastGoodCom ?? state.lastGoodCom,
       hasDevice: hasDevice ?? state.hasDevice,
+      isScanningPorts: isScanningPorts ?? state.isScanningPorts,
     );
   }
 
@@ -145,19 +159,40 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
   void _onStatusWord(HelperStatusWord word) {
     switch (word) {
       case HelperStatusWord.ready:
-        final com = ref.read(configProvider).comPort;
+        final cfg = ref.read(configProvider);
+        // 为什么：helper 已用 argv 开对口；此处只补 α/mode/com 配置，不再立刻 reconnect
         _patch(
-          message: '串口就绪',
+          message: '串口就绪（${cfg.comPort}）',
           phase: HelperPhase.ready,
-          currentCom: com,
+          currentCom: cfg.comPort,
+          lastGoodCom: cfg.comPort,
           hasDevice: true,
         );
+        sendEmaAlpha(cfg.emaAlpha);
+        sendMode(cfg.mode);
+        sendComPort(cfg.comPort);
       case HelperStatusWord.reconnecting:
-        _patch(message: '正在重连串口…');
+        _patch(
+          message: '正在重连串口…',
+          phase: HelperPhase.connecting,
+          hasDevice: false,
+        );
       case HelperStatusWord.reconnectOk:
-        _patch(message: '重连成功', hasDevice: true);
+        final com = ref.read(configProvider).comPort;
+        _patch(
+          message: '重连成功',
+          hasDevice: true,
+          currentCom: com,
+          lastGoodCom: com,
+          phase: HelperPhase.ready,
+        );
       case HelperStatusWord.reconnectFail:
-        _patch(message: '重连失败', hasDevice: false);
+        _patch(
+          message: '重连失败：打不开 ${ref.read(configProvider).comPort}',
+          hasDevice: false,
+          phase: HelperPhase.noDevice,
+          currentCom: '',
+        );
       case HelperStatusWord.unknown:
         break;
     }
@@ -168,40 +203,106 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     if (name.isEmpty) return;
     ref.read(configProvider.notifier).setComPort(name);
     _patch(message: '已选择 $name');
+    // 已连接时只改本地配置；真正切口点「换口连接」（同口恢复才用「重连串口」）
+    sendComPort(name);
   }
 
   Future<void> connect() async {
     if (state.phase == HelperPhase.connecting) return;
-    if (_client.isConnected && state.canControl) return;
+
+    final wanted = ref.read(configProvider).comPort.trim();
+    final anchor = state.anchorCom;
+    final portChanged =
+        wanted.isNotEmpty &&
+        anchor.isNotEmpty &&
+        wanted.toUpperCase() != anchor.toUpperCase();
+
+    // 已连通且口未变：忽略重复点「连接」；换口 / 失败后重连要往下走
+    if (_client.isConnected && state.canControl && !portChanged) return;
 
     if (_client.isConnected) {
       _cancelPendingSolid();
       await _client.quit();
-      _patch(message: '重新连接…', phase: HelperPhase.disconnected);
+      _patch(
+        message: portChanged ? '换口，重启 helper…' : '重新连接…',
+        phase: HelperPhase.disconnected,
+        hasDevice: false,
+        currentCom: '',
+        // lastGoodCom 保留：新口失败后仍知道「上次成功是哪口」
+      );
     }
 
     _patch(message: '启动 helper…', phase: HelperPhase.connecting);
     try {
-      await _client.connect();
-      _patch(message: '已连接，等待 helper 状态…');
+      await _client.connect(comPort: wanted);
+      _patch(message: '已连接 IPC，等待串口状态…');
     } catch (e) {
-      _patch(message: '$e', phase: HelperPhase.failed, hasDevice: false);
+      _patch(
+        message: '$e',
+        phase: HelperPhase.failed,
+        hasDevice: false,
+        currentCom: '',
+      );
     }
   }
 
-  void sendEmaAlpha(double _) {}
+  /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过（配置已由 ConfigNotifier 落盘）。
+  void sendEmaAlpha(double alpha) {
+    if (!_client.isConnected) return;
+    try {
+      final v = alpha.clamp(0.05, 1.0);
+      _sendIpc('set alpha ${v.toStringAsFixed(2)}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
 
-  void sendMode(ColorMode _) {}
+  void sendMode(ColorMode mode) {
+    if (!_client.isConnected) return;
+    try {
+      final letter = switch (mode) {
+        ColorMode.a => 'a',
+        ColorMode.b => 'b',
+      };
+      _sendIpc('set mode $letter');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
 
-  void sendComPort(String _) {}
+  void sendComPort(String port) {
+    if (!_client.isConnected) return;
+    final name = port.trim();
+    if (name.isEmpty) return;
+    try {
+      _sendIpc('set com $name');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
 
+  /// 每次扫描：若出现 VID/PID 推荐口且当前未选中推荐口，则自动选第一个推荐口。
+  /// （首次未插灯带时列表为空；插上后点刷新即可落到 CH340。）
   Future<void> scanPorts() async {
-    final scanned = await scanWindowsComPorts();
-    _patch(
-      message: scanned.all.isEmpty ? '未发现串口' : '已扫描 ${scanned.all.length} 个串口',
-      allPorts: scanned.all,
-      ch340Ports: scanned.ch340,
-    );
+    if (state.isScanningPorts) return;
+    _patch(isScanningPorts: true, message: '正在扫描串口…');
+    try {
+      final scanned = await scanWindowsComPorts();
+      _patch(
+        message: scanned.isEmpty ? '未发现串口' : '已扫描 ${scanned.length} 个串口',
+        ports: scanned,
+      );
+
+      final preferred = scanned.where((p) => p.preferred).toList();
+      if (preferred.isEmpty) return;
+
+      final current = ref.read(configProvider).comPort.trim().toUpperCase();
+      if (!preferred.any((p) => p.port == current)) {
+        selectComPort(preferred.first.port);
+      }
+    } finally {
+      _patch(isScanningPorts: false);
+    }
   }
 
   Future<void> reconnectSerial() async {
@@ -210,6 +311,8 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
       return;
     }
     try {
+      // 先把当前 UI 口推给 helper，再重开
+      sendComPort(ref.read(configProvider).comPort);
       _sendIpc('reconnect');
     } catch (e) {
       _patch(message: '$e');

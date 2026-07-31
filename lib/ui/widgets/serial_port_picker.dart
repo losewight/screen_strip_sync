@@ -19,8 +19,12 @@ class SerialPortPicker extends ConsumerStatefulWidget {
   ConsumerState<SerialPortPicker> createState() => _SerialPortPickerState();
 }
 
+/// 下拉「自定义」项的内部值，不对应真实 COM 口名。
+const _customComKey = '__custom__';
+
 class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
   late final TextEditingController _comController;
+  bool _isManualMode = false;
 
   @override
   void initState() {
@@ -48,17 +52,15 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
       }
     });
 
-    // 下拉选项：CH340 排在前面并标注，其余口照列
-    final ch340 = ui.ch340Ports.toSet();
-    final options = <String>[
-      ...ui.ch340Ports,
-      ...ui.allPorts.where((p) => !ch340.contains(p)),
-    ];
-    final selected = options.contains(cfg.comPort) ? cfg.comPort : null;
+    final ports = ui.ports;
+    final inList = ports.any((p) => p.port == cfg.comPort);
+    final selected = _isManualMode
+        ? _customComKey
+        : (inList ? cfg.comPort : null);
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 38, 43, 60),
+        color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(widget.radius),
         border: Border.all(color: AppTheme.divider),
       ),
@@ -66,80 +68,119 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             '串口',
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 14,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w500,
-              color: Color.fromARGB(255, 240, 240, 240),
             ),
           ),
           const SizedBox(height: AppSpacing.text),
           Row(
             children: [
               Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey(selected ?? 'none'),
+                  initialValue: selected,
+                  isExpanded: true,
+                  dropdownColor: AppTheme.cardBg,
+                  borderRadius: AppTheme.menuBorderRadius,
+                  decoration: InputDecoration(
                     labelText: '扫描到的口',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                    hintText: ports.isEmpty ? '点右侧刷新扫描' : '选择串口',
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: selected,
-                      hint: Text(options.isEmpty ? '点右侧刷新扫描' : '选择串口'),
-                      items: [
-                        for (final p in options)
-                          DropdownMenuItem(
-                            value: p,
-                            child: Text(ch340.contains(p) ? '$p (CH340)' : p),
-                          ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) helper.selectComPort(v);
-                      },
+                  selectedItemBuilder: (context) => [
+                    for (final p in ports)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          p.preferred ? '${p.displayName} (推荐)' : p.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('自定义 / 手动指定串口…'),
                     ),
-                  ),
+                  ],
+                  items: [
+                    for (final p in ports)
+                      DropdownMenuItem(
+                        value: p.port,
+                        child: Text(
+                          p.preferred ? '${p.displayName} (推荐)' : p.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    const DropdownMenuItem(
+                      value: _customComKey,
+                      child: Text('自定义 / 手动指定串口…'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    if (v == _customComKey) {
+                      setState(() => _isManualMode = true);
+                      return;
+                    }
+                    setState(() => _isManualMode = false);
+                    helper.selectComPort(v);
+                  },
                 ),
               ),
               const SizedBox(width: AppSpacing.control),
-              IconButton(
-                tooltip: '刷新扫描',
-                onPressed: helper.scanPorts,
-                icon: const Icon(Icons.refresh),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: ui.isScanningPorts
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            strokeCap: StrokeCap.round,
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: '刷新扫描',
+                        onPressed: helper.scanPorts,
+                        iconSize: 24,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
+                        icon: const Icon(Icons.refresh),
+                      ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.text),
-          TextField(
-            controller: _comController,
-            decoration: const InputDecoration(
-              labelText: '手动输入 COM 口',
-              hintText: '例如 COM10',
-              border: OutlineInputBorder(),
-              isDense: true,
+          if (_isManualMode) ...[
+            const SizedBox(height: AppSpacing.text),
+            TextField(
+              controller: _comController,
+              decoration: const InputDecoration(
+                labelText: '手动输入 COM 口',
+                hintText: '例如 COM10',
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              ],
+              textCapitalization: TextCapitalization.characters,
+              onChanged: ref.read(configProvider.notifier).setComPort,
+              onSubmitted: helper.selectComPort,
             ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-            ],
-            textCapitalization: TextCapitalization.characters,
-            onChanged: ref.read(configProvider.notifier).setComPort,
-            onSubmitted: helper.selectComPort,
-          ),
+          ],
           const SizedBox(height: AppSpacing.control),
           Text(
             ui.currentCom.isEmpty
-                ? '选好口后点上方「连接」；灯带通常是标了 CH340 的那个。'
+                ? '未插灯带时列表可能为空；插上后点刷新，出现「推荐」口会自动选中。'
+                      '需要指定其它口时，选「自定义 / 手动指定串口…」。选好后点上方「连接」。'
                 : 'helper 当前口：${ui.currentCom}'
                       '${ui.hasDevice ? '（已打开）' : '（未打开）'}'
-                      '。换口后点上方「连接」重新生效。',
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 12,
-              color: Color.fromARGB(255, 160, 164, 174),
-            ),
+                      '。换口后点「换口连接」；同口异常才用「重连串口」。',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),

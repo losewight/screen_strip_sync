@@ -45,7 +45,8 @@ class HelperClient {
 
   bool get isConnected => _sock != null;
 
-  Future<void> connect() async {
+  /// [comPort] 传给 helper 作 argv[1]，启动时就开对口（不再死开 COM10）。
+  Future<void> connect({String? comPort}) async {
     if (isConnected) return;
 
     await _teardownSocket();
@@ -63,9 +64,14 @@ class HelperClient {
     }
 
     final helperFile = resolveHelperExecutable();
+    final args = <String>[];
+    final com = comPort?.trim();
+    if (com != null && com.isNotEmpty) {
+      args.add(com);
+    }
     _proc = await Process.start(
       helperFile.path,
-      [],
+      args,
       workingDirectory: helperFile.parent.path,
     );
 

@@ -20,17 +20,39 @@ class ControlPage extends ConsumerWidget {
     final config = ref.read(configProvider.notifier);
     final ui = ref.watch(helperStateProvider);
     final notifier = ref.read(helperStateProvider.notifier);
-    // 已连上时选了别的口 → 放开「连接」，用新口重启 helper
+    // 锚点：当前打开口，或换口失败后仍保留的 lastGoodCom
+    final anchor = ui.anchorCom;
     final portChanged =
         cfg.comPort.isNotEmpty &&
-        ui.currentCom.isNotEmpty &&
-        cfg.comPort != ui.currentCom;
-    // 连接中一律禁用，避免重复起 helper
+        anchor.isNotEmpty &&
+        cfg.comPort.toUpperCase() != anchor.toUpperCase();
+
     final canConnect =
         ui.phase != HelperPhase.connecting &&
         (ui.phase == HelperPhase.disconnected ||
             ui.phase == HelperPhase.failed ||
             portChanged);
+
+    // 重连串口：仅「IPC 已通且所选口就是当前打开口」
+    final canReconnectSerial =
+        ui.phase != HelperPhase.connecting &&
+        ui.currentCom.isNotEmpty &&
+        cfg.comPort.isNotEmpty &&
+        cfg.comPort.toUpperCase() == ui.currentCom.toUpperCase() &&
+        (ui.canControl || ui.phase == HelperPhase.noDevice);
+
+    // 换口失败后选回上次成功口 →「重新连接」；选其它口 →「换口连接」
+    final String connectLabel;
+    if (portChanged) {
+      connectLabel = '换口连接';
+    } else if (ui.lastGoodCom.isNotEmpty &&
+        (ui.phase == HelperPhase.failed ||
+            ui.phase == HelperPhase.disconnected) &&
+        !ui.canControl) {
+      connectLabel = '重新连接';
+    } else {
+      connectLabel = '连接';
+    }
 
     return Center(
       child: SingleChildScrollView(
@@ -43,8 +65,8 @@ class ControlPage extends ConsumerWidget {
             children: [
               _ConnectBar(
                 canConnect: canConnect,
-                connectLabel: portChanged ? '换口连接' : '连接',
-                canReconnectSerial: ui.canReconnectSerial,
+                connectLabel: connectLabel,
+                canReconnectSerial: canReconnectSerial,
                 onConnect: notifier.connect,
                 onReconnectSerial: notifier.reconnectSerial,
               ),

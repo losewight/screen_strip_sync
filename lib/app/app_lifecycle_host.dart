@@ -97,6 +97,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     }
 
     // 为什么：Timer/Socket 等未释放时 VM 可能不退，显式杀主进程
+    CrashLog.event('lifecycle', 'exit(0)');
     exit(0);
   }
 
