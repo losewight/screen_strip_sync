@@ -25,6 +25,10 @@ static float g_ema_g[10] = {};
 static float g_ema_b[10] = {};
 static bool g_ema_inited = false;
 
+// 为什么：休眠软关会发临时黑帧，意图必须单独存，不能被黑帧冲掉
+static std::mutex g_intent_mu;
+static DisplayIntent g_intent{};
+
 void engine_set_alpha(float alpha) {
   // 与 Flutter AppConfig 对齐：[0.05, 1.0]
   if (alpha < 0.05f)
@@ -258,6 +262,44 @@ static void frame_loop(HANDLE h) {
       break;
     i++;
   }
+}
+
+void engine_set_intent_idle() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::Idle;
+  g_intent.solid[0] = '\0';
+}
+
+void engine_set_intent_engine() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::Engine;
+  g_intent.solid[0] = '\0';
+}
+
+void engine_set_intent_solid(const char *rrggbb) {
+  if (rrggbb == nullptr || strlen(rrggbb) != 6)
+    return;
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::Solid;
+  // 规范成小写 hex，恢复时直接组帧
+  for (int i = 0; i < 6; ++i) {
+    char c = rrggbb[i];
+    if (c >= 'A' && c <= 'F')
+      c = (char)(c - 'A' + 'a');
+    g_intent.solid[i] = c;
+  }
+  g_intent.solid[6] = '\0';
+}
+
+void engine_set_intent_soft_off() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::SoftOff;
+  g_intent.solid[0] = '\0';
+}
+
+DisplayIntent engine_get_display_intent() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  return g_intent;
 }
 
 void engine_start(HANDLE h) {

@@ -81,12 +81,28 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
   Timer? _solidTimer;
   String? _lastSentSolid;
 
+  /// 方案三：曾成功连过；休眠硬关断连后才允许唤醒自动重连。
+  bool _hadSession = false;
+  bool _wakeReconnectArmed = false;
+  bool _intentionalDisconnect = false;
+  bool _resumeWantEngine = false;
+  String? _resumeSolid;
+  bool _resumePoweredOff = false;
+
   HelperClient get _client => ref.read(helperClientProvider);
 
   @override
   HelperUiState build() {
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);
     _disconnectSub ??= _client.disconnectStream.listen((_) {
+      // 快照须在改 phase 之前，否则熄灯态会丢
+      final cfg = ref.read(configProvider);
+      if (!_intentionalDisconnect && cfg.autoSleepSync && _hadSession) {
+        _wakeReconnectArmed = true;
+        _resumeWantEngine = _engineWanted;
+        _resumeSolid = _lastSentSolid;
+        _resumePoweredOff = state.phase == HelperPhase.poweredOff;
+      }
       _cancelPendingSolid();
       _patch(
         message: 'helper 已断开',
@@ -214,6 +230,48 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
         _onStatusCom(port);
       case HelperStatusEngine(:final running):
         _onStatusEngine(running);
+      case HelperStatusDisplay(:final kind):
+        _onStatusDisplay(kind);
+    }
+  }
+
+  /// helper 休眠恢复后的显示意图：对齐徽标，避免灯已亮而 UI 仍停在熄灯。
+  void _onStatusDisplay(HelperDisplayKind kind) {
+    final com = state.currentCom;
+    switch (kind) {
+      case HelperDisplayKind.engine:
+        _engineWanted = true;
+        _patch(
+          engineRunning: true,
+          phase: HelperPhase.running,
+          hasDevice: true,
+          message: com.isEmpty ? '追色运行中' : '$com · 追色运行中',
+        );
+      case HelperDisplayKind.solid:
+        _engineWanted = false;
+        _patch(
+          engineRunning: false,
+          phase: HelperPhase.running,
+          hasDevice: true,
+          message: '纯色运行中',
+        );
+      case HelperDisplayKind.softOff:
+        _engineWanted = false;
+        _lastSentSolid = null;
+        _patch(
+          engineRunning: false,
+          phase: HelperPhase.poweredOff,
+          hasDevice: true,
+          message: '已熄灯',
+        );
+      case HelperDisplayKind.idle:
+        _engineWanted = false;
+        _patch(
+          engineRunning: false,
+          phase: HelperPhase.ready,
+          hasDevice: true,
+          message: _formatReadyMessage(com: com, engine: false),
+        );
     }
   }
 
@@ -267,6 +325,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     switch (word) {
       case HelperStatusWord.ready:
         final cfg = ref.read(configProvider);
+        _hadSession = true;
         // 为什么：COM 真值等随后的 status com，此处不猜 cfg.comPort
         _patch(
           message: '串口就绪',
@@ -277,19 +336,19 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
         sendEmaAlpha(cfg.emaAlpha);
         sendMode(cfg.mode);
         sendComPort(cfg.comPort);
+        sendSleepSync(cfg.autoSleepSync);
       case HelperStatusWord.reconnecting:
         _patch(
           message: '正在重连串口…',
-          phase: HelperPhase.connecting,
-          hasDevice: false,
+          phase: state.canControl ? null : HelperPhase.connecting,
+          hasDevice: state.canControl ? true : false,
           engineRunning: false,
         );
       case HelperStatusWord.reconnectOk:
-        // COM 真值由随后的 status com 写入
         _patch(
           message: '重连成功',
           hasDevice: true,
-          phase: HelperPhase.ready,
+          phase: state.canControl ? null : HelperPhase.ready,
           engineRunning: false,
         );
       case HelperStatusWord.reconnectFail:
@@ -336,7 +395,12 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
 
     if (_client.isConnected) {
       _cancelPendingSolid();
-      await _client.quit();
+      _intentionalDisconnect = true;
+      try {
+        await _client.quit();
+      } finally {
+        _intentionalDisconnect = false;
+      }
       _patch(
         message: portChanged ? '换口，重启 helper…' : '重新连接…',
         phase: HelperPhase.disconnected,
@@ -390,6 +454,16 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     if (name.isEmpty) return;
     try {
       _sendIpc('set com $name');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  /// 休眠同步开关：已连接则下发；未连接静默（配置已落盘）。
+  void sendSleepSync(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set sleep_sync ${enabled ? 1 : 0}');
     } catch (e) {
       _patch(message: '$e');
     }
@@ -527,25 +601,64 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
+  /// 方案三：仅 armed（休眠硬关导致断连）时拉起 helper，并按快照恢复现场。
   Future<void> reconnectAfterResume() async {
     if (_resumeBusy) return;
+    final cfg = ref.read(configProvider);
+    if (!cfg.autoSleepSync) return;
+    if (!_wakeReconnectArmed) return;
+    if (_client.isConnected) return;
+
     _resumeBusy = true;
     try {
       _cancelPendingSolid();
+      final wantEngine = _resumeWantEngine;
+      final solid = _resumeSolid;
+      final wasPoweredOff = _resumePoweredOff;
+
       _patch(message: '系统唤醒，3 秒后重连…');
       await Future<void>.delayed(const Duration(seconds: 3));
 
-      final wantEngine = _engineWanted;
-      await _client.quit();
+      _intentionalDisconnect = true;
+      try {
+        await _client.quit();
+      } finally {
+        _intentionalDisconnect = false;
+      }
       _engineWanted = false;
       _patch(message: '正在重连…', phase: HelperPhase.disconnected);
 
       const maxAttempts = 5;
       for (var left = maxAttempts; left >= 1; left--) {
         try {
+          // 上次卡在 connecting 时先拆掉，否则 connect() 会空返回
+          if (state.phase == HelperPhase.connecting && _client.isConnected) {
+            _intentionalDisconnect = true;
+            try {
+              await _client.quit();
+            } finally {
+              _intentionalDisconnect = false;
+            }
+            _patch(phase: HelperPhase.disconnected);
+          }
+
           await connect();
-          if (_client.isConnected && state.phase == HelperPhase.ready) {
-            if (wantEngine) send('start');
+          if (!_client.isConnected) {
+            throw StateError('IPC 未接通');
+          }
+
+          final ready = await _waitUntilCanControl(
+            const Duration(seconds: 8),
+          );
+          if (ready) {
+            if (wantEngine) {
+              send('start');
+            } else if (wasPoweredOff) {
+              softOff();
+            } else if (solid != null && solid.length == 6) {
+              sendSolid(solid);
+            }
+            _wakeReconnectArmed = false;
             return;
           }
         } catch (_) {}
@@ -554,6 +667,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
           await Future<void>.delayed(const Duration(seconds: 2));
         }
       }
+      _wakeReconnectArmed = false;
       _patch(
         message: '唤醒后重连失败，请手动点「连接」',
         phase: HelperPhase.failed,
@@ -563,9 +677,29 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
+  /// 等 status ready（或已可控）；超时返回 false。
+  Future<bool> _waitUntilCanControl(Duration timeout) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (state.canControl) return true;
+      if (state.phase == HelperPhase.failed ||
+          state.phase == HelperPhase.noDevice) {
+        return false;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return state.canControl;
+  }
+
   Future<void> quit() async {
     _cancelPendingSolid();
-    await _client.quit();
+    _intentionalDisconnect = true;
+    _wakeReconnectArmed = false;
+    try {
+      await _client.quit();
+    } finally {
+      _intentionalDisconnect = false;
+    }
   }
 }
 

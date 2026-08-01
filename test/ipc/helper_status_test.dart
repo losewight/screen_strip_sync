@@ -77,6 +77,43 @@ void main() {
       expect(tryParseStatusLine('status engine'), isNull);
     });
 
+    test('parses status display kinds', () {
+      expect(
+        tryParseStatusLine('status display engine'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.engine,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status display solid'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.solid,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status display soft_off'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.softOff,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status display idle'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.idle,
+        ),
+      );
+      expect(tryParseStatusLine('status display'), isNull);
+      expect(tryParseStatusLine('status display other'), isNull);
+    });
+
     test('ignores unknown key-value pairs', () {
       expect(tryParseStatusLine('status foo bar'), isNull);
     });

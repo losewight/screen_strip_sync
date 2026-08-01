@@ -10,7 +10,7 @@ import '../widgets/win11_switch.dart';
 
 /// 主控：顶部灯带状态栏 + 连接操作 + 休眠 / 开关机联动开关。
 ///
-/// 连接走 [helperStateProvider]；开关仅绑 [configProvider]，暂不下发 helper。
+/// 连接走 [helperStateProvider]；休眠同步开关落盘并下发 helper。
 class ControlPage extends ConsumerWidget {
   const ControlPage({super.key});
 
@@ -78,9 +78,12 @@ class ControlPage extends ConsumerWidget {
                 children: [
                   _SwitchRow(
                     title: '自动休眠同步',
-                    subtitle: '当显示器息屏时，灯带自动熄灭',
+                    subtitle: '系统休眠时关闭灯带并结束 helper，唤醒后自动重连并恢复状态',
                     value: cfg.autoSleepSync,
-                    onChanged: config.setAutoSleepSync,
+                    onChanged: (v) {
+                      config.setAutoSleepSync(v);
+                      notifier.sendSleepSync(v);
+                    },
                   ),
                   _SwitchRow(
                     title: '关机时灯带自动关闭',

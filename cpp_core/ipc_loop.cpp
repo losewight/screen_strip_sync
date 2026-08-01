@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include "helper_lifecycle.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "serial_port.h"
@@ -92,6 +93,26 @@ static void send_engine_status(SOCKET client) {
   send_status_kv(client, "engine", engine_is_running() ? "1" : "0");
 }
 
+static void send_display_intent(SOCKET client, const DisplayIntent &intent) {
+  const char *word = "idle";
+  switch (intent.kind) {
+  case DisplayIntentKind::Engine:
+    word = "engine";
+    break;
+  case DisplayIntentKind::Solid:
+    word = "solid";
+    break;
+  case DisplayIntentKind::SoftOff:
+    word = "soft_off";
+    break;
+  case DisplayIntentKind::Idle:
+  default:
+    word = "idle";
+    break;
+  }
+  send_status_kv(client, "display", word);
+}
+
 // include_com=false：重连失败等无句柄情形，只报 engine 0
 static void push_runtime_status(SOCKET client, bool include_com) {
   if (include_com) {
@@ -118,21 +139,27 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
   if (strcmp(line, "soft_off") == 0) {
     engine_stop();
+    engine_set_intent_soft_off();
     printf("cmd=soft_off\n");
     send_solid(*serial, "000000");
     send_engine_status(client);
+    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
+    engine_set_intent_engine();
     printf("cmd=start\n");
     send_engine_status(client);
+    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
+    engine_set_intent_idle();
     printf("cmd=stop\n");
     send_engine_status(client);
+    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strncmp(line, "solid ", 6) == 0) {
@@ -141,7 +168,11 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("bad solid color: [%s]\n", color);
     } else {
       printf("cmd=solid color=%s\n", color);
+      engine_stop();
+      engine_set_intent_solid(color);
       send_solid(*serial, color);
+      send_engine_status(client);
+      send_display_intent(client, engine_get_display_intent());
     }
     return true;
   }
@@ -194,6 +225,19 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("bad set com: [%s]\n", p);
     } else {
       printf("cmd=set com\n");
+    }
+    return true;
+  }
+  // 为什么：0|1；非法忽略。控制休眠软关 vs 硬退
+  if (strncmp(line, "set sleep_sync ", 15) == 0) {
+    const char *p = line + 15;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      helper_set_sleep_sync(*p == '1');
+      printf("cmd=set sleep_sync %c\n", *p);
+    } else {
+      printf("bad set sleep_sync: [%s]\n", p);
     }
     return true;
   }

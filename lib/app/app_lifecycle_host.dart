@@ -5,11 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
 import 'crash_log.dart';
 
-/// App 级生命周期：关窗先 hide（视觉秒关）再后台清理；休眠唤醒后按需重连。
+/// App 级生命周期：关窗先 hide 再清理；休眠唤醒仅靠 armed 标志重连（方案三）。
 class AppLifecycleHost extends ConsumerStatefulWidget {
   const AppLifecycleHost({super.key, required this.child});
 
@@ -55,7 +54,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     final prev = _lastLifecycle;
     _lastLifecycle = state;
 
-    // 为什么：最小化/失焦也会 resumed，连接仍活时绝不能 teardown
+    // 为什么：仅后台→前台；最小化若不断开 socket 则 armed 为 false，不会误连
     final cameFromBackground = switch (prev) {
       AppLifecycleState.paused ||
       AppLifecycleState.hidden ||
@@ -63,11 +62,15 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
       _ => false,
     };
 
-    if (state == AppLifecycleState.resumed &&
-        cameFromBackground &&
-        !ref.read(helperStateProvider.notifier).isReady) {
+    if (state == AppLifecycleState.resumed && cameFromBackground) {
       ref.read(helperStateProvider.notifier).reconnectAfterResume();
     }
+  }
+
+  @override
+  void onWindowFocus() {
+    // 仅当 _wakeReconnectArmed（休眠硬关断连）时才会真正重连；最小化不断开则无操作
+    ref.read(helperStateProvider.notifier).reconnectAfterResume();
   }
 
   @override
@@ -112,7 +115,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
   }
 
   Future<void> _quitHelperIfConnected() async {
-    await ref.read(helperClientProvider).quit();
+    await ref.read(helperStateProvider.notifier).quit();
   }
 
   @override

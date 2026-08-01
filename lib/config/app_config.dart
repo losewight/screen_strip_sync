@@ -32,7 +32,7 @@ class AppConfig {
   /// helper 曾成功打开的口；空表示从未连上过，不走快速连接。
   final String lastConnectedCom;
 
-  /// 显示器息屏时是否自动熄灯；暂不下发 helper。
+  /// 系统休眠时硬关 helper；唤醒后由 Flutter 自动重连并恢复现场。
   final bool autoSleepSync;
 
   /// Windows 关机时是否自动关闭灯带；暂不下发 helper。

@@ -9,6 +9,7 @@ project(ZeerayCore)
 # backup/day19_sample_send.cpp 为源码备份，不编入。
 add_executable(helper
   helper_main.cpp
+  helper_lifecycle.cpp
   serial_port.cpp
   fake_bgra.cpp
   light_engine.cpp

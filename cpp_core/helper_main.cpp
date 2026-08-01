@@ -1,41 +1,12 @@
-﻿// helper 入口：串口属主生命周期 + 把命令通道交给 ipc_loop。
-// Day19 假图打印见 fake_bgra（当前不调用）；发灯备份见
-// backup/day19_sample_send.cpp。
+﻿// helper 入口：串口属主启动编排 + 把命令通道交给 ipc_loop。
+// 关灯 / 休眠软关 / 唤醒恢复见 helper_lifecycle.cpp。
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "power_watch.h"
-#include "serial_port.h"
 
-#include <atomic>
 #include <cstdio>
-
-static HANDLE *g_serial = nullptr;
-static std::atomic_bool g_shutting_down{false};
-
-void helper_set_serial(HANDLE *serial) { g_serial = serial; }
-
-// 为什么：休眠窗口极短——先喊停再立刻 set_power 0，最后才 join；多路径共用防重入
-void helper_shutdown() {
-  bool expected = false;
-  if (!g_shutting_down.compare_exchange_strong(expected, true))
-    return;
-
-  printf("helper_shutdown begin\n");
-  engine_request_stop();
-  if (g_serial != nullptr && *g_serial != INVALID_HANDLE_VALUE) {
-    power_off(*g_serial); // 趁 USB 还能写，优先灭灯
-  }
-  engine_stop(); // join 发帧线程
-  if (g_serial != nullptr && *g_serial != INVALID_HANDLE_VALUE) {
-    close_com(*g_serial);
-    *g_serial = INVALID_HANDLE_VALUE;
-  }
-  dxgi_shutdown();
-  ipc_cancel();
-  printf("helper_shutdown done\n");
-}
 
 static BOOL WINAPI on_ctrl(DWORD type) {
   switch (type) {

@@ -33,6 +33,15 @@ final class HelperStatusEngine extends HelperStatusEvent {
   final bool running;
 }
 
+/// 显示意图：`status display engine|solid|soft_off|idle`
+enum HelperDisplayKind { idle, engine, solid, softOff }
+
+final class HelperStatusDisplay extends HelperStatusEvent {
+  const HelperStatusDisplay(this.kind);
+
+  final HelperDisplayKind kind;
+}
+
 HelperStatusWord parseHelperStatusWord(String word) {
   return switch (word) {
     'ready' => HelperStatusWord.ready,
@@ -40,6 +49,16 @@ HelperStatusWord parseHelperStatusWord(String word) {
     'reconnect_ok' => HelperStatusWord.reconnectOk,
     'reconnect_fail' => HelperStatusWord.reconnectFail,
     _ => HelperStatusWord.unknown,
+  };
+}
+
+HelperDisplayKind? parseHelperDisplayKind(String value) {
+  return switch (value) {
+    'idle' => HelperDisplayKind.idle,
+    'engine' => HelperDisplayKind.engine,
+    'solid' => HelperDisplayKind.solid,
+    'soft_off' => HelperDisplayKind.softOff,
+    _ => null,
   };
 }
 
@@ -51,19 +70,23 @@ HelperStatusEvent? tryParseStatusLine(String line) {
 
   final space = rest.indexOf(' ');
   if (space < 0) {
-    // 缺参的 com/engine 不算相位词
-    if (rest == 'com' || rest == 'engine') return null;
+    // 缺参的 com/engine/display 不算相位词
+    if (rest == 'com' || rest == 'engine' || rest == 'display') return null;
     return HelperStatusPhase(parseHelperStatusWord(rest));
   }
 
   final key = rest.substring(0, space);
   final value = rest.substring(space + 1).trim();
 
-  return switch (key) {
-    'com' when value.isNotEmpty => HelperStatusCom(value),
-    'engine' when value == '0' || value == '1' => HelperStatusEngine(
-      value == '1',
-    ),
-    _ => null,
-  };
+  if (key == 'com' && value.isNotEmpty) {
+    return HelperStatusCom(value);
+  }
+  if (key == 'engine' && (value == '0' || value == '1')) {
+    return HelperStatusEngine(value == '1');
+  }
+  if (key == 'display') {
+    final kind = parseHelperDisplayKind(value);
+    if (kind != null) return HelperStatusDisplay(kind);
+  }
+  return null;
 }
