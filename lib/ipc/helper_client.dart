@@ -43,11 +43,11 @@ class HelperClient {
   final StringBuffer _rxBuf = StringBuffer();
   StreamSubscription<List<int>>? _socketSub;
 
-  final _statusController = StreamController<HelperStatusWord>.broadcast();
+  final _statusController = StreamController<HelperStatusEvent>.broadcast();
   final _disconnectController = StreamController<void>.broadcast();
 
-  /// helper 推来的 `status` 词（ready / reconnecting / …）。
-  Stream<HelperStatusWord> get statusStream => _statusController.stream;
+  /// helper 推来的 `status` 事件（相位 / com / engine）。
+  Stream<HelperStatusEvent> get statusStream => _statusController.stream;
 
   /// Socket 断开（helper 退出或网络错误）。
   Stream<void> get disconnectStream => _disconnectController.stream;
@@ -154,9 +154,9 @@ class HelperClient {
 
   void _onLine(String line) {
     if (line.isEmpty) return;
-    final word = tryParseStatusLine(line);
-    if (word != null) {
-      _statusController.add(word);
+    final event = tryParseStatusLine(line);
+    if (event != null) {
+      _statusController.add(event);
     }
   }
 

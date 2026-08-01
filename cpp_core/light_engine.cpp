@@ -275,3 +275,12 @@ void engine_stop() {
     g_worker.join();
   g_ema_inited = false;
 }
+
+bool engine_is_running() { return g_running.load(); }
+
+void engine_get_com(char *buf, size_t cap) {
+  if (buf == nullptr || cap == 0)
+    return;
+  std::lock_guard<std::mutex> lock(g_com_mu);
+  snprintf(buf, cap, "%s", g_com_name);
+}

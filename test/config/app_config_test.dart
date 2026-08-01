@@ -12,6 +12,7 @@ void main() {
         emaAlpha: 0.55,
         mode: ColorMode.b,
         comPort: 'COM7',
+        lastConnectedCom: 'COM7',
         autoSleepSync: false,
         turnOffOnShutdown: false,
         startOnBoot: true,
@@ -20,6 +21,7 @@ void main() {
       expect(restored.emaAlpha, 0.55);
       expect(restored.mode, ColorMode.b);
       expect(restored.comPort, 'COM7');
+      expect(restored.lastConnectedCom, 'COM7');
       expect(restored.autoSleepSync, isFalse);
       expect(restored.turnOffOnShutdown, isFalse);
       expect(restored.startOnBoot, isTrue);
@@ -30,6 +32,7 @@ void main() {
       expect(cfg.emaAlpha, 0.3);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
+      expect(cfg.lastConnectedCom, '');
       expect(cfg.autoSleepSync, isTrue);
       expect(cfg.turnOffOnShutdown, isTrue);
       expect(cfg.startOnBoot, isFalse);
@@ -51,6 +54,14 @@ void main() {
       expect(AppConfig.fromJson({'comPort': 'COM3'}).comPort, 'COM3');
     });
 
+    test('lastConnectedCom trims; missing defaults empty', () {
+      expect(AppConfig.fromJson({}).lastConnectedCom, '');
+      expect(
+        AppConfig.fromJson({'lastConnectedCom': ' COM12 '}).lastConnectedCom,
+        'COM12',
+      );
+    });
+
     test('toJson uses stable string keys', () {
       expect(
         const AppConfig(mode: ColorMode.b).toJson(),
@@ -58,6 +69,7 @@ void main() {
           'emaAlpha': 0.3,
           'mode': 'b',
           'comPort': 'COM10',
+          'lastConnectedCom': '',
           'autoSleepSync': true,
           'turnOffOnShutdown': true,
           'startOnBoot': false,
@@ -90,6 +102,7 @@ void main() {
       expect(cfg.emaAlpha, 0.3);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
+      expect(cfg.lastConnectedCom, '');
       expect(cfg.autoSleepSync, isTrue);
       expect(cfg.turnOffOnShutdown, isTrue);
       expect(cfg.startOnBoot, isFalse);
@@ -100,6 +113,7 @@ void main() {
         emaAlpha: 0.8,
         mode: ColorMode.b,
         comPort: 'COM5',
+        lastConnectedCom: 'COM5',
         autoSleepSync: false,
         turnOffOnShutdown: false,
         startOnBoot: true,
@@ -109,6 +123,7 @@ void main() {
       expect(loaded.emaAlpha, 0.8);
       expect(loaded.mode, ColorMode.b);
       expect(loaded.comPort, 'COM5');
+      expect(loaded.lastConnectedCom, 'COM5');
       expect(loaded.autoSleepSync, isFalse);
       expect(loaded.turnOffOnShutdown, isFalse);
       expect(loaded.startOnBoot, isTrue);

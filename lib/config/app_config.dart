@@ -15,6 +15,7 @@ class AppConfig {
     this.emaAlpha = 0.3,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
+    this.lastConnectedCom = '',
     this.autoSleepSync = true,
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
@@ -25,8 +26,11 @@ class AppConfig {
 
   final ColorMode mode;
 
-  /// 串口名，如 `COM10`；helper 侧仍写死，此处仅 UI。
+  /// 串口名，如 `COM10`；下拉/手输的当前选中。
   final String comPort;
+
+  /// helper 曾成功打开的口；空表示从未连上过，不走快速连接。
+  final String lastConnectedCom;
 
   /// 显示器息屏时是否自动熄灯；暂不下发 helper。
   final bool autoSleepSync;
@@ -41,6 +45,7 @@ class AppConfig {
     double? emaAlpha,
     ColorMode? mode,
     String? comPort,
+    String? lastConnectedCom,
     bool? autoSleepSync,
     bool? turnOffOnShutdown,
     bool? startOnBoot,
@@ -49,6 +54,7 @@ class AppConfig {
       emaAlpha: emaAlpha ?? this.emaAlpha,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
+      lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
       autoSleepSync: autoSleepSync ?? this.autoSleepSync,
       turnOffOnShutdown: turnOffOnShutdown ?? this.turnOffOnShutdown,
       startOnBoot: startOnBoot ?? this.startOnBoot,
@@ -74,6 +80,12 @@ class AppConfig {
       _ => 'COM10',
     };
 
+    final rawLastCom = json['lastConnectedCom'];
+    final lastCom = switch (rawLastCom) {
+      String s => s.trim(),
+      _ => '',
+    };
+
     final autoSleepSync = switch (json['autoSleepSync']) {
       bool b => b,
       _ => true,
@@ -93,6 +105,7 @@ class AppConfig {
       emaAlpha: alpha,
       mode: mode,
       comPort: com,
+      lastConnectedCom: lastCom,
       autoSleepSync: autoSleepSync,
       turnOffOnShutdown: turnOffOnShutdown,
       startOnBoot: startOnBoot,
@@ -106,6 +119,7 @@ class AppConfig {
       ColorMode.b => 'b',
     },
     'comPort': comPort,
+    'lastConnectedCom': lastConnectedCom,
     'autoSleepSync': autoSleepSync,
     'turnOffOnShutdown': turnOffOnShutdown,
     'startOnBoot': startOnBoot,

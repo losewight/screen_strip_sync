@@ -31,6 +31,7 @@ class ControlPage extends ConsumerWidget {
         ui.phase != HelperPhase.connecting &&
         (ui.phase == HelperPhase.disconnected ||
             ui.phase == HelperPhase.failed ||
+            ui.phase == HelperPhase.noDevice ||
             portChanged);
 
     // 重连串口：仅「IPC 已通且所选口就是当前打开口」
@@ -89,7 +90,9 @@ class ControlPage extends ConsumerWidget {
                   ),
                   _SwitchRow(
                     title: '开机时灯带自动启动',
-                    subtitle: '需先在软件设置中开启软件开机自启动',
+                    subtitle:
+                        '打开后，App 启动时自动连接上次成功的口；'
+                        '随 Windows 开机还需在软件设置中开启软件开机自启动',
                     value: cfg.startOnBoot,
                     onChanged: config.setStartOnBoot,
                   ),

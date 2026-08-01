@@ -29,6 +29,15 @@ class ConfigNotifier extends Notifier<AppConfig> {
     _store.save(state);
   }
 
+  /// helper 确认连通后写入；供快速连接 / 开机自启读取。
+  void setLastConnectedCom(String value) {
+    final name = value.trim();
+    if (name.isEmpty) return;
+    if (name == state.lastConnectedCom) return;
+    state = state.copyWith(lastConnectedCom: name, comPort: name);
+    _store.save(state);
+  }
+
   void setAutoSleepSync(bool value) {
     state = state.copyWith(autoSleepSync: value);
     _store.save(state);

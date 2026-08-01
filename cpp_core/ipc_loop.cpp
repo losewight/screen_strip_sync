@@ -81,6 +81,27 @@ static void send_status(SOCKET client, const char *word) {
     send(client, buf, n, 0);
 }
 
+static void send_status_kv(SOCKET client, const char *key, const char *value) {
+  char buf[64];
+  int n = snprintf(buf, sizeof(buf), "status %s %s\n", key, value);
+  if (n > 0 && n < (int)sizeof(buf))
+    send(client, buf, n, 0);
+}
+
+static void send_engine_status(SOCKET client) {
+  send_status_kv(client, "engine", engine_is_running() ? "1" : "0");
+}
+
+// include_com=false：重连失败等无句柄情形，只报 engine 0
+static void push_runtime_status(SOCKET client, bool include_com) {
+  if (include_com) {
+    char com[16];
+    engine_get_com(com, sizeof(com));
+    send_status_kv(client, "com", com);
+  }
+  send_engine_status(client);
+}
+
 static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "quit") == 0) {
     engine_stop();
@@ -91,6 +112,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     engine_stop();
     printf("cmd=off\n");
     power_off(*serial);
+    send_engine_status(client);
     return true;
   }
   // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
@@ -98,16 +120,19 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     engine_stop();
     printf("cmd=soft_off\n");
     send_solid(*serial, "000000");
+    send_engine_status(client);
     return true;
   }
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
     printf("cmd=start\n");
+    send_engine_status(client);
     return true;
   }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
     printf("cmd=stop\n");
+    send_engine_status(client);
     return true;
   }
   if (strncmp(line, "solid ", 6) == 0) {
@@ -195,9 +220,11 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       *serial = neu;
       printf("cmd=reconnect ok\n");
       send_status(client, "reconnect_ok");
+      push_runtime_status(client, true);
     } else {
       printf("cmd=reconnect failed\n");
       send_status(client, "reconnect_fail");
+      send_engine_status(client);
     }
     return true;
   }
@@ -258,6 +285,7 @@ bool ipc_run(unsigned short port, HANDLE *serial) {
   g_client_sock = client;
   printf("client connected\n");
   send_status(client, "ready"); // 串口在 main 里已就绪，IPC 接通即告 App
+  push_runtime_status(client, true);
 
   for (;;) {
     char line[256];

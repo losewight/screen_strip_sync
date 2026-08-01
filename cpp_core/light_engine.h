@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <cstddef>
 #include <windows.h>
 
 bool power_on(HANDLE h);
@@ -19,3 +20,6 @@ void engine_start(HANDLE h);
 // 只置停止标志、不 join；休眠关灯前先喊停，避免 join 拖死写串口窗口
 void engine_request_stop();
 void engine_stop();
+// 为什么：IPC 状态上报只读快照；热路径仍用 atomic/mutex 内已有数据
+bool engine_is_running();
+void engine_get_com(char *buf, size_t cap);

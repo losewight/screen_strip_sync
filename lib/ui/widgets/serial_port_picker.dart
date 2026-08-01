@@ -9,7 +9,8 @@ import '../../state/helper_state.dart';
 
 /// 串口选择卡：扫描下拉 + 手动输入兜底。
 ///
-/// 只改本地选中，真正生效靠上方的「连接」——换口后连接按钮会重新可点。
+/// 有 [AppConfig.lastConnectedCom] 时，扫描完成前也立刻显示该口；
+/// 扫描只刷新列表，不冲掉选中。真正开口靠上方「连接」。
 class SerialPortPicker extends ConsumerStatefulWidget {
   const SerialPortPicker({super.key, this.radius = 10});
 
@@ -29,15 +30,38 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
   @override
   void initState() {
     super.initState();
-    _comController = TextEditingController(
-      text: ref.read(configProvider).comPort,
-    );
+    final cfg = ref.read(configProvider);
+    // 启动优先展示上次成功口（可能尚未扫到）
+    final initial = cfg.lastConnectedCom.trim().isNotEmpty
+        ? cfg.lastConnectedCom
+        : cfg.comPort;
+    _comController = TextEditingController(text: initial);
   }
 
   @override
   void dispose() {
     _comController.dispose();
     super.dispose();
+  }
+
+  String _footerText({
+    required HelperUiState ui,
+    required AppConfig cfg,
+  }) {
+    if (ui.currentCom.isNotEmpty) {
+      return 'helper 当前口：${ui.currentCom}'
+          '${ui.hasDevice ? '（已打开）' : '（未打开）'}'
+          '。换口后点「换口连接」；同口异常才用「重连串口」。';
+    }
+    final last = cfg.lastConnectedCom.trim();
+    if (last.isNotEmpty) {
+      if (ui.isScanningPorts) {
+        return '上次连接：$last（扫描中…）。可直接点上方「连接」，不必等扫描结束。';
+      }
+      return '上次连接：$last。点上方「连接」即可；需要换口时从列表另选。';
+    }
+    return '未插灯带时列表可能为空；插上后点刷新，出现「推荐」口会自动选中。'
+        '需要指定其它口时，选「自定义 / 手动指定串口…」。选好后点上方「连接」。';
   }
 
   @override
@@ -53,10 +77,26 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
     });
 
     final ports = ui.ports;
-    final inList = ports.any((p) => p.port == cfg.comPort);
+    final last = cfg.lastConnectedCom.trim();
+    // 选中：用户当前 comPort；空则回退上次成功口
+    final selectedPort = cfg.comPort.trim().isNotEmpty
+        ? cfg.comPort.trim()
+        : last;
+
+    final inList = ports.any(
+      (p) => p.port.toUpperCase() == selectedPort.toUpperCase(),
+    );
+    // 扫描前 / 口不在列表：临时插入一项，保证 Dropdown 能显示
+    final needsSynthetic = !_isManualMode && selectedPort.isNotEmpty && !inList;
+    final isLastConnected =
+        last.isNotEmpty && selectedPort.toUpperCase() == last.toUpperCase();
+    final syntheticLabel = isLastConnected
+        ? '上次连接：$selectedPort'
+        : selectedPort;
+
     final selected = _isManualMode
         ? _customComKey
-        : (inList ? cfg.comPort : null);
+        : (selectedPort.isNotEmpty ? selectedPort : null);
 
     return Container(
       decoration: BoxDecoration(
@@ -79,16 +119,28 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  key: ValueKey(selected ?? 'none'),
+                  key: ValueKey(
+                    '${selected ?? 'none'}_${ports.length}_$needsSynthetic',
+                  ),
                   initialValue: selected,
                   isExpanded: true,
                   dropdownColor: AppTheme.cardBg,
                   borderRadius: AppTheme.menuBorderRadius,
                   decoration: InputDecoration(
                     labelText: '扫描到的口',
-                    hintText: ports.isEmpty ? '点右侧刷新扫描' : '选择串口',
+                    hintText: selectedPort.isEmpty
+                        ? (ports.isEmpty ? '点右侧刷新扫描' : '选择串口')
+                        : null,
                   ),
                   selectedItemBuilder: (context) => [
+                    if (needsSynthetic)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          syntheticLabel,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     for (final p in ports)
                       Align(
                         alignment: Alignment.centerLeft,
@@ -103,6 +155,14 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
                     ),
                   ],
                   items: [
+                    if (needsSynthetic)
+                      DropdownMenuItem(
+                        value: selectedPort,
+                        child: Text(
+                          syntheticLabel,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     for (final p in ports)
                       DropdownMenuItem(
                         value: p.port,
@@ -174,12 +234,7 @@ class _SerialPortPickerState extends ConsumerState<SerialPortPicker> {
           ],
           const SizedBox(height: AppSpacing.control),
           Text(
-            ui.currentCom.isEmpty
-                ? '未插灯带时列表可能为空；插上后点刷新，出现「推荐」口会自动选中。'
-                      '需要指定其它口时，选「自定义 / 手动指定串口…」。选好后点上方「连接」。'
-                : 'helper 当前口：${ui.currentCom}'
-                      '${ui.hasDevice ? '（已打开）' : '（未打开）'}'
-                      '。换口后点「换口连接」；同口异常才用「重连串口」。',
+            _footerText(ui: ui, cfg: cfg),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

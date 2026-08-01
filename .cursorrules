@@ -177,10 +177,15 @@ lib/
 | → helper | `off` | 真下电：停引擎 + `set_power 0`（UI 不用；备用） |
 | → helper | `quit` | 停引擎并结束 IPC；`helper_shutdown` 内仍 `power_off` |
 | → helper | `reconnect` | 关串口并重试就绪（最多 10 次） |
+| → helper | `set alpha <0.05..1>` | 写 EMA α；helper 侧 clamp；非法忽略 |
+| → helper | `set mode a\|b` | 存方案；阶段 C 前引擎观感相同 |
+| → helper | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | ← helper | `status ready` | 客户端接通、串口已就绪 |
 | ← helper | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
+| ← helper | `status com COMn` | 当前已打开的串口（Dart 落盘 `lastConnectedCom`，核验用） |
+| ← helper | `status engine 0\|1` | 追色发帧线程是否在跑（Dart 对齐 `engineRunning`，不强制上 UI） |
 
-**尚未实现**（阶段 B 落地）：`set alpha <0..1>`、`set mode a|b`、`set com <COMn>`、`set blur <n>`，以及更宽的状态上报。协议扩展先写清草稿（命令名 / 取值域 / 越界行为），再动 C++。
+**尚未实现**：`set blur <n>`；更宽的状态上报可按需再加。协议扩展先写清草稿，再动 C++。
 
 ---
 
@@ -213,7 +218,7 @@ lib/
 - [ ] **B1 协议草稿**：写清新命令的名字、取值域、越界与非法输入行为（先文档，后 C++）。
 - [ ] **B2 helper 侧接收**：`dispatch_line` 加分支 + 参数校验与 clamp；**帧长/节流不接受外部调整**。
 - [ ] **B3 引擎侧生效**：配置存 `std::atomic`，热路径只读不加锁（当前 α 写死在 `light_engine.cpp` 的 `alpha = 0.3f`，COM 写死在 `try_serial_ready` 的 `"COM10"`）。
-- [ ] **B4 状态上报加宽**：`engine_running` / `com_name` 等回传，前端如实显示。
+- [x] **B4 状态上报加宽**：`status com` / `status engine` 回传；Dart 解析后核验并对齐 `currentCom` / `engineRunning` / `lastConnectedCom`（不上徽标/顶栏强显）。
 
 ### 阶段 C — 产品债与收尾
 
