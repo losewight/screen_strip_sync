@@ -6,91 +6,17 @@ import '../ipc/helper_client.dart';
 import '../ipc/helper_status.dart';
 import '../ipc/windows_com_ports.dart';
 import 'config_state.dart';
+import 'helper_ui_state.dart';
 
-/// 连接 / 引擎相位（按钮禁用态与徽标用）。
-enum HelperPhase {
-  disconnected,
-  connecting,
-  ready,
-  running,
+export 'helper_ui_state.dart';
 
-  /// IPC 仍通，软关（黑帧、电源未断）；可再 solid/start 唤醒。
-  /// 真下电（`set_power 0`）只在退进程 `quit` → helper_shutdown。
-  poweredOff,
+part 'helper_solid_gate.dart';
+part 'helper_state_base.dart';
+part 'helper_status_handlers.dart';
+part 'helper_wake_reconnect.dart';
 
-  /// IPC 通，但串口未打开（扫描无口 / 开口失败）。
-  noDevice,
-  failed,
-}
-
-/// 主控 UI 只读快照：相位 + 状态条文案 + 串口列表。
-class HelperUiState {
-  const HelperUiState({
-    required this.phase,
-    required this.message,
-    this.ipcLine = '',
-    this.ports = const [],
-    this.currentCom = '',
-    this.lastGoodCom = '',
-    this.hasDevice = false,
-    this.isScanningPorts = false,
-    this.engineRunning = false,
-  });
-
-  final HelperPhase phase;
-  final String message;
-
-  /// 最近经 Socket 发出的 IPC 行（含 `\n`），供状态徽标小字展示。
-  final String ipcLine;
-
-  /// 本机扫描结果（preferred 已排前）。
-  final List<ComPortInfo> ports;
-
-  /// helper 当前打开的口；换口 quit 后会暂时清空。
-  final String currentCom;
-
-  /// 最近一次成功打开的口；换口失败后仍保留，供文案 / 换口判断。
-  final String lastGoodCom;
-  final bool hasDevice;
-
-  /// 正在枚举本机 COM（刷新钮改加载圈）。
-  final bool isScanningPorts;
-
-  /// helper 追色发帧线程是否在跑（来自 `status engine`）。
-  final bool engineRunning;
-
-  /// 换口判断锚点：优先当前打开口，否则用上次成功口。
-  String get anchorCom => currentCom.isNotEmpty ? currentCom : lastGoodCom;
-
-  /// 已接通 IPC，可发控灯命令（含关灯后的 poweredOff）。
-  bool get canControl =>
-      phase == HelperPhase.ready ||
-      phase == HelperPhase.running ||
-      phase == HelperPhase.poweredOff;
-}
-
-class HelperStateNotifier extends Notifier<HelperUiState> {
-  /// 与串口 ≥50ms 对齐；冷却期内只保留最新色。
-  static const _solidCooldown = Duration(milliseconds: 70);
-
-  StreamSubscription<HelperStatusEvent>? _statusSub;
-  StreamSubscription<void>? _disconnectSub;
-  bool _engineWanted = false;
-  bool _resumeBusy = false;
-  String? _pendingSolid;
-  Timer? _solidTimer;
-  String? _lastSentSolid;
-
-  /// 方案三：曾成功连过；休眠硬关断连后才允许唤醒自动重连。
-  bool _hadSession = false;
-  bool _wakeReconnectArmed = false;
-  bool _intentionalDisconnect = false;
-  bool _resumeWantEngine = false;
-  String? _resumeSolid;
-  bool _resumePoweredOff = false;
-
-  HelperClient get _client => ref.read(helperClientProvider);
-
+class HelperStateNotifier extends _HelperStateBase
+    with _HelperSolidGate, _HelperStatusHandlers, _HelperWakeReconnect {
   @override
   HelperUiState build() {
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);
@@ -161,208 +87,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     return selected;
   }
 
-  /// 丢弃未发出的纯色，避免关窗/熄灯后补发走马灯。
-  void _cancelPendingSolid() {
-    _solidTimer?.cancel();
-    _solidTimer = null;
-    _pendingSolid = null;
-  }
-
-  void _flushPendingSolid() {
-    final color = _pendingSolid;
-    _pendingSolid = null;
-    if (color == null || !_client.isConnected) return;
-    if (color == _lastSentSolid) return;
-    _lastSentSolid = color;
-    _sendIpc('solid $color');
-  }
-
-  void _onSolidCooldownEnd() {
-    _solidTimer = null;
-    if (_pendingSolid == null) return;
-    _flushPendingSolid();
-    // 冷却期内又攒了色：发出后继续冷却，保证最快约 70ms 一帧
-    _solidTimer = Timer(_solidCooldown, _onSolidCooldownEnd);
-  }
-
   bool get isReady => _client.isConnected && state.canControl;
-
-  void _patch({
-    String? message,
-    String? ipcLine,
-    HelperPhase? phase,
-    List<ComPortInfo>? ports,
-    String? currentCom,
-    String? lastGoodCom,
-    bool? hasDevice,
-    bool? isScanningPorts,
-    bool? engineRunning,
-  }) {
-    state = HelperUiState(
-      phase: phase ?? state.phase,
-      message: message ?? state.message,
-      ipcLine: ipcLine ?? state.ipcLine,
-      ports: ports ?? state.ports,
-      currentCom: currentCom ?? state.currentCom,
-      lastGoodCom: lastGoodCom ?? state.lastGoodCom,
-      hasDevice: hasDevice ?? state.hasDevice,
-      isScanningPorts: isScanningPorts ?? state.isScanningPorts,
-      engineRunning: engineRunning ?? state.engineRunning,
-    );
-  }
-
-  void _sendIpc(String cmd) {
-    _client.send(cmd);
-    _patch(ipcLine: '$cmd\n');
-  }
-
-  String _formatReadyMessage({required String com, required bool engine}) {
-    if (com.isEmpty) return '串口就绪';
-    if (engine) return '$com · 追色运行中';
-    return '串口就绪（$com）';
-  }
-
-  void _onStatusEvent(HelperStatusEvent event) {
-    switch (event) {
-      case HelperStatusPhase(:final word):
-        _onStatusPhase(word);
-      case HelperStatusCom(:final port):
-        _onStatusCom(port);
-      case HelperStatusEngine(:final running):
-        _onStatusEngine(running);
-      case HelperStatusDisplay(:final kind):
-        _onStatusDisplay(kind);
-    }
-  }
-
-  /// helper 休眠恢复后的显示意图：对齐徽标，避免灯已亮而 UI 仍停在熄灯。
-  void _onStatusDisplay(HelperDisplayKind kind) {
-    final com = state.currentCom;
-    switch (kind) {
-      case HelperDisplayKind.engine:
-        _engineWanted = true;
-        _patch(
-          engineRunning: true,
-          phase: HelperPhase.running,
-          hasDevice: true,
-          message: com.isEmpty ? '追色运行中' : '$com · 追色运行中',
-        );
-      case HelperDisplayKind.solid:
-        _engineWanted = false;
-        _patch(
-          engineRunning: false,
-          phase: HelperPhase.running,
-          hasDevice: true,
-          message: '纯色运行中',
-        );
-      case HelperDisplayKind.softOff:
-        _engineWanted = false;
-        _lastSentSolid = null;
-        _patch(
-          engineRunning: false,
-          phase: HelperPhase.poweredOff,
-          hasDevice: true,
-          message: '已熄灯',
-        );
-      case HelperDisplayKind.idle:
-        _engineWanted = false;
-        _patch(
-          engineRunning: false,
-          phase: HelperPhase.ready,
-          hasDevice: true,
-          message: _formatReadyMessage(com: com, engine: false),
-        );
-    }
-  }
-
-  /// helper 真值 COM：更新 UI 并落盘，供下次快速连接。
-  void _onStatusCom(String port) {
-    final name = port.trim();
-    if (name.isEmpty) return;
-    ref.read(configProvider.notifier).setLastConnectedCom(name);
-    _patch(
-      message: _formatReadyMessage(com: name, engine: state.engineRunning),
-      currentCom: name,
-      lastGoodCom: name,
-      hasDevice: true,
-      phase:
-          state.phase == HelperPhase.connecting ||
-              state.phase == HelperPhase.disconnected
-          ? HelperPhase.ready
-          : null,
-    );
-  }
-
-  void _onStatusEngine(bool running) {
-    _engineWanted = running;
-    final com = state.currentCom;
-    if (running) {
-      _patch(
-        engineRunning: true,
-        message: com.isEmpty ? '追色运行中' : '$com · 追色运行中',
-        phase: HelperPhase.running,
-        hasDevice: true,
-      );
-      return;
-    }
-    // engine 0：停追色。poweredOff / noDevice / failed 等相位不动
-    final keepPhase =
-        state.phase == HelperPhase.poweredOff ||
-        state.phase == HelperPhase.noDevice ||
-        state.phase == HelperPhase.failed ||
-        state.phase == HelperPhase.disconnected ||
-        state.phase == HelperPhase.connecting;
-    _patch(
-      engineRunning: false,
-      message: keepPhase
-          ? state.message
-          : _formatReadyMessage(com: com, engine: false),
-      phase: keepPhase ? null : HelperPhase.ready,
-    );
-  }
-
-  void _onStatusPhase(HelperStatusWord word) {
-    switch (word) {
-      case HelperStatusWord.ready:
-        final cfg = ref.read(configProvider);
-        _hadSession = true;
-        // 为什么：COM 真值等随后的 status com，此处不猜 cfg.comPort
-        _patch(
-          message: '串口就绪',
-          phase: HelperPhase.ready,
-          hasDevice: true,
-          engineRunning: false,
-        );
-        sendEmaAlpha(cfg.emaAlpha);
-        sendMode(cfg.mode);
-        sendComPort(cfg.comPort);
-        sendSleepSync(cfg.autoSleepSync);
-      case HelperStatusWord.reconnecting:
-        _patch(
-          message: '正在重连串口…',
-          phase: state.canControl ? null : HelperPhase.connecting,
-          hasDevice: state.canControl ? true : false,
-          engineRunning: false,
-        );
-      case HelperStatusWord.reconnectOk:
-        _patch(
-          message: '重连成功',
-          hasDevice: true,
-          phase: state.canControl ? null : HelperPhase.ready,
-          engineRunning: false,
-        );
-      case HelperStatusWord.reconnectFail:
-        _patch(
-          message: '重连失败：打不开 ${ref.read(configProvider).comPort}',
-          hasDevice: false,
-          phase: HelperPhase.noDevice,
-          currentCom: '',
-          engineRunning: false,
-        );
-      case HelperStatusWord.unknown:
-        break;
-    }
-  }
 
   void selectComPort(String value) {
     final name = value.trim();
@@ -373,6 +98,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     sendComPort(name);
   }
 
+  @override
   Future<void> connect() async {
     if (state.phase == HelperPhase.connecting) return;
 
@@ -425,6 +151,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
   }
 
   /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过（配置已由 ConfigNotifier 落盘）。
+  @override
   void sendEmaAlpha(double alpha) {
     if (!_client.isConnected) return;
     try {
@@ -435,6 +162,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {
@@ -448,6 +176,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
+  @override
   void sendComPort(String port) {
     if (!_client.isConnected) return;
     final name = port.trim();
@@ -460,6 +189,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
   }
 
   /// 休眠同步开关：已连接则下发；未连接静默（配置已落盘）。
+  @override
   void sendSleepSync(bool enabled) {
     if (!_client.isConnected) return;
     try {
@@ -518,35 +248,9 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
-  /// 点色卡/取色：若追色引擎在跑（[_engineWanted]），先立即 `stop`。
-  /// 纯色走 **方案 A**：首击立刻发；冷却 70ms 内只记最新色，结束再补发。
-  /// 最快约一帧/70ms，避免人手切色卡仍把每色都塞进队列。
-  void sendSolid(String rrggbb) {
-    if (!_client.isConnected) return;
-    try {
-      if (_engineWanted) {
-        _engineWanted = false;
-        _sendIpc('stop');
-      }
-      _patch(
-        message: '纯色运行中',
-        phase: HelperPhase.running,
-        hasDevice: true,
-      );
-      _pendingSolid = rrggbb;
-      if (_solidTimer == null) {
-        // leading：冷却空闲 → 马上发，再进入冷却
-        _flushPendingSolid();
-        _solidTimer = Timer(_solidCooldown, _onSolidCooldownEnd);
-      }
-      // else：冷却中只更新 pending，等 _onSolidCooldownEnd trailing
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
   /// UI「关灯」：发 `soft_off`（停引擎 + 纯黑一帧），不掉电。
   /// 勿与备用命令 `off`（`set_power 0`）混淆；真下电只走 `quit`。
+  @override
   void softOff() {
     if (!_client.isConnected) return;
     try {
@@ -565,6 +269,7 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     }
   }
 
+  @override
   void send(String cmd) {
     if (!_client.isConnected) return;
     try {
@@ -599,96 +304,6 @@ class HelperStateNotifier extends Notifier<HelperUiState> {
     } catch (e) {
       _patch(message: '$e');
     }
-  }
-
-  /// 方案三：仅 armed（休眠硬关导致断连）时拉起 helper，并按快照恢复现场。
-  Future<void> reconnectAfterResume() async {
-    if (_resumeBusy) return;
-    final cfg = ref.read(configProvider);
-    if (!cfg.autoSleepSync) return;
-    if (!_wakeReconnectArmed) return;
-    if (_client.isConnected) return;
-
-    _resumeBusy = true;
-    try {
-      _cancelPendingSolid();
-      final wantEngine = _resumeWantEngine;
-      final solid = _resumeSolid;
-      final wasPoweredOff = _resumePoweredOff;
-
-      _patch(message: '系统唤醒，3 秒后重连…');
-      await Future<void>.delayed(const Duration(seconds: 3));
-
-      _intentionalDisconnect = true;
-      try {
-        await _client.quit();
-      } finally {
-        _intentionalDisconnect = false;
-      }
-      _engineWanted = false;
-      _patch(message: '正在重连…', phase: HelperPhase.disconnected);
-
-      const maxAttempts = 5;
-      for (var left = maxAttempts; left >= 1; left--) {
-        try {
-          // 上次卡在 connecting 时先拆掉，否则 connect() 会空返回
-          if (state.phase == HelperPhase.connecting && _client.isConnected) {
-            _intentionalDisconnect = true;
-            try {
-              await _client.quit();
-            } finally {
-              _intentionalDisconnect = false;
-            }
-            _patch(phase: HelperPhase.disconnected);
-          }
-
-          await connect();
-          if (!_client.isConnected) {
-            throw StateError('IPC 未接通');
-          }
-
-          final ready = await _waitUntilCanControl(
-            const Duration(seconds: 8),
-          );
-          if (ready) {
-            if (wantEngine) {
-              send('start');
-            } else if (wasPoweredOff) {
-              softOff();
-            } else if (solid != null && solid.length == 6) {
-              sendSolid(solid);
-            }
-            _wakeReconnectArmed = false;
-            return;
-          }
-        } catch (_) {}
-        if (left > 1) {
-          _patch(message: '重连失败，2 秒后重试（剩 ${left - 1}）…');
-          await Future<void>.delayed(const Duration(seconds: 2));
-        }
-      }
-      _wakeReconnectArmed = false;
-      _patch(
-        message: '唤醒后重连失败，请手动点「连接」',
-        phase: HelperPhase.failed,
-      );
-    } finally {
-      _resumeBusy = false;
-    }
-  }
-
-  /// 等 status ready（或已可控）；超时返回 false。
-  Future<bool> _waitUntilCanControl(Duration timeout) async {
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      if (state.canControl) return true;
-      if (state.phase == HelperPhase.failed ||
-          state.phase == HelperPhase.noDevice) {
-        return false;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    return state.canControl;
   }
 
   Future<void> quit() async {
