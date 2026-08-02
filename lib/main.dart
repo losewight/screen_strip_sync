@@ -30,6 +30,12 @@ Future<void> main() async {
     await windowManager.focus();
   });
 
-  runApp(const ProviderScope(child: ZeerayApp()));
+  // 为什么：Windows Debug 下 AXTree 更新失败会 assert 杀进程（Lost connection）；
+  // 本 App 不依赖读屏，ExcludeSemantics 关掉语义桥即可避开。
+  runApp(
+    const ProviderScope(
+      child: ExcludeSemantics(child: ZeerayApp()),
+    ),
+  );
   CrashLog.event('main', 'runApp done');
 }

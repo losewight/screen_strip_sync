@@ -68,7 +68,12 @@ class _StoreTitleBarState extends State<StoreTitleBar> with WindowListener {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.lightbulb, size: 20, color: AppTheme.accent),
+                    Image.asset(
+                      'assets/app_icon.png',
+                      width: 20,
+                      height: 20,
+                      filterQuality: FilterQuality.high,
+                    ),
                     const SizedBox(width: AppSpacing.control),
                     const Text(
                       'Zeeray Ambilight',
