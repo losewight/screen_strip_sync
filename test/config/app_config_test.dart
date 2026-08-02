@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeeray_ambilight/config/app_config.dart';
 import 'package:zeeray_ambilight/config/config_store.dart';
+import 'package:zeeray_ambilight/config/segment_map_codec.dart';
 
 void main() {
   group('AppConfig.fromJson / toJson', () {
@@ -76,6 +77,36 @@ void main() {
         },
       );
     });
+
+    test('missing segmentMap is null (uncalibrated)', () {
+      expect(AppConfig.fromJson({}).segmentMap, isNull);
+      expect(const AppConfig().hasSegmentMap, isFalse);
+    });
+
+    test('valid segmentMap round-trips; bad length discarded', () {
+      final map = List.generate(
+        kSegmentCount,
+        (i) => SegmentSample(
+          x0: i / 10.0,
+          y0: 0,
+          x1: (i + 1) / 10.0,
+          y1: 0.05,
+        ),
+      );
+      final cfg = AppConfig(segmentMap: map);
+      final restored = AppConfig.fromJson(cfg.toJson());
+      expect(restored.hasSegmentMap, isTrue);
+      expect(restored.segmentMap![3].x0, closeTo(0.3, 1e-9));
+
+      expect(
+        AppConfig.fromJson({
+          'segmentMap': [
+            {'x0': 0, 'y0': 0, 'x1': 1, 'y1': 1},
+          ],
+        }).segmentMap,
+        isNull,
+      );
+    });
   });
 
   group('ConfigStore', () {
@@ -106,6 +137,7 @@ void main() {
       expect(cfg.autoSleepSync, isTrue);
       expect(cfg.turnOffOnShutdown, isTrue);
       expect(cfg.startOnBoot, isFalse);
+      expect(cfg.segmentMap, isNull);
     });
 
     test('save then load round-trips', () {

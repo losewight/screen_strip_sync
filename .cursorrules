@@ -98,31 +98,21 @@ flowchart LR
 | `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` |
 | `power_watch.cpp` | 隐藏窗拦截休眠 / 会话结束消息 |
 
-### 3.2 Flutter（`lib/`，目标结构，当前只有单文件烟测台）
+### 3.2 Flutter（`lib/`）
 
 ```text
 lib/
-├── main.dart                  # runApp(ProviderScope(child: ZeerayApp()))
-├── app/
-│   ├── app.dart               # MaterialApp + NavigationRail 壳
-│   └── theme.dart             # 主题（可后置）
+├── main.dart
+├── app/                       # MaterialApp 壳、生命周期
 ├── ui/
-│   ├── pages/
-│   │   ├── control_page.dart  # 主控：连接 / 开始 / 停止 / 纯色 / 关灯 + 状态
-│   │   └── settings_page.dart # 设置：EMA α、方案 A/B、COM 口
-│   └── widgets/               # 状态徽标、色卡按钮等小组件
-├── state/
-│   ├── helper_state.dart      # 连接与引擎状态 Notifier + Provider
-│   └── config_state.dart      # 配置 Notifier（读写 JSON）
-├── ipc/
-│   ├── helper_client.dart     # Process.start + Socket + 按行收发（从 main.dart 搬）
-│   └── helper_status.dart     # status 行 → enum 解析
-└── config/
-    ├── app_config.dart        # 数据类 + fromJson / toJson
-    └── config_store.dart      # exe 同目录 JSON 读写
+│   ├── pages/                 # control / lighting_schemes / settings
+│   └── widgets/               # 含 segment_map_calibrator、segment_rect_overlay
+├── state/                     # helper_state（含 map IPC mixin）、config_state
+├── ipc/                       # helper_client、primary_monitor_capture（截屏）
+└── config/                    # app_config、segment_sample、segment_map_codec、config_store
 ```
 
-**待清理**：`lib/engine/`、`lib/serial/` 是 FFI 时代遗留的空目录，与「Flutter 不碰串口」边界冲突，A0 时删除，避免误导后续实现。
+映射校准入口在「灯光方案 → 屏幕同步」，不在设置页。
 
 ---
 
@@ -180,12 +170,18 @@ lib/
 | → helper | `set alpha <0.05..1>` | 写 EMA α；helper 侧 clamp；非法忽略 |
 | → helper | `set mode a\|b` | 存方案；阶段 C 前引擎观感相同 |
 | → helper | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
+| → helper | `set sleep_sync 0\|1` | 休眠同步：1=软关可唤醒重连；0=硬退 |
+| → helper | `highlight <0..9>` | 校准：仅该段白、其余黑一帧（`send_highlight`，≥50ms） |
+| → helper | `set map default` | 清空自定义采样表，恢复顶边均分 |
+| → helper | `set map x0,y0,x1,y1;...` | 10 段矩形（0..100 整数百分比，`;` 分隔）；非法整句忽略 |
 | ← helper | `status ready` | 客户端接通、串口已就绪 |
 | ← helper | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
 | ← helper | `status com COMn` | 当前已打开的串口（Dart 落盘 `lastConnectedCom`，核验用） |
 | ← helper | `status engine 0\|1` | 追色发帧线程是否在跑（Dart 对齐 `engineRunning`，不强制上 UI） |
 
-**尚未实现**：`set blur <n>`；更宽的状态上报可按需再加。协议扩展先写清草稿，再动 C++。
+**采样映射**：与方案 A/B **正交**。无有效 `segmentMap` / 未下发 map → DXGI 顶边均分（历史默认）。有表时矩形内步进抽点 + 丢近黑 + RMS（√均值平方）。截图与框选只在 Flutter；IPC **不传**逐帧像素。
+
+**尚未实现**：`set blur <n>`；更宽的状态上报可按需再加。
 
 ---
 
@@ -193,7 +189,7 @@ lib/
 
 **用法**：从上往下取**第一项未勾选**的做；一次只推一小步，验收通过再进下一项。已掌握的概念可跳过讲解，但不跳过验收。
 
-### 阶段 A — 前端产品壳 + 真 IPC（当前焦点）
+### 阶段 A — 前端产品壳 + 真 IPC（已完成主体，清单可后补勾）
 
 现有 `lib/main.dart` 的 IPC 能力（拉起 helper、Socket 收发、唤醒重连）**必须原样迁移、不得倒退成 mock**。
 
@@ -220,9 +216,18 @@ lib/
 - [ ] **B3 引擎侧生效**：配置存 `std::atomic`，热路径只读不加锁（当前 α 写死在 `light_engine.cpp` 的 `alpha = 0.3f`，COM 写死在 `try_serial_ready` 的 `"COM10"`）。
 - [x] **B4 状态上报加宽**：`status com` / `status engine` 回传；Dart 解析后核验并对齐 `currentCom` / `engineRunning` / `lastConnectedCom`（不上徽标/顶栏强显）。
 
+### 阶段 M — 段映射校准（与 A/B 调色正交）
+
+- [x] **M1** `SegmentSample` / codec / `AppConfig.segmentMap` JSON。
+- [x] **M2** helper：`highlight` / `set map` / 矩形采样（无表=顶边默认）。
+- [x] **M3** Dart ready 同步 map；`sendSegmentMap` / `highlightSegment`。
+- [x] **M4** Flutter win32 主屏截图（不经 helper）。
+- [x] **M5** 屏幕同步页校准：逐段框选、返回上一段、可重叠；开始 `soft_off`，完成 `start`。
+- [x] **M2.5** 自定义 map 路径：平方近似 RMS，仍丢近黑（顶边默认路径未改）。
+
 ### 阶段 C — 产品债与收尾
 
-- [ ] **C1 方案 A 确认**：高 Brightness + RGB 跟色的默认通路走通。
+- [ ] **C1 方案 A 确认**：高 Brightness + RGB 跟色的默认通路走通（映射已独立于本项）。
 - [ ] **C2 方案 B**：luma → Brightness（`01`~`63`）+ 亮度 EMA；RGB 主跟色相；可选 R/G/B 增益或伽马、亮度上限；参数经 JSON + IPC 下发，禁止写死唯一魔法数。
 - [ ] **C3 helper 缺口**：父进程 PID 监测、COM 自动重连、DXGI `ACCESS_LOST` 自动恢复、IPC 断连后重回 `listen`（当前 `ipc_run` 只 accept 一次就返回）。
 - [ ] **C4 打包与复查**：helper 与 App 同目录分发；全路线红线复查。
@@ -244,7 +249,9 @@ lib/
 | A — 简单跟色（默认） | 开箱即用 | 高亮度 + RGB 跟屏色；接受亮↔黑较硬切；UI 选项少 |
 | B — 暗场/亮度调色（可选） | 进阶用户 | luma → Brightness + 亮度 EMA；极暗可 `01` + 黑；可选校正与亮度上限 |
 
-**其它已知缺口**：无父进程监测；DXGI `ACCESS_LOST` 不自动恢复；COM 名写死 `COM10` 且失败后只能手动 `reconnect`；EMA / 采样 / blur 不可配置；IPC 断连后不重回 listen。
+映射（阶段 M）与上表无关：A/B 共用 `segmentMap`；未校准用顶边均分。
+
+**其它已知缺口**：无父进程监测；DXGI `ACCESS_LOST` 不自动恢复；IPC 断连后不重回 listen；`set blur` 未做。
 
 ---
 

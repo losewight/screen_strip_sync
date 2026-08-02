@@ -19,6 +19,10 @@ static std::atomic<char> g_mode{'a'};
 // main，仍用锁防竞态
 static std::mutex g_com_mu;
 static char g_com_name[16] = "COM10";
+// 为什么：map 与调色正交；IPC 写、发帧读，短锁拷贝快照
+static std::mutex g_map_mu;
+static bool g_map_custom = false;
+static SegmentRect g_map[kSegmentCount] = {};
 // 为什么：EMA 需要「上一帧平滑结果」；10 段 × RGB
 static float g_ema_r[10] = {};
 static float g_ema_g[10] = {};
@@ -79,6 +83,81 @@ bool engine_set_com(const char *name) {
   std::lock_guard<std::mutex> lock(g_com_mu);
   snprintf(g_com_name, sizeof(g_com_name), "%s", norm);
   return true;
+}
+
+bool engine_set_map_from_ipc(const char *payload) {
+  if (payload == nullptr)
+    return false;
+  while (*payload == ' ' || *payload == '\t')
+    ++payload;
+
+  SegmentRect parsed[kSegmentCount];
+  const char *p = payload;
+  for (int i = 0; i < kSegmentCount; ++i) {
+    auto read_int = [](const char *&q, int *out) -> bool {
+      if (*q < '0' || *q > '9')
+        return false;
+      int v = 0;
+      while (*q >= '0' && *q <= '9') {
+        v = v * 10 + (*q - '0');
+        if (v > 100)
+          return false;
+        ++q;
+      }
+      *out = v;
+      return true;
+    };
+    int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    if (!read_int(p, &x0) || *p != ',')
+      return false;
+    ++p;
+    if (!read_int(p, &y0) || *p != ',')
+      return false;
+    ++p;
+    if (!read_int(p, &x1) || *p != ',')
+      return false;
+    ++p;
+    if (!read_int(p, &y1))
+      return false;
+    if (x0 < 0 || y0 < 0 || x1 > 100 || y1 > 100 || x0 >= x1 || y0 >= y1)
+      return false;
+    parsed[i].x0 = x0 / 100.f;
+    parsed[i].y0 = y0 / 100.f;
+    parsed[i].x1 = x1 / 100.f;
+    parsed[i].y1 = y1 / 100.f;
+    if (i + 1 < kSegmentCount) {
+      if (*p != ';')
+        return false;
+      ++p;
+    }
+  }
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  if (*p != '\0')
+    return false;
+
+  std::lock_guard<std::mutex> lock(g_map_mu);
+  for (int i = 0; i < kSegmentCount; ++i)
+    g_map[i] = parsed[i];
+  g_map_custom = true;
+  return true;
+}
+
+void engine_clear_map() {
+  std::lock_guard<std::mutex> lock(g_map_mu);
+  g_map_custom = false;
+}
+
+void engine_copy_map_snapshot(bool *out_custom,
+                              SegmentRect out_rects[kSegmentCount]) {
+  if (out_custom == nullptr || out_rects == nullptr)
+    return;
+  std::lock_guard<std::mutex> lock(g_map_mu);
+  *out_custom = g_map_custom;
+  if (g_map_custom) {
+    for (int i = 0; i < kSegmentCount; ++i)
+      out_rects[i] = g_map[i];
+  }
 }
 
 static void play_strip_scan(HANDLE h);
@@ -195,10 +274,40 @@ bool send_solid(HANDLE h, const char *rrggbb) {
   return true;
 }
 
+bool send_highlight(HANDLE h, int seg) {
+  if (seg < 0 || seg >= kSegmentCount)
+    return false;
+  const char *colors[kSegmentCount];
+  for (int i = 0; i < kSegmentCount; ++i)
+    colors[i] = (i == seg) ? "ffffff" : "000000";
+
+  char frame[128];
+  snprintf(frame, sizeof(frame),
+           "set_rgb_pc %04x 00 63 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
+           1, colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
+           colors[6], colors[7], colors[8], colors[9]);
+
+  DWORD len = (DWORD)strlen(frame);
+  if (len >= 120) {
+    printf("highlight frame too long: %lu\n", (unsigned long)len);
+    return false;
+  }
+  if (!send_one_frame(h, frame, len))
+    return false;
+  Sleep(50);
+  return true;
+}
+
 // 为什么：produce = 抓屏采样；timeout 常见，应跳过本帧而不是当致命错误
 static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
   unsigned char rgb[10][3] = {};
-  DxgiErr e = dxgi_grab_and_sample(50, rgb); // 循环里用短超时
+  bool custom = false;
+  SegmentRect rects[kSegmentCount];
+  engine_copy_map_snapshot(&custom, rects);
+  // 调用：有自定义表则按矩形采；否则顶边默认
+  DxgiErr e = dxgi_grab_and_sample(50, rgb, custom ? rects : nullptr);
   if (e != DxgiErr::Ok)
     return false;
 

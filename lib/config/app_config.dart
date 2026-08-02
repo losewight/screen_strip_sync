@@ -1,4 +1,9 @@
-﻿/// 双调色方案（阶段 C 才真正进引擎；此处只存用户意图）。
+﻿import 'segment_map_codec.dart';
+import 'segment_sample.dart';
+
+export 'segment_sample.dart';
+
+/// 双调色方案（阶段 C 才真正进引擎；此处只存用户意图）。
 enum ColorMode {
   /// 方案 A：高亮度 + RGB 跟屏色
   a,
@@ -7,7 +12,7 @@ enum ColorMode {
   b,
 }
 
-/// 用户可改参数快照（A5 落盘；B 才下发 helper）。
+/// 用户可改参数快照（A5 落盘；映射与调色正交）。
 ///
 /// 帧长 / 50ms 节流永不进此类。
 class AppConfig {
@@ -19,9 +24,10 @@ class AppConfig {
     this.autoSleepSync = true,
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
+    this.segmentMap,
   });
 
-  /// EMA 平滑系数，与 helper 当前写死的 `0.3f` 对齐；取值域约 0.05..1.0。
+  /// EMA 平滑系数；取值域约 0.05..1.0。
   final double emaAlpha;
 
   final ColorMode mode;
@@ -41,6 +47,12 @@ class AppConfig {
   /// 软件随系统启动后是否自动启动灯带；暂不下发 helper。
   final bool startOnBoot;
 
+  /// 10 段屏幕采样矩形；`null` = 未校准，helper 用顶边均分默认。
+  final List<SegmentSample>? segmentMap;
+
+  bool get hasSegmentMap =>
+      segmentMap != null && segmentMap!.length == kSegmentCount;
+
   AppConfig copyWith({
     double? emaAlpha,
     ColorMode? mode,
@@ -49,6 +61,8 @@ class AppConfig {
     bool? autoSleepSync,
     bool? turnOffOnShutdown,
     bool? startOnBoot,
+    List<SegmentSample>? segmentMap,
+    bool clearSegmentMap = false,
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
@@ -58,6 +72,7 @@ class AppConfig {
       autoSleepSync: autoSleepSync ?? this.autoSleepSync,
       turnOffOnShutdown: turnOffOnShutdown ?? this.turnOffOnShutdown,
       startOnBoot: startOnBoot ?? this.startOnBoot,
+      segmentMap: clearSegmentMap ? null : (segmentMap ?? this.segmentMap),
     );
   }
 
@@ -101,6 +116,8 @@ class AppConfig {
       _ => false,
     };
 
+    final segmentMap = SegmentMapCodec.parseSegmentMapJson(json['segmentMap']);
+
     return AppConfig(
       emaAlpha: alpha,
       mode: mode,
@@ -109,19 +126,26 @@ class AppConfig {
       autoSleepSync: autoSleepSync,
       turnOffOnShutdown: turnOffOnShutdown,
       startOnBoot: startOnBoot,
+      segmentMap: segmentMap,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'emaAlpha': emaAlpha,
-    'mode': switch (mode) {
-      ColorMode.a => 'a',
-      ColorMode.b => 'b',
-    },
-    'comPort': comPort,
-    'lastConnectedCom': lastConnectedCom,
-    'autoSleepSync': autoSleepSync,
-    'turnOffOnShutdown': turnOffOnShutdown,
-    'startOnBoot': startOnBoot,
-  };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'emaAlpha': emaAlpha,
+      'mode': switch (mode) {
+        ColorMode.a => 'a',
+        ColorMode.b => 'b',
+      },
+      'comPort': comPort,
+      'lastConnectedCom': lastConnectedCom,
+      'autoSleepSync': autoSleepSync,
+      'turnOffOnShutdown': turnOffOnShutdown,
+      'startOnBoot': startOnBoot,
+    };
+    if (hasSegmentMap) {
+      map['segmentMap'] = segmentMap!.map((s) => s.toJson()).toList();
+    }
+    return map;
+  }
 }

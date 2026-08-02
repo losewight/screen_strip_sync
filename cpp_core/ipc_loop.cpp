@@ -212,6 +212,34 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return true;
   }
+  // 为什么：校准逐段点亮；越界忽略
+  if (strncmp(line, "highlight ", 10) == 0) {
+    const char *p = line + 10;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end == p || *end != '\0' || v < 0 || v >= kSegmentCount) {
+      printf("bad highlight: [%s]\n", p);
+    } else {
+      printf("cmd=highlight %ld\n", v);
+      send_highlight(*serial, (int)v);
+    }
+    return true;
+  }
+  // 为什么：default 清表；否则 10 段百分比矩形
+  if (strcmp(line, "set map default") == 0) {
+    engine_clear_map();
+    printf("cmd=set map default\n");
+    return true;
+  }
+  if (strncmp(line, "set map ", 8) == 0) {
+    const char *p = line + 8;
+    if (!engine_set_map_from_ipc(p)) {
+      printf("bad set map: [%s]\n", p);
+    } else {
+      printf("cmd=set map\n");
+    }
+    return true;
+  }
   if (strcmp(line, "reconnect") == 0) {
     engine_stop();
     send_status(client, "reconnecting");

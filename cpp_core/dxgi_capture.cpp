@@ -196,7 +196,8 @@ DxgiErr dxgi_grab_one_frame(UINT timeout_ms) {
   return DxgiErr::Ok;
 }
 
-DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3]) {
+DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
+                             const SegmentRect *rects) {
   if (!g_duplication)
     return DxgiErr::DuplicateFailed;
 
@@ -300,36 +301,112 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3]) {
   }
 
   const UINT stride = mapped.RowPitch;
-  // 为什么：原采 Height-2（底边）；关于水平中线对称 → 顶边往下 2 行，对照 luma
-  const UINT y = desc.Height > 2 ? 2u : 0;
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-    // 为什么：水平多点平均 = 空间降噪，减少单像素闪；不另开缓冲
-    const int blurStep = 2;
-    for (int i = 0; i < 10; ++i) {
-      const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
-      unsigned sum_r = 0, sum_g = 0, sum_b = 0;
-      int count = 0;
-      for (int dx = -blurStep; dx <= blurStep; ++dx) {
-        const int sx = (int)x + dx;
-        if (sx < 0 || sx >= (int)desc.Width)
-          continue;
-        const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
-        sum_b += px[0];
-        sum_g += px[1];
-        sum_r += px[2];
-        ++count;
+    if (rects != nullptr) {
+      // M2.5：步进抽点 + 丢近黑 + RMS（√均值平方，近似 gamma 校正均值）
+      constexpr int kNearBlack = 12; // (r+g+b)/3 低于此跳过
+      for (int i = 0; i < kSegmentCount; ++i) {
+        int x0 = (int)(rects[i].x0 * (float)desc.Width);
+        int y0 = (int)(rects[i].y0 * (float)desc.Height);
+        int x1 = (int)(rects[i].x1 * (float)desc.Width);
+        int y1 = (int)(rects[i].y1 * (float)desc.Height);
+        if (x0 < 0)
+          x0 = 0;
+        if (y0 < 0)
+          y0 = 0;
+        if (x1 > (int)desc.Width)
+          x1 = (int)desc.Width;
+        if (y1 > (int)desc.Height)
+          y1 = (int)desc.Height;
+        if (x1 <= x0)
+          x1 = x0 + 1;
+        if (y1 <= y0)
+          y1 = y0 + 1;
+        if (x1 > (int)desc.Width)
+          x1 = (int)desc.Width;
+        if (y1 > (int)desc.Height)
+          y1 = (int)desc.Height;
+
+        const int rw = x1 - x0;
+        const int rh = y1 - y0;
+        // 为什么：每段大约最多 ~16×16 点，控 CPU
+        int step_x = rw > 16 ? rw / 16 : 1;
+        int step_y = rh > 16 ? rh / 16 : 1;
+        if (step_x < 1)
+          step_x = 1;
+        if (step_y < 1)
+          step_y = 1;
+
+        // 为什么：sRGB 算术均值偏灰；累加平方再开方 ≈ 线性空间均值
+        unsigned long long sum_r2 = 0, sum_g2 = 0, sum_b2 = 0;
+        int count = 0;
+        for (int y = y0; y < y1; y += step_y) {
+          for (int x = x0; x < x1; x += step_x) {
+            const unsigned char *px =
+                p + (UINT)y * stride + (UINT)x * (UINT)bpp;
+            const unsigned r = px[2], g = px[1], b = px[0];
+            if ((r + g + b) / 3u < (unsigned)kNearBlack)
+              continue;
+            sum_r2 += (unsigned long long)r * r;
+            sum_g2 += (unsigned long long)g * g;
+            sum_b2 += (unsigned long long)b * b;
+            ++count;
+          }
+        }
+        if (count == 0) {
+          out_rgb[i][0] = 0;
+          out_rgb[i][1] = 0;
+          out_rgb[i][2] = 0;
+        } else {
+          const float inv = 1.f / (float)count;
+          out_rgb[i][0] = (unsigned char)(sqrtf((float)sum_r2 * inv) + 0.5f);
+          out_rgb[i][1] = (unsigned char)(sqrtf((float)sum_g2 * inv) + 0.5f);
+          out_rgb[i][2] = (unsigned char)(sqrtf((float)sum_b2 * inv) + 0.5f);
+        }
       }
-      out_rgb[i][0] = (unsigned char)(sum_r / count);
-      out_rgb[i][1] = (unsigned char)(sum_g / count);
-      out_rgb[i][2] = (unsigned char)(sum_b / count);
+    } else {
+      // 未校准：顶边均分（原路径，不动公式）
+      const UINT y = desc.Height > 2 ? 2u : 0;
+      const int blurStep = 2;
+      for (int i = 0; i < 10; ++i) {
+        const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
+        unsigned sum_r = 0, sum_g = 0, sum_b = 0;
+        int count = 0;
+        for (int dx = -blurStep; dx <= blurStep; ++dx) {
+          const int sx = (int)x + dx;
+          if (sx < 0 || sx >= (int)desc.Width)
+            continue;
+          const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
+          sum_b += px[0];
+          sum_g += px[1];
+          sum_r += px[2];
+          ++count;
+        }
+        out_rgb[i][0] = (unsigned char)(sum_r / count);
+        out_rgb[i][1] = (unsigned char)(sum_g / count);
+        out_rgb[i][2] = (unsigned char)(sum_b / count);
+      }
     }
   } else if (desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+    // float16：自定义 map 仍采矩形中心一点（罕见 format，先保可用）
     for (int i = 0; i < 10; ++i) {
-      const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
+      UINT x, y;
+      if (rects != nullptr) {
+        const float mx = 0.5f * (rects[i].x0 + rects[i].x1);
+        const float my = 0.5f * (rects[i].y0 + rects[i].y1);
+        x = (UINT)(mx * (float)desc.Width);
+        y = (UINT)(my * (float)desc.Height);
+        if (x >= desc.Width)
+          x = desc.Width - 1;
+        if (y >= desc.Height)
+          y = desc.Height - 1;
+      } else {
+        x = (UINT)((i + 0.5) * desc.Width / 10);
+        y = desc.Height > 2 ? 2u : 0;
+      }
       const unsigned short *h =
           (const unsigned short *)(p + y * stride + x * (UINT)bpp);
-      // float16 排布是 R,G,B,A
       out_rgb[i][0] = (unsigned char)half_to_u8(h[0]);
       out_rgb[i][1] = (unsigned char)half_to_u8(h[1]);
       out_rgb[i][2] = (unsigned char)half_to_u8(h[2]);

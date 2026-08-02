@@ -117,6 +117,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         sendMode(cfg.mode);
         sendComPort(cfg.comPort);
         sendSleepSync(cfg.autoSleepSync);
+        syncSegmentMapFromConfig();
       case HelperStatusWord.reconnecting:
         _patch(
           message: '正在重连串口…',
@@ -155,4 +156,5 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendMode(ColorMode mode);
   void sendComPort(String port);
   void sendSleepSync(bool enabled);
+  void syncSegmentMapFromConfig();
 }

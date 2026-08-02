@@ -2,6 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/segment_map_codec.dart';
 import '../ipc/helper_client.dart';
 import '../ipc/helper_status.dart';
 import '../ipc/windows_com_ports.dart';
@@ -10,13 +11,18 @@ import 'helper_ui_state.dart';
 
 export 'helper_ui_state.dart';
 
+part 'helper_segment_map_ipc.dart';
 part 'helper_solid_gate.dart';
 part 'helper_state_base.dart';
 part 'helper_status_handlers.dart';
 part 'helper_wake_reconnect.dart';
 
 class HelperStateNotifier extends _HelperStateBase
-    with _HelperSolidGate, _HelperStatusHandlers, _HelperWakeReconnect {
+    with
+        _HelperSolidGate,
+        _HelperStatusHandlers,
+        _HelperWakeReconnect,
+        _HelperSegmentMapIpc {
   @override
   HelperUiState build() {
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);

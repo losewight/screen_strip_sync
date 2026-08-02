@@ -8,6 +8,7 @@ import '../../state/lighting_scheme_tab.dart';
 import '../widgets/color_swatch_button.dart';
 import '../widgets/helper_status_badge.dart';
 import '../widgets/mode_tab_bar.dart';
+import '../widgets/segment_map_calibrator.dart';
 
 /// 灯光方案页签（壳层 [ModeTabBar] 与正文共用）。
 const lightingSchemeTabs = <ModeTabItem>[
@@ -85,7 +86,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: 720),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -157,6 +158,10 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                   notifier.sendMode(set.first);
                 },
               ),
+              const SizedBox(height: AppSpacing.pageSection),
+              _sectionLabel(context, '映射校准'),
+              const SizedBox(height: AppSpacing.text),
+              const SegmentMapCalibrator(),
             ],
           ),
         ),

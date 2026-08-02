@@ -1,4 +1,4 @@
-﻿name: zeeray_ambilight
+name: zeeray_ambilight
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.4.1
   window_manager: ^0.5.2
+  win32: ^6.3.0
+  ffi: ^2.2.0
 
 dev_dependencies:
   flutter_test:

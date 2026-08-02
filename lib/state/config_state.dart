@@ -2,6 +2,7 @@
 
 import '../config/app_config.dart';
 import '../config/config_store.dart';
+import '../config/segment_map_codec.dart';
 
 export '../config/app_config.dart';
 
@@ -50,6 +51,21 @@ class ConfigNotifier extends Notifier<AppConfig> {
 
   void setStartOnBoot(bool value) {
     state = state.copyWith(startOnBoot: value);
+    _store.save(state);
+  }
+
+  /// 写入恰好 [kSegmentCount] 段；长度不对则忽略。
+  void setSegmentMap(List<SegmentSample> map) {
+    if (map.length != kSegmentCount) return;
+    state = state.copyWith(
+      segmentMap: List<SegmentSample>.unmodifiable(map),
+    );
+    _store.save(state);
+  }
+
+  /// 清除校准，helper 侧应随后 `set map default`。
+  void clearSegmentMap() {
+    state = state.copyWith(clearSegmentMap: true);
     _store.save(state);
   }
 }
