@@ -93,26 +93,6 @@ static void send_engine_status(SOCKET client) {
   send_status_kv(client, "engine", engine_is_running() ? "1" : "0");
 }
 
-static void send_display_intent(SOCKET client, const DisplayIntent &intent) {
-  const char *word = "idle";
-  switch (intent.kind) {
-  case DisplayIntentKind::Engine:
-    word = "engine";
-    break;
-  case DisplayIntentKind::Solid:
-    word = "solid";
-    break;
-  case DisplayIntentKind::SoftOff:
-    word = "soft_off";
-    break;
-  case DisplayIntentKind::Idle:
-  default:
-    word = "idle";
-    break;
-  }
-  send_status_kv(client, "display", word);
-}
-
 // include_com=false：重连失败等无句柄情形，只报 engine 0
 static void push_runtime_status(SOCKET client, bool include_com) {
   if (include_com) {
@@ -133,7 +113,6 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     engine_stop();
     printf("cmd=off\n");
     power_off(*serial);
-    send_engine_status(client);
     return true;
   }
   // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
@@ -142,24 +121,18 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     engine_set_intent_soft_off();
     printf("cmd=soft_off\n");
     send_solid(*serial, "000000");
-    send_engine_status(client);
-    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
     engine_set_intent_engine();
     printf("cmd=start\n");
-    send_engine_status(client);
-    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
     engine_set_intent_idle();
     printf("cmd=stop\n");
-    send_engine_status(client);
-    send_display_intent(client, engine_get_display_intent());
     return true;
   }
   if (strncmp(line, "solid ", 6) == 0) {
@@ -171,8 +144,6 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       engine_stop();
       engine_set_intent_solid(color);
       send_solid(*serial, color);
-      send_engine_status(client);
-      send_display_intent(client, engine_get_display_intent());
     }
     return true;
   }
