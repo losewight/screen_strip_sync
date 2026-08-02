@@ -11,9 +11,10 @@ import 'segment_rect_overlay.dart';
 /// 屏幕同步页：逐段框选映射校准。
 ///
 /// 调用链：
-/// 开始 → soft_off → 截屏 → highlight(0)
+/// 开始 → 快照现场 → soft_off → 截屏 → highlight(0)
 /// → 拖框 → 确认/下一段（或返回上一段）→ … → 第 10 段确认
-/// → ConfigNotifier.setSegmentMap + sendSegmentMap → start 引擎
+/// → setSegmentMap + sendSegmentMap → start
+/// 取消 → 按快照恢复（追色 / 纯色 / 熄灯），不保存草稿 map
 class SegmentMapCalibrator extends ConsumerStatefulWidget {
   const SegmentMapCalibrator({super.key});
 
@@ -30,6 +31,10 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
   int _seg = 0;
   late List<SegmentSample?> _drafts;
   SegmentSample? _currentRect;
+
+  /// 进入校准前的现场（取消时还原）。
+  bool _preWantEngine = false;
+  String? _preSolid;
 
   @override
   void initState() {
@@ -58,6 +63,9 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
       _error = null;
     });
     try {
+      final scene = _helper.captureSceneForCalibration();
+      _preWantEngine = scene.wantEngine;
+      _preSolid = scene.solid;
       // 为什么：先软关停追色并熄灯，再逐段 highlight，避免与引擎抢串口
       _helper.softOff();
       final shot = await capturePrimaryMonitor();
@@ -91,6 +99,10 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
       _currentRect = null;
       _error = null;
     });
+    _helper.restoreAfterCalibrationCancel(
+      wantEngine: _preWantEngine,
+      solid: _preSolid,
+    );
   }
 
   void _confirmNext() {
@@ -140,7 +152,7 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
     }
     _config.setSegmentMap(map);
     _helper.sendSegmentMap(map);
-    // 为什么：校准完成恢复追色；取消路径不 start，保持软关后的熄灯态
+    // 完成路径固定开追色（产品约定）；与取消「还原快照」不同
     _helper.send('start');
     _shot?.dispose();
     setState(() {

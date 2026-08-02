@@ -312,6 +312,35 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
+  /// 校准开始前快照：取消时用 [restoreAfterCalibrationCancel] 还原。
+  /// soft_off 会清空 [_lastSentSolid]，须在 soft_off 之前调用。
+  ({bool wantEngine, String? solid}) captureSceneForCalibration() {
+    final solid =
+        !_engineWanted && _lastSentSolid != null && _lastSentSolid!.isNotEmpty
+        ? _lastSentSolid
+        : null;
+    return (
+      wantEngine: _engineWanted || state.engineRunning,
+      solid: solid,
+    );
+  }
+
+  /// 校准取消：恢复进入校准前的追色 / 纯色 / 熄灯。
+  void restoreAfterCalibrationCancel({
+    required bool wantEngine,
+    String? solid,
+  }) {
+    if (!_client.isConnected) return;
+    if (wantEngine) {
+      send('start');
+    } else if (solid != null && solid.isNotEmpty) {
+      sendSolid(solid);
+    } else {
+      // ready 或 poweredOff：软关清掉 highlight 残段
+      softOff();
+    }
+  }
+
   Future<void> quit() async {
     _cancelPendingSolid();
     _intentionalDisconnect = true;
