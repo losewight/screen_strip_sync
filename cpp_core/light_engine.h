@@ -21,6 +21,8 @@ bool send_solid(HANDLE h, const char *rrggbb);
 bool send_highlight(HANDLE h, int seg);
 bool try_serial_ready(HANDLE *out_h);
 void engine_set_alpha(float alpha);
+void engine_set_near_black(int v);
+void engine_set_blur(int v);
 void engine_set_mode(char mode);
 bool engine_set_com(const char *name);
 

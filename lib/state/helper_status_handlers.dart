@@ -114,6 +114,8 @@ mixin _HelperStatusHandlers on _HelperStateBase {
           engineRunning: false,
         );
         sendEmaAlpha(cfg.emaAlpha);
+        sendNearBlack(cfg.nearBlack);
+        sendBlur(cfg.blurStep);
         sendMode(cfg.mode);
         sendComPort(cfg.comPort);
         sendSleepSync(cfg.autoSleepSync);
@@ -153,6 +155,8 @@ mixin _HelperStatusHandlers on _HelperStateBase {
 
   // 由 HelperStateNotifier 实现（ready 时下发配置）。
   void sendEmaAlpha(double alpha);
+  void sendNearBlack(int nearBlack);
+  void sendBlur(int blurStep);
   void sendMode(ColorMode mode);
   void sendComPort(String port);
   void sendSleepSync(bool enabled);

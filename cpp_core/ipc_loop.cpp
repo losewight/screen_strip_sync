@@ -165,6 +165,39 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return true;
   }
+  // 为什么：缺参/非整数忽略；合法值交 engine clamp
+  if (strncmp(line, "set near_black ", 15) == 0) {
+    const char *p = line + 15;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set near_black: [%s]\n", p);
+    } else {
+      engine_set_near_black((int)v);
+      printf("cmd=set near_black\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set blur ", 9) == 0) {
+    const char *p = line + 9;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set blur: [%s]\n", p);
+    } else {
+      engine_set_blur((int)v);
+      printf("cmd=set blur\n");
+    }
+    return true;
+  }
   // 为什么：仅 a|b；非法忽略。引擎暂不分支（阶段 C）
   if (strncmp(line, "set mode ", 9) == 0) {
     const char *p = line + 9;

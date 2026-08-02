@@ -168,6 +168,8 @@ lib/
 | → helper | `quit` | 停引擎并结束 IPC；`helper_shutdown` 内仍 `power_off` |
 | → helper | `reconnect` | 关串口并重试就绪（最多 10 次） |
 | → helper | `set alpha <0.05..1>` | 写 EMA α；helper 侧 clamp；非法忽略 |
+| → helper | `set near_black <0..64>` | 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；默认 12；非法忽略 |
+| → helper | `set blur <0..8>` | 采样邻域半宽（空间降噪）；`0`=不扩邻域；默认 2；非法忽略 |
 | → helper | `set mode a\|b` | 存方案；阶段 C 前引擎观感相同 |
 | → helper | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | → helper | `set sleep_sync 0\|1` | 休眠同步：1=软关可唤醒重连；0=硬退 |
@@ -179,9 +181,9 @@ lib/
 | ← helper | `status com COMn` | 当前已打开的串口（Dart 落盘 `lastConnectedCom`，核验用） |
 | ← helper | `status engine 0\|1` | 追色发帧线程是否在跑（Dart 对齐 `engineRunning`，不强制上 UI） |
 
-**采样映射**：与方案 A/B **正交**。无有效 `segmentMap` / 未下发 map → DXGI 顶边均分（历史默认）。有表时矩形内步进抽点 + 丢近黑 + RMS（√均值平方）。截图与框选只在 Flutter；IPC **不传**逐帧像素。
+**采样映射**：与方案 A/B **正交**。无有效 `segmentMap` / 未下发 map → DXGI 顶边均分（历史默认）。有表时矩形内步进抽点 + 丢近黑 + RMS（√均值平方）；`set blur` 在格子点上扩 `±n` 邻域。截图与框选只在 Flutter；IPC **不传**逐帧像素。
 
-**尚未实现**：`set blur <n>`；更宽的状态上报可按需再加。
+**尚未实现**：更宽的状态上报可按需再加。
 
 ---
 

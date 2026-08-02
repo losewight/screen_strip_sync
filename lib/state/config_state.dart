@@ -20,6 +20,16 @@ class ConfigNotifier extends Notifier<AppConfig> {
     _store.save(state);
   }
 
+  void setNearBlack(int value) {
+    state = state.copyWith(nearBlack: value.clamp(0, 64));
+    _store.save(state);
+  }
+
+  void setBlurStep(int value) {
+    state = state.copyWith(blurStep: value.clamp(0, 8));
+    _store.save(state);
+  }
+
   void setMode(ColorMode mode) {
     state = state.copyWith(mode: mode);
     _store.save(state);

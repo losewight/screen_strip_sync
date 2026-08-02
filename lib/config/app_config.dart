@@ -18,6 +18,8 @@ enum ColorMode {
 class AppConfig {
   const AppConfig({
     this.emaAlpha = 0.3,
+    this.nearBlack = 12,
+    this.blurStep = 2,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
     this.lastConnectedCom = '',
@@ -29,6 +31,12 @@ class AppConfig {
 
   /// EMA 平滑系数；取值域约 0.05..1.0。
   final double emaAlpha;
+
+  /// 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；0..64。
+  final int nearBlack;
+
+  /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
+  final int blurStep;
 
   final ColorMode mode;
 
@@ -55,6 +63,8 @@ class AppConfig {
 
   AppConfig copyWith({
     double? emaAlpha,
+    int? nearBlack,
+    int? blurStep,
     ColorMode? mode,
     String? comPort,
     String? lastConnectedCom,
@@ -66,6 +76,8 @@ class AppConfig {
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
+      nearBlack: nearBlack ?? this.nearBlack,
+      blurStep: blurStep ?? this.blurStep,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
       lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
@@ -82,6 +94,16 @@ class AppConfig {
     final alpha = switch (rawAlpha) {
       num n => n.toDouble().clamp(0.05, 1.0),
       _ => 0.3,
+    };
+
+    final nearBlack = switch (json['nearBlack']) {
+      num n => n.round().clamp(0, 64),
+      _ => 12,
+    };
+
+    final blurStep = switch (json['blurStep']) {
+      num n => n.round().clamp(0, 8),
+      _ => 2,
     };
 
     final mode = switch (json['mode']) {
@@ -120,6 +142,8 @@ class AppConfig {
 
     return AppConfig(
       emaAlpha: alpha,
+      nearBlack: nearBlack,
+      blurStep: blurStep,
       mode: mode,
       comPort: com,
       lastConnectedCom: lastCom,
@@ -133,6 +157,8 @@ class AppConfig {
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{
       'emaAlpha': emaAlpha,
+      'nearBlack': nearBlack,
+      'blurStep': blurStep,
       'mode': switch (mode) {
         ColorMode.a => 'a',
         ColorMode.b => 'b',

@@ -169,6 +169,28 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
+  void sendNearBlack(int nearBlack) {
+    if (!_client.isConnected) return;
+    try {
+      final v = nearBlack.clamp(0, 64);
+      _sendIpc('set near_black $v');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendBlur(int blurStep) {
+    if (!_client.isConnected) return;
+    try {
+      final v = blurStep.clamp(0, 8);
+      _sendIpc('set blur $v');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {

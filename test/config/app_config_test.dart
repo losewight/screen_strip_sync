@@ -11,6 +11,8 @@ void main() {
     test('round-trip preserves fields', () {
       const original = AppConfig(
         emaAlpha: 0.55,
+        nearBlack: 20,
+        blurStep: 4,
         mode: ColorMode.b,
         comPort: 'COM7',
         lastConnectedCom: 'COM7',
@@ -20,6 +22,8 @@ void main() {
       );
       final restored = AppConfig.fromJson(original.toJson());
       expect(restored.emaAlpha, 0.55);
+      expect(restored.nearBlack, 20);
+      expect(restored.blurStep, 4);
       expect(restored.mode, ColorMode.b);
       expect(restored.comPort, 'COM7');
       expect(restored.lastConnectedCom, 'COM7');
@@ -31,6 +35,8 @@ void main() {
     test('missing keys fall back to defaults', () {
       final cfg = AppConfig.fromJson(<String, dynamic>{});
       expect(cfg.emaAlpha, 0.3);
+      expect(cfg.nearBlack, 12);
+      expect(cfg.blurStep, 2);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
       expect(cfg.lastConnectedCom, '');
@@ -42,6 +48,13 @@ void main() {
     test('clamps out-of-range emaAlpha', () {
       expect(AppConfig.fromJson({'emaAlpha': 0.01}).emaAlpha, 0.05);
       expect(AppConfig.fromJson({'emaAlpha': 2.0}).emaAlpha, 1.0);
+    });
+
+    test('clamps out-of-range nearBlack and blurStep', () {
+      expect(AppConfig.fromJson({'nearBlack': -1}).nearBlack, 0);
+      expect(AppConfig.fromJson({'nearBlack': 100}).nearBlack, 64);
+      expect(AppConfig.fromJson({'blurStep': -3}).blurStep, 0);
+      expect(AppConfig.fromJson({'blurStep': 99}).blurStep, 8);
     });
 
     test('illegal mode falls back to A; B is case-insensitive', () {
@@ -68,6 +81,8 @@ void main() {
         const AppConfig(mode: ColorMode.b).toJson(),
         {
           'emaAlpha': 0.3,
+          'nearBlack': 12,
+          'blurStep': 2,
           'mode': 'b',
           'comPort': 'COM10',
           'lastConnectedCom': '',

@@ -42,6 +42,10 @@ void engine_set_alpha(float alpha) {
   g_alpha.store(alpha);
 }
 
+void engine_set_near_black(int v) { dxgi_set_near_black(v); }
+
+void engine_set_blur(int v) { dxgi_set_blur(v); }
+
 void engine_set_mode(char mode) {
   // 调用前已校验；统一存小写
   g_mode.store(mode);

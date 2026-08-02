@@ -1,5 +1,6 @@
 ﻿#include "dxgi_capture.h"
 
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <d3d11.h>
@@ -9,6 +10,26 @@ static ID3D11Device *g_device = nullptr;
 static ID3D11DeviceContext *g_context = nullptr;
 static IDXGIOutputDuplication *g_duplication = nullptr;
 static ID3D11Texture2D *g_staging = nullptr;
+
+// 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
+static std::atomic<int> g_near_black{12}; // 0..64
+static std::atomic<int> g_blur_step{2};   // 0..8
+
+void dxgi_set_near_black(int v) {
+  if (v < 0)
+    v = 0;
+  if (v > 64)
+    v = 64;
+  g_near_black.store(v);
+}
+
+void dxgi_set_blur(int v) {
+  if (v < 0)
+    v = 0;
+  if (v > 8)
+    v = 8;
+  g_blur_step.store(v);
+}
 
 // 为什么：真桌面 format 不固定；按 format 算每像素字节数，才能和 RowPitch
 // 对照。
@@ -304,8 +325,9 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
     if (rects != nullptr) {
-      // M2.5：步进抽点 + 丢近黑 + RMS（√均值平方，近似 gamma 校正均值）
-      constexpr int kNearBlack = 12; // (r+g+b)/3 低于此跳过
+      // 步进抽点 + 丢近黑 + 可选 blur 邻域 + RMS
+      const int nearBlack = g_near_black.load();
+      const int blur = g_blur_step.load();
       for (int i = 0; i < kSegmentCount; ++i) {
         int x0 = (int)(rects[i].x0 * (float)desc.Width);
         int y0 = (int)(rects[i].y0 * (float)desc.Height);
@@ -343,15 +365,26 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         int count = 0;
         for (int y = y0; y < y1; y += step_y) {
           for (int x = x0; x < x1; x += step_x) {
-            const unsigned char *px =
-                p + (UINT)y * stride + (UINT)x * (UINT)bpp;
-            const unsigned r = px[2], g = px[1], b = px[0];
-            if ((r + g + b) / 3u < (unsigned)kNearBlack)
-              continue;
-            sum_r2 += (unsigned long long)r * r;
-            sum_g2 += (unsigned long long)g * g;
-            sum_b2 += (unsigned long long)b * b;
-            ++count;
+            // blur>0：格子点 ±blur 邻域一并采样（仍过近黑）
+            for (int dy = -blur; dy <= blur; ++dy) {
+              const int sy = y + dy;
+              if (sy < 0 || sy >= (int)desc.Height)
+                continue;
+              for (int dx = -blur; dx <= blur; ++dx) {
+                const int sx = x + dx;
+                if (sx < 0 || sx >= (int)desc.Width)
+                  continue;
+                const unsigned char *px =
+                    p + (UINT)sy * stride + (UINT)sx * (UINT)bpp;
+                const unsigned r = px[2], g = px[1], b = px[0];
+                if ((r + g + b) / 3u < (unsigned)nearBlack)
+                  continue;
+                sum_r2 += (unsigned long long)r * r;
+                sum_g2 += (unsigned long long)g * g;
+                sum_b2 += (unsigned long long)b * b;
+                ++count;
+              }
+            }
           }
         }
         if (count == 0) {
@@ -366,9 +399,9 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         }
       }
     } else {
-      // 未校准：顶边均分（原路径，不动公式）
+      // 未校准：顶边均分；blur 为水平邻域半宽
       const UINT y = desc.Height > 2 ? 2u : 0;
-      const int blurStep = 2;
+      const int blurStep = g_blur_step.load();
       for (int i = 0; i < 10; ++i) {
         const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
         unsigned sum_r = 0, sum_g = 0, sum_b = 0;
