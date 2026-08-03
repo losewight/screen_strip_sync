@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include "config_store.h"
 #include "helper_lifecycle.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
@@ -161,6 +162,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("bad set alpha: [%s]\n", p);
     } else {
       engine_set_alpha(v);
+      config_set_ema_alpha(v);
       printf("cmd=set alpha\n");
     }
     return true;
@@ -178,6 +180,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("bad set near_black: [%s]\n", p);
     } else {
       engine_set_near_black((int)v);
+      config_set_near_black((int)v);
       printf("cmd=set near_black\n");
     }
     return true;
@@ -194,6 +197,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("bad set blur: [%s]\n", p);
     } else {
       engine_set_blur((int)v);
+      config_set_blur((int)v);
       printf("cmd=set blur\n");
     }
     return true;
@@ -215,6 +219,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
         ++rest;
       if (*rest == '\0') {
         engine_set_mode(norm);
+        config_set_mode(norm);
         printf("cmd=set mode %c\n", norm);
         return true;
       }
@@ -228,6 +233,9 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     if (!engine_set_com(p)) {
       printf("bad set com: [%s]\n", p);
     } else {
+      char norm[16];
+      engine_get_com(norm, sizeof(norm));
+      config_set_com(norm);
       printf("cmd=set com\n");
     }
     return true;
@@ -239,6 +247,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       ++p;
     if ((*p == '0' || *p == '1') && p[1] == '\0') {
       helper_set_sleep_sync(*p == '1');
+      config_set_sleep_sync(*p == '1');
       printf("cmd=set sleep_sync %c\n", *p);
     } else {
       printf("bad set sleep_sync: [%s]\n", p);
@@ -261,6 +270,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   // 为什么：default 清表；否则 10 段百分比矩形
   if (strcmp(line, "set map default") == 0) {
     engine_clear_map();
+    config_clear_map();
     printf("cmd=set map default\n");
     return true;
   }
@@ -269,6 +279,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     if (!engine_set_map_from_ipc(p)) {
       printf("bad set map: [%s]\n", p);
     } else {
+      config_sync_map_from_engine();
       printf("cmd=set map\n");
     }
     return true;
@@ -297,6 +308,9 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("cmd=reconnect ok\n");
       send_status(client, "reconnect_ok");
       push_runtime_status(client, true);
+      char com[16];
+      engine_get_com(com, sizeof(com));
+      config_set_last_connected_com(com);
     } else {
       printf("cmd=reconnect failed\n");
       send_status(client, "reconnect_fail");

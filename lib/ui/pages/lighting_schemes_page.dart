@@ -27,11 +27,6 @@ const lightingSchemeTabs = <ModeTabItem>[
     selectedIcon: Icons.auto_awesome,
     label: '动态特效',
   ),
-  ModeTabItem(
-    icon: Icons.music_note_outlined,
-    selectedIcon: Icons.music_note,
-    label: '音乐律动',
-  ),
 ];
 
 /// 灯光方案：模式面板；顶栏与进度条由壳层统一渲染。

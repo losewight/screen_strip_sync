@@ -18,7 +18,8 @@ static std::atomic<char> g_mode{'a'};
 // 为什么：字符串不能 atomic；set/reconnect 都在 IPC 线程，启动在
 // main，仍用锁防竞态
 static std::mutex g_com_mu;
-static char g_com_name[16] = "COM10";
+// 为什么：业务默认口只来自 HelperConfig；开串口前必须 config_apply / set com
+static char g_com_name[16] = "";
 // 为什么：map 与调色正交；IPC 写、发帧读，短锁拷贝快照
 static std::mutex g_map_mu;
 static bool g_map_custom = false;
