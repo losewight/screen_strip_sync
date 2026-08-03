@@ -52,15 +52,9 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     ('橙', Color(0xFFFF8800)),
   ];
 
-  Color _lastPicked = const Color(0xFFFF0000);
-
   Future<void> _pickColor(HelperStateNotifier notifier) async {
-    final picked = await showSolidColorPicker(
-      context,
-      initial: _lastPicked,
-    );
+    final picked = await showSolidColorPicker(context);
     if (picked == null || !mounted) return;
-    setState(() => _lastPicked = picked);
     notifier.sendSolid(colorToSolidHex(picked));
   }
 

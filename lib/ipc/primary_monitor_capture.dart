@@ -4,22 +4,35 @@ import 'dart:ui' as ui;
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:win32/win32.dart';
 
 /// 主显示器一帧静图（与 DXGI EnumOutputs(0) 对齐：主屏）。
 ///
 /// 调用：[capturePrimaryMonitor] → 得到本对象 → UI 用 [image] 显示；
-/// 用完后调用 [dispose]。不经过 helper / IPC。
+/// 用 [colorAt] 按像素取样；用完后调用 [dispose]。不经过 helper / IPC。
 class PrimaryMonitorShot {
   PrimaryMonitorShot({
     required this.width,
     required this.height,
     required this.image,
+    required this.bgra,
   });
 
   final int width;
   final int height;
   final ui.Image image;
+
+  /// BitBlt 原始缓冲（每像素 BGRA，行宽 = [width]）。
+  final Uint8List bgra;
+
+  /// 物理像素坐标取样；越界夹到边缘。
+  Color colorAt(int x, int y) {
+    final px = x.clamp(0, width - 1);
+    final py = y.clamp(0, height - 1);
+    final i = (py * width + px) * 4;
+    return Color.fromARGB(255, bgra[i + 2], bgra[i + 1], bgra[i]);
+  }
 
   void dispose() => image.dispose();
 }
@@ -110,5 +123,10 @@ Future<PrimaryMonitorShot> capturePrimaryMonitor() async {
     completer.complete,
   );
   final image = await completer.future;
-  return PrimaryMonitorShot(width: width, height: height, image: image);
+  return PrimaryMonitorShot(
+    width: width,
+    height: height,
+    image: image,
+    bgra: pixels,
+  );
 }

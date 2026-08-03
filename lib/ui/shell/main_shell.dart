@@ -82,9 +82,16 @@ class _MainShellState extends ConsumerState<MainShell> {
                               .read(lightingSchemeTabProvider.notifier)
                               .select,
                         ),
-                      StripProgressBar(
-                        key: const ValueKey('shell-strip-progress'),
-                        phase: phase,
+                      // 软件设置无顶栏，进度条一并藏起；Offstage 保单实例状态
+                      Offstage(
+                        offstage: _index == 2,
+                        child: TickerMode(
+                          enabled: _index != 2,
+                          child: StripProgressBar(
+                            key: const ValueKey('shell-strip-progress'),
+                            phase: phase,
+                          ),
+                        ),
                       ),
                       Expanded(
                         child: Stack(
