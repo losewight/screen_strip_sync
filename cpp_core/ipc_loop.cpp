@@ -8,12 +8,15 @@
 #include "light_engine.h"
 #include "serial_port.h"
 
+#include <atomic>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 static SOCKET g_listen_sock = INVALID_SOCKET;
 static SOCKET g_client_sock = INVALID_SOCKET;
+static std::atomic_bool g_ipc_quit{false};
 
 // ---------------------------------------------------------------------------
 // 1) 校验
@@ -34,13 +37,15 @@ static bool is_rrggbb(const char *s) {
 
 // ---------------------------------------------------------------------------
 // 2) 读一行（到 \n；超长丢弃到行尾）
+// 为什么：512 是 IPC 行上限，与串口帧长 <120 红线无关，禁止互相「对齐」
 // ---------------------------------------------------------------------------
 
 enum class ReadLineResult { Ok, PeerGone, TooLong };
 
 static ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
-  // 与拆前一致：有效内容最多 200，缓冲仍给 256
-  const int max_payload = (line_cap > 200) ? 200 : (line_cap - 1);
+  const int kMaxPayload = 512;
+  const int max_payload =
+      (line_cap - 1 < kMaxPayload) ? (line_cap - 1) : kMaxPayload;
   int n = 0;
 
   while (n < max_payload) {
@@ -72,29 +77,56 @@ static ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
 }
 
 // ---------------------------------------------------------------------------
-// 3) 状态回推 + 执行一行命令；返回 false = 结束命令循环（quit）
+// 3) 状态 / 配置快照回推
 // ---------------------------------------------------------------------------
 
-// 为什么：状态走同一条 IPC，不另开通道；App 才能显示设备分配/回收结果
-static void send_status(SOCKET client, const char *word) {
-  char buf[64];
-  int n = snprintf(buf, sizeof(buf), "status %s\n", word);
-  if (n > 0 && n < (int)sizeof(buf))
+static void send_raw(SOCKET client, const char *buf, int n) {
+  if (n > 0 && client != INVALID_SOCKET)
     send(client, buf, n, 0);
 }
 
-static void send_status_kv(SOCKET client, const char *key, const char *value) {
-  char buf[64];
-  int n = snprintf(buf, sizeof(buf), "status %s %s\n", key, value);
+static void send_line(SOCKET client, const char *fmt, ...) {
+  char buf[640];
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
   if (n > 0 && n < (int)sizeof(buf))
-    send(client, buf, n, 0);
+    send_raw(client, buf, n);
+}
+
+static void send_status(SOCKET client, const char *word) {
+  send_line(client, "status %s\n", word);
+}
+
+static void send_status_kv(SOCKET client, const char *key, const char *value) {
+  send_line(client, "status %s %s\n", key, value);
 }
 
 static void send_engine_status(SOCKET client) {
   send_status_kv(client, "engine", engine_is_running() ? "1" : "0");
 }
 
-// include_com=false：重连失败等无句柄情形，只报 engine 0
+static void send_display_status(SOCKET client) {
+  DisplayIntent intent = engine_get_display_intent();
+  switch (intent.kind) {
+  case DisplayIntentKind::Engine:
+    send_status_kv(client, "display", "engine");
+    break;
+  case DisplayIntentKind::Solid:
+    send_status_kv(client, "display", "solid");
+    break;
+  case DisplayIntentKind::SoftOff:
+    send_status_kv(client, "display", "soft_off");
+    break;
+  case DisplayIntentKind::Idle:
+  default:
+    send_status_kv(client, "display", "idle");
+    break;
+  }
+}
+
+// include_com=false：重连失败等无句柄情形，只报 engine
 static void push_runtime_status(SOCKET client, bool include_com) {
   if (include_com) {
     char com[16];
@@ -102,19 +134,120 @@ static void push_runtime_status(SOCKET client, bool include_com) {
     send_status_kv(client, "com", com);
   }
   send_engine_status(client);
+  send_display_status(client);
 }
 
-static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
+static void format_scene(char *out, size_t cap) {
+  DisplayIntent intent = engine_get_display_intent();
+  switch (intent.kind) {
+  case DisplayIntentKind::Engine:
+    snprintf(out, cap, "engine");
+    break;
+  case DisplayIntentKind::Solid:
+    snprintf(out, cap, "solid %s", intent.solid);
+    break;
+  case DisplayIntentKind::SoftOff:
+    snprintf(out, cap, "off");
+    break;
+  case DisplayIntentKind::Idle:
+  default:
+    snprintf(out, cap, "idle");
+    break;
+  }
+}
+
+// 连接建立 / sync：全量 cfg + cfg end + status
+static void push_config_snapshot(SOCKET client) {
+  HelperConfig c{};
+  config_copy(&c);
+
+  send_line(client, "cfg alpha %.2f\n", (double)c.emaAlpha);
+  send_line(client, "cfg near_black %d\n", c.nearBlack);
+  send_line(client, "cfg blur %d\n", c.blurStep);
+  send_line(client, "cfg mode %c\n", c.mode);
+  send_line(client, "cfg com %s\n", c.comPort);
+  send_line(client, "cfg last_com %s\n", c.lastConnectedCom);
+  send_line(client, "cfg sleep_sync %d\n", c.autoSleepSync ? 1 : 0);
+  send_line(client, "cfg shutdown_off %d\n", c.turnOffOnShutdown ? 1 : 0);
+  send_line(client, "cfg autostart %d\n", c.startOnBoot ? 1 : 0);
+
+  if (!c.hasMap) {
+    send_line(client, "cfg map default\n");
+  } else {
+    char map_line[560];
+    int n = snprintf(map_line, sizeof(map_line), "cfg map ");
+    for (int i = 0; i < kSegmentCount; ++i) {
+      int x0 = (int)(c.map[i].x0 * 100.f + 0.5f);
+      int y0 = (int)(c.map[i].y0 * 100.f + 0.5f);
+      int x1 = (int)(c.map[i].x1 * 100.f + 0.5f);
+      int y1 = (int)(c.map[i].y1 * 100.f + 0.5f);
+      if (x0 < 0)
+        x0 = 0;
+      if (y0 < 0)
+        y0 = 0;
+      if (x1 > 100)
+        x1 = 100;
+      if (y1 > 100)
+        y1 = 100;
+      int w = snprintf(map_line + n, sizeof(map_line) - (size_t)n,
+                       "%s%d,%d,%d,%d", (i == 0 ? "" : ";"), x0, y0, x1, y1);
+      if (w < 0 || n + w >= (int)sizeof(map_line)) {
+        send_line(client, "cfg map default\n");
+        n = -1;
+        break;
+      }
+      n += w;
+    }
+    if (n > 0) {
+      if (n + 1 < (int)sizeof(map_line)) {
+        map_line[n++] = '\n';
+        map_line[n] = '\0';
+      }
+      send_raw(client, map_line, n);
+    }
+  }
+
+  char scene[40];
+  format_scene(scene, sizeof(scene));
+  send_line(client, "cfg scene %s\n", scene);
+  send_line(client, "cfg end\n");
+
+  send_status(client, "ready");
+  push_runtime_status(client, true);
+}
+
+// ---------------------------------------------------------------------------
+// 4) 执行一行命令
+// ---------------------------------------------------------------------------
+
+enum class DispatchResult {
+  Continue,
+  DropClient,      // bye：只关本连接
+  ShutdownService, // quit：结束 ipc_run
+};
+
+static DispatchResult dispatch_line(const char *line, HANDLE *serial,
+                                    SOCKET client) {
   if (strcmp(line, "quit") == 0) {
+    // 为什么：关窗走 bye；quit 才关后台服务
     engine_stop();
     printf("cmd=quit\n");
-    return false;
+    return DispatchResult::ShutdownService;
+  }
+  if (strcmp(line, "bye") == 0) {
+    printf("cmd=bye\n");
+    return DispatchResult::DropClient;
+  }
+  if (strcmp(line, "sync") == 0) {
+    printf("cmd=sync\n");
+    push_config_snapshot(client);
+    return DispatchResult::Continue;
   }
   if (strcmp(line, "off") == 0) {
     engine_stop();
     printf("cmd=off\n");
     power_off(*serial);
-    return true;
+    return DispatchResult::Continue;
   }
   // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
   if (strcmp(line, "soft_off") == 0) {
@@ -122,19 +255,19 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     engine_set_intent_soft_off();
     printf("cmd=soft_off\n");
     send_solid(*serial, "000000");
-    return true;
+    return DispatchResult::Continue;
   }
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
     engine_set_intent_engine();
     printf("cmd=start\n");
-    return true;
+    return DispatchResult::Continue;
   }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
     engine_set_intent_idle();
     printf("cmd=stop\n");
-    return true;
+    return DispatchResult::Continue;
   }
   if (strncmp(line, "solid ", 6) == 0) {
     const char *color = line + 6;
@@ -146,10 +279,8 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       engine_set_intent_solid(color);
       send_solid(*serial, color);
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：缺参/非数字忽略（与 solid 非法同风格）；合法值交 engine_set_alpha
-  // clamp
   if (strncmp(line, "set alpha ", 10) == 0) {
     const char *p = line + 10;
     char *end = nullptr;
@@ -165,9 +296,8 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       config_set_ema_alpha(v);
       printf("cmd=set alpha\n");
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：缺参/非整数忽略；合法值交 engine clamp
   if (strncmp(line, "set near_black ", 15) == 0) {
     const char *p = line + 15;
     char *end = nullptr;
@@ -183,7 +313,7 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       config_set_near_black((int)v);
       printf("cmd=set near_black\n");
     }
-    return true;
+    return DispatchResult::Continue;
   }
   if (strncmp(line, "set blur ", 9) == 0) {
     const char *p = line + 9;
@@ -200,9 +330,8 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       config_set_blur((int)v);
       printf("cmd=set blur\n");
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：仅 a|b；非法忽略。引擎暂不分支（阶段 C）
   if (strncmp(line, "set mode ", 9) == 0) {
     const char *p = line + 9;
     while (*p == ' ' || *p == '\t')
@@ -221,13 +350,12 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
         engine_set_mode(norm);
         config_set_mode(norm);
         printf("cmd=set mode %c\n", norm);
-        return true;
+        return DispatchResult::Continue;
       }
     }
     printf("bad set mode: [%s]\n", p);
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：只改配置，不自动开口；切口靠随后的 reconnect
   if (strncmp(line, "set com ", 8) == 0) {
     const char *p = line + 8;
     if (!engine_set_com(p)) {
@@ -238,9 +366,8 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       config_set_com(norm);
       printf("cmd=set com\n");
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：0|1；非法忽略。控制休眠软关 vs 硬退
   if (strncmp(line, "set sleep_sync ", 15) == 0) {
     const char *p = line + 15;
     while (*p == ' ' || *p == '\t')
@@ -252,9 +379,32 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     } else {
       printf("bad set sleep_sync: [%s]\n", p);
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：校准逐段点亮；越界忽略
+  if (strncmp(line, "set shutdown_off ", 17) == 0) {
+    const char *p = line + 17;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_shutdown_off(*p == '1');
+      printf("cmd=set shutdown_off %c\n", *p);
+    } else {
+      printf("bad set shutdown_off: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set autostart ", 14) == 0) {
+    const char *p = line + 14;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_autostart(*p == '1');
+      printf("cmd=set autostart %c\n", *p);
+    } else {
+      printf("bad set autostart: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "highlight ", 10) == 0) {
     const char *p = line + 10;
     char *end = nullptr;
@@ -265,14 +415,13 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("cmd=highlight %ld\n", v);
       send_highlight(*serial, (int)v);
     }
-    return true;
+    return DispatchResult::Continue;
   }
-  // 为什么：default 清表；否则 10 段百分比矩形
   if (strcmp(line, "set map default") == 0) {
     engine_clear_map();
     config_clear_map();
     printf("cmd=set map default\n");
-    return true;
+    return DispatchResult::Continue;
   }
   if (strncmp(line, "set map ", 8) == 0) {
     const char *p = line + 8;
@@ -282,12 +431,11 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       config_sync_map_from_engine();
       printf("cmd=set map\n");
     }
-    return true;
+    return DispatchResult::Continue;
   }
   if (strcmp(line, "reconnect") == 0) {
     engine_stop();
     send_status(client, "reconnecting");
-    // 为什么：旧句柄已失效，先归还再申请，避免占着坏句柄
     if (*serial != INVALID_HANDLE_VALUE) {
       close_com(*serial);
       *serial = INVALID_HANDLE_VALUE;
@@ -316,17 +464,35 @@ static bool dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       send_status(client, "reconnect_fail");
       send_engine_status(client);
     }
-    return true;
+    return DispatchResult::Continue;
   }
   printf("unknown cmd: [%s]\n", line);
-  return true;
+  return DispatchResult::Continue;
+}
+
+static void drop_client() {
+  SOCKET cs = g_client_sock;
+  g_client_sock = INVALID_SOCKET;
+  if (cs != INVALID_SOCKET) {
+    closesocket(cs);
+    printf("client dropped (lights stay)\n");
+  }
+}
+
+static void close_listen_sock() {
+  SOCKET ls = g_listen_sock;
+  g_listen_sock = INVALID_SOCKET;
+  if (ls != INVALID_SOCKET)
+    closesocket(ls);
 }
 
 // ---------------------------------------------------------------------------
-// 4) 对外：听端口 → accept → 命令循环 → 清理 Winsock
+// 5) 对外：听端口 → 循环 accept（select）→ quit/cancel 才退出
 // ---------------------------------------------------------------------------
 
 bool ipc_run(unsigned short port, HANDLE *serial) {
+  g_ipc_quit.store(false);
+
   WSADATA wsa;
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
     printf("WSAStartup failed: %d\n", WSAGetLastError());
@@ -339,6 +505,10 @@ bool ipc_run(unsigned short port, HANDLE *serial) {
     WSACleanup();
     return false;
   }
+
+  BOOL yes = 1;
+  setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes,
+             sizeof(yes));
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
@@ -353,57 +523,97 @@ bool ipc_run(unsigned short port, HANDLE *serial) {
   }
   printf("bind ok 127.0.0.1:%u\n", (unsigned)port);
 
-  if (listen(listen_sock, 1) == SOCKET_ERROR) {
+  // backlog>1：踢旧时新连接已在队列，不必丢
+  if (listen(listen_sock, 4) == SOCKET_ERROR) {
     printf("listen failed: %d\n", WSAGetLastError());
     closesocket(listen_sock);
     WSACleanup();
     return false;
   }
-  // 为什么：记住 listen_sock，才能在 ipc_cancel() 里关掉 accept 阻塞
   g_listen_sock = listen_sock;
   printf("listen ok 127.0.0.1:%u\n", (unsigned)port);
 
-  SOCKET client = accept(listen_sock, NULL, NULL);
-  if (client == INVALID_SOCKET) {
-    printf("accept failed: %d\n", WSAGetLastError());
-    g_listen_sock = INVALID_SOCKET;
-    closesocket(listen_sock);
-    WSACleanup();
-    return false;
-  }
-  // 为什么：记住 client，才能在 ipc_cancel() 里关掉 recv 阻塞
-  g_client_sock = client;
-  printf("client connected\n");
-  send_status(client, "ready"); // 串口在 main 里已就绪，IPC 接通即告 App
-  push_runtime_status(client, true);
+  while (!g_ipc_quit.load()) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(listen_sock, &readfds);
+    SOCKET client = g_client_sock;
+    if (client != INVALID_SOCKET)
+      FD_SET(client, &readfds);
 
-  for (;;) {
-    char line[256];
-    ReadLineResult rr = read_line(client, line, (int)sizeof(line));
-    if (rr == ReadLineResult::PeerGone)
+    SOCKET maxfd = listen_sock;
+    if (client != INVALID_SOCKET && client > maxfd)
+      maxfd = client;
+
+    timeval tv{};
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    int sel = select((int)maxfd + 1, &readfds, nullptr, nullptr, &tv);
+    if (g_ipc_quit.load())
       break;
+    if (sel == SOCKET_ERROR) {
+      int err = WSAGetLastError();
+      if (err == WSAEINTR)
+        continue;
+      printf("select failed: %d\n", err);
+      break;
+    }
+    if (sel == 0)
+      continue;
+
+    // 新连接：踢旧（灯不动）→ 推快照
+    if (FD_ISSET(listen_sock, &readfds)) {
+      SOCKET neu = accept(listen_sock, nullptr, nullptr);
+      if (neu == INVALID_SOCKET) {
+        if (!g_ipc_quit.load())
+          printf("accept failed: %d\n", WSAGetLastError());
+        continue;
+      }
+      if (g_client_sock != INVALID_SOCKET) {
+        printf("kick old client\n");
+        drop_client();
+      }
+      g_client_sock = neu;
+      printf("client connected\n");
+      push_config_snapshot(neu);
+      continue;
+    }
+
+    client = g_client_sock;
+    if (client == INVALID_SOCKET || !FD_ISSET(client, &readfds))
+      continue;
+
+    char line[520];
+    ReadLineResult rr = read_line(client, line, (int)sizeof(line));
+    if (rr == ReadLineResult::PeerGone) {
+      drop_client();
+      continue;
+    }
     if (rr == ReadLineResult::TooLong)
       continue;
-    if (!dispatch_line(line, serial, client))
-      break; // quit
+
+    DispatchResult dr = dispatch_line(line, serial, client);
+    if (dr == DispatchResult::DropClient) {
+      drop_client();
+      continue;
+    }
+    if (dr == DispatchResult::ShutdownService) {
+      g_ipc_quit.store(true);
+      break;
+    }
   }
 
-  closesocket(client);
-  closesocket(listen_sock);
-  g_client_sock = INVALID_SOCKET;
-  g_listen_sock = INVALID_SOCKET;
+  drop_client();
+  close_listen_sock();
   WSACleanup();
   return true;
 }
 
-// 为什么：从其他线程（Ctrl handler）关掉两个 socket，让 accept/recv 立即
-// 失败返回，ipc_run 自然结束，从而回到 helper_main.cpp 的清理序列。
-// 关 listen_sock 打断还在等 accept 的情形；关 client 打断正在 recv 的情形。
+// 为什么：从其他线程关掉 socket + 置旗标，打断 select，ipc_run 返回后
+// helper_main 走 helper_shutdown。必须清空全局句柄，避免 ipc_run 尾部
+// double-close。
 void ipc_cancel() {
-  SOCKET ls = g_listen_sock;
-  SOCKET cs = g_client_sock;
-  if (ls != INVALID_SOCKET)
-    closesocket(ls);
-  if (cs != INVALID_SOCKET)
-    closesocket(cs);
+  g_ipc_quit.store(true);
+  close_listen_sock();
+  drop_client();
 }

@@ -11,6 +11,8 @@
 // 为什么：主线程改 false，发帧线程 while 退出；Day7 的停止标志。
 static std::atomic<bool> g_running{false};
 static std::thread g_worker;
+// 为什么：托盘菜单与 IPC 可能并发 start/stop，必须串行化防双 worker
+static std::mutex g_engine_mu;
 // 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
 static std::atomic<float> g_alpha{0.3f};
 // 为什么：'a'|'b'；阶段 C 前 produce_colors 不读，仅防配置丢失
@@ -417,6 +419,7 @@ DisplayIntent engine_get_display_intent() {
 }
 
 void engine_start(HANDLE h) {
+  std::lock_guard<std::mutex> lock(g_engine_mu);
   if (g_running.load())
     return; // 避免重复 start 起两个线程
   g_running.store(true);
@@ -426,6 +429,7 @@ void engine_start(HANDLE h) {
 void engine_request_stop() { g_running.store(false); }
 
 void engine_stop() {
+  std::lock_guard<std::mutex> lock(g_engine_mu);
   g_running.store(false);
   if (g_worker.joinable())
     g_worker.join();

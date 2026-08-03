@@ -15,6 +15,8 @@ static std::atomic_bool g_sleep_sync{true};
 
 void helper_set_serial(HANDLE *serial) { g_serial = serial; }
 
+HANDLE *helper_serial() { return g_serial; }
+
 void helper_set_sleep_sync(bool on) {
   g_sleep_sync.store(on);
   printf("sleep_sync=%d\n", on ? 1 : 0);

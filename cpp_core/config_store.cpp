@@ -576,9 +576,15 @@ static void ensure_saver_started() {
         if (!g_dirty.load())
           continue;
         snap = g_cfg;
+        // 为什么：先清脏再写；失败必须挂回，否则丢盘且不再重试
         g_dirty.store(false);
       }
-      write_config_file(snap);
+      if (!write_config_file(snap)) {
+        std::lock_guard<std::mutex> lock(g_mu);
+        g_dirty.store(true);
+        // 为什么：推迟下一轮，避免磁盘满时 200ms 空转打满日志
+        g_last_change_ms.store(GetTickCount64());
+      }
     }
   });
 }
@@ -664,6 +670,7 @@ void config_apply() {
   if (c.hasMap) {
     char payload[512];
     int n = 0;
+    bool map_ok = true;
     for (int i = 0; i < kSegmentCount; ++i) {
       int x0 = (int)(c.map[i].x0 * 100.f + 0.5f);
       int y0 = (int)(c.map[i].y0 * 100.f + 0.5f);
@@ -681,14 +688,24 @@ void config_apply() {
                        "%s%d,%d,%d,%d", (i == 0 ? "" : ";"), x0, y0, x1, y1);
       if (w < 0 || n + w >= (int)sizeof(payload)) {
         printf("config_apply: map payload overflow\n");
-        engine_clear_map();
-        return;
+        map_ok = false;
+        break;
       }
       n += w;
     }
-    if (!engine_set_map_from_ipc(payload)) {
+    if (map_ok && !engine_set_map_from_ipc(payload)) {
       printf("config_apply: map reject, clear\n");
+      map_ok = false;
+    }
+    if (!map_ok) {
+      // 为什么：引擎已回退顶边均分；内存/磁盘若仍 hasMap，会双真相并写回毒表
       engine_clear_map();
+      {
+        std::lock_guard<std::mutex> lock(g_mu);
+        g_cfg.hasMap = false;
+        mark_dirty_unlocked();
+      }
+      ensure_saver_started();
     }
   } else {
     engine_clear_map();
@@ -697,6 +714,13 @@ void config_apply() {
 }
 
 const HelperConfig &config_get() { return g_cfg; }
+
+void config_copy(HelperConfig *out) {
+  if (!out)
+    return;
+  std::lock_guard<std::mutex> lock(g_mu);
+  *out = g_cfg;
+}
 
 void config_set_ema_alpha(float v) {
   std::lock_guard<std::mutex> lock(g_mu);
@@ -742,6 +766,21 @@ void config_set_sleep_sync(bool on) {
   ensure_saver_started();
 }
 
+void config_set_shutdown_off(bool on) {
+  std::lock_guard<std::mutex> lock(g_mu);
+  g_cfg.turnOffOnShutdown = on;
+  mark_dirty_unlocked();
+  ensure_saver_started();
+}
+
+void config_set_autostart(bool on) {
+  // 为什么：H3 只落 JSON；HKCU Run 注册表由 H7 接管
+  std::lock_guard<std::mutex> lock(g_mu);
+  g_cfg.startOnBoot = on;
+  mark_dirty_unlocked();
+  ensure_saver_started();
+}
+
 void config_set_last_connected_com(const char *com) {
   if (!com)
     return;
@@ -779,16 +818,21 @@ void config_request_save() {
 }
 
 void config_flush() {
+  // 调用约定：saver 已停（见 config_shutdown），否则可能与 debounce 写竞态
   HelperConfig snap;
   {
     std::lock_guard<std::mutex> lock(g_mu);
     snap = g_cfg;
     g_dirty.store(false);
   }
-  write_config_file(snap);
+  if (!write_config_file(snap)) {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_dirty.store(true);
+  }
 }
 
 void config_shutdown() {
+  // 为什么：必须先停 saver 再 flush，否则旧快照可能盖掉最新落盘
   g_saver_stop.store(true);
   if (g_saver_started.load() && g_saver.joinable())
     g_saver.join();

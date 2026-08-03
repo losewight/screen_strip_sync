@@ -1,0 +1,328 @@
+﻿#include "tray_icon.h"
+
+#include "config_store.h"
+#include "helper_lifecycle.h"
+#include "light_engine.h"
+#include "resource.h"
+
+#include <atomic>
+#include <cstdio>
+#include <thread>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+#include <shellapi.h>
+
+static constexpr UINT WM_TRAYICON = WM_APP + 1;
+static constexpr UINT kTrayId = 1;
+
+static std::atomic_bool g_started{false};
+static std::atomic_bool g_stop_requested{false};
+static HWND g_hwnd = nullptr;
+static HPOWERNOTIFY g_suspend_notify = nullptr;
+static UINT g_taskbar_created = 0;
+static NOTIFYICONDATAW g_nid{};
+static bool g_nid_added = false;
+static DWORD g_tray_tid = 0;
+
+// H5 替换为 ui_launcher；H4 仅占位
+void ui_request_open() { printf("tray: open UI (H5 stub)\n"); }
+
+static HANDLE serial_or_invalid() {
+  HANDLE *p = helper_serial();
+  if (!p || *p == INVALID_HANDLE_VALUE)
+    return INVALID_HANDLE_VALUE;
+  return *p;
+}
+
+static void tray_add_icon(HWND hwnd) {
+  HINSTANCE inst = GetModuleHandleW(nullptr);
+  ZeroMemory(&g_nid, sizeof(g_nid));
+  g_nid.cbSize = sizeof(g_nid);
+  g_nid.hWnd = hwnd;
+  g_nid.uID = kTrayId;
+  g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+  g_nid.uCallbackMessage = WM_TRAYICON;
+  g_nid.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(IDI_HELPER_TRAY));
+  if (!g_nid.hIcon)
+    g_nid.hIcon =
+        LoadIconW(nullptr, MAKEINTRESOURCEW(32512)); // IDI_APPLICATION
+  wcsncpy_s(g_nid.szTip, L"Zeeray Ambilight", _TRUNCATE);
+
+  if (g_nid_added) {
+    Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+  } else if (Shell_NotifyIconW(NIM_ADD, &g_nid)) {
+    g_nid_added = true;
+    // 为什么：Win10+ 建议设版本，避免部分 shell 行为异常
+    g_nid.uVersion = NOTIFYICON_VERSION_4;
+    Shell_NotifyIconW(NIM_SETVERSION, &g_nid);
+    printf("tray icon added\n");
+  } else {
+    printf("tray NIM_ADD failed: %lu\n", (unsigned long)GetLastError());
+  }
+}
+
+static void tray_remove_icon() {
+  if (!g_nid_added)
+    return;
+  Shell_NotifyIconW(NIM_DELETE, &g_nid);
+  g_nid_added = false;
+  printf("tray icon removed\n");
+}
+
+static void tray_soft_off() {
+  HANDLE h = serial_or_invalid();
+  if (h == INVALID_HANDLE_VALUE) {
+    printf("tray soft_off: no serial\n");
+    return;
+  }
+  engine_stop();
+  engine_set_intent_soft_off();
+  send_solid(h, "000000");
+  printf("tray soft_off\n");
+}
+
+static void tray_engine_toggle() {
+  HANDLE h = serial_or_invalid();
+  if (h == INVALID_HANDLE_VALUE) {
+    printf("tray engine: no serial\n");
+    return;
+  }
+  if (engine_is_running()) {
+    engine_stop();
+    engine_set_intent_soft_off();
+    send_solid(h, "000000");
+    printf("tray engine stop + soft_off\n");
+  } else {
+    engine_start(h);
+    engine_set_intent_engine();
+    printf("tray engine start\n");
+  }
+}
+
+static void tray_toggle_autostart() {
+  HelperConfig c{};
+  config_copy(&c);
+  bool next = !c.startOnBoot;
+  config_set_autostart(next);
+  printf("tray autostart -> %d\n", next ? 1 : 0);
+}
+
+static void tray_show_menu(HWND hwnd) {
+  POINT pt;
+  GetCursorPos(&pt);
+  HMENU menu = CreatePopupMenu();
+  if (!menu)
+    return;
+
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_OPEN_UI, L"打开界面");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+  const bool running = engine_is_running();
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_ENGINE_TOGGLE,
+              running ? L"停止追色" : L"开始追色");
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_SOFT_OFF, L"关灯");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+  HelperConfig c{};
+  config_copy(&c);
+  AppendMenuW(menu, MF_STRING | (c.startOnBoot ? MF_CHECKED : 0),
+              IDM_TRAY_AUTOSTART, L"开机自启");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_EXIT, L"退出");
+
+  HANDLE h = serial_or_invalid();
+  if (h == INVALID_HANDLE_VALUE) {
+    EnableMenuItem(menu, IDM_TRAY_ENGINE_TOGGLE, MF_GRAYED);
+    EnableMenuItem(menu, IDM_TRAY_SOFT_OFF, MF_GRAYED);
+  }
+
+  // 为什么：否则点菜单外不收起
+  SetForegroundWindow(hwnd);
+  TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd,
+                 nullptr);
+  PostMessageW(hwnd, WM_NULL, 0, 0);
+  DestroyMenu(menu);
+}
+
+static void tray_on_exit() {
+  printf("tray exit\n");
+  helper_shutdown();
+  tray_remove_icon();
+  if (g_hwnd)
+    PostMessageW(g_hwnd, WM_QUIT, 0, 0);
+}
+
+static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
+                                      LPARAM lParam) {
+  if (msg == g_taskbar_created && g_taskbar_created != 0) {
+    // 为什么：explorer 重启后托盘图标丢失，必须 NIM_ADD 重挂
+    g_nid_added = false;
+    tray_add_icon(hwnd);
+    return 0;
+  }
+
+  switch (msg) {
+  case WM_TRAYICON: {
+    // 为什么：NIM_SETVERSION(NOTIFYICON_VERSION_4) 后事件在 LOWORD(lParam)，
+    // HIWORD 是图标 ID；整 lParam 去比永远对不上，右键会像“没反应”
+    const UINT ev = LOWORD(lParam);
+    if (ev == WM_LBUTTONDBLCLK) {
+      ui_request_open();
+    } else if (ev == WM_RBUTTONUP || ev == WM_CONTEXTMENU) {
+      tray_show_menu(hwnd);
+    }
+    return 0;
+  }
+
+  case WM_COMMAND:
+    switch (LOWORD(wParam)) {
+    case IDM_TRAY_OPEN_UI:
+      ui_request_open();
+      break;
+    case IDM_TRAY_ENGINE_TOGGLE:
+      tray_engine_toggle();
+      break;
+    case IDM_TRAY_SOFT_OFF:
+      tray_soft_off();
+      break;
+    case IDM_TRAY_AUTOSTART:
+      tray_toggle_autostart();
+      break;
+    case IDM_TRAY_EXIT:
+      tray_on_exit();
+      break;
+    default:
+      break;
+    }
+    return 0;
+
+  case WM_POWERBROADCAST:
+    // 方案三：开=硬关进程；关=不插手；H6 再改软关保活
+    if (wParam == PBT_APMSUSPEND || wParam == PBT_APMQUERYSUSPEND) {
+      if (helper_get_sleep_sync()) {
+        printf("power: suspend (wParam=0x%Ix) -> helper_shutdown\n", wParam);
+        helper_shutdown();
+      } else {
+        printf("power: suspend (wParam=0x%Ix) sleep_sync off, skip\n", wParam);
+      }
+      return TRUE;
+    }
+    if (wParam == PBT_APMRESUMESUSPEND || wParam == PBT_APMRESUMEAUTOMATIC ||
+        wParam == PBT_APMRESUMECRITICAL) {
+      printf("power: resume (wParam=0x%Ix) ignored (H6 will restore)\n",
+             wParam);
+      return TRUE;
+    }
+    break;
+
+  case WM_QUERYENDSESSION:
+    printf("power: query end session -> helper_shutdown\n");
+    helper_shutdown();
+    return TRUE;
+
+  case WM_ENDSESSION:
+    if (wParam) {
+      printf("power: end session -> helper_shutdown\n");
+      helper_shutdown();
+    }
+    return 0;
+
+  case WM_DESTROY:
+    tray_remove_icon();
+    if (g_suspend_notify) {
+      UnregisterSuspendResumeNotification(g_suspend_notify);
+      g_suspend_notify = nullptr;
+    }
+    PostQuitMessage(0);
+    return 0;
+
+  default:
+    break;
+  }
+  return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static void tray_thread_main() {
+  g_tray_tid = GetCurrentThreadId();
+  g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
+
+  WNDCLASSEXW wc{};
+  wc.cbSize = sizeof(wc);
+  wc.lpfnWndProc = tray_wnd_proc;
+  wc.hInstance = GetModuleHandleW(nullptr);
+  wc.lpszClassName = L"ZeerayHelperTray";
+  wc.hIcon = LoadIconW(wc.hInstance, MAKEINTRESOURCEW(IDI_HELPER_TRAY));
+  if (!RegisterClassExW(&wc)) {
+    if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+      printf("tray RegisterClassEx failed: %lu\n",
+             (unsigned long)GetLastError());
+      return;
+    }
+  }
+
+  // 为什么：HWND_MESSAGE 收不到电源广播；必须用隐藏顶层窗
+  HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"ZeerayTray",
+                              WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
+                              wc.hInstance, nullptr);
+  if (!hwnd) {
+    printf("tray CreateWindowEx failed: %lu\n", (unsigned long)GetLastError());
+    return;
+  }
+  g_hwnd = hwnd;
+  ShowWindow(hwnd, SW_HIDE);
+
+  g_suspend_notify =
+      RegisterSuspendResumeNotification(hwnd, DEVICE_NOTIFY_WINDOW_HANDLE);
+  if (!g_suspend_notify) {
+    printf("RegisterSuspendResumeNotification failed: %lu\n",
+           (unsigned long)GetLastError());
+  } else {
+    printf("tray suspend notify ok\n");
+  }
+
+  tray_add_icon(hwnd);
+  printf("tray window ok\n");
+
+  MSG msg;
+  while (!g_stop_requested.load() && GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    TranslateMessage(&msg);
+    DispatchMessageW(&msg);
+  }
+
+  tray_remove_icon();
+  if (g_suspend_notify) {
+    UnregisterSuspendResumeNotification(g_suspend_notify);
+    g_suspend_notify = nullptr;
+  }
+  if (g_hwnd) {
+    DestroyWindow(g_hwnd);
+    g_hwnd = nullptr;
+  }
+  g_tray_tid = 0;
+  printf("tray thread exit\n");
+}
+
+void tray_start() {
+  bool expected = false;
+  if (!g_started.compare_exchange_strong(expected, true))
+    return;
+  g_stop_requested.store(false);
+  // 为什么：detach —— 主线程被 ipc_run 占用；退出靠 tray_stop / 进程结束
+  std::thread(tray_thread_main).detach();
+}
+
+void tray_stop() {
+  g_stop_requested.store(true);
+  HWND hwnd = g_hwnd;
+  if (hwnd) {
+    PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  }
+  // 短暂等待线程摘图标（进程马上退出时 OS 也会清）
+  for (int i = 0; i < 50 && g_tray_tid != 0; ++i)
+    Sleep(20);
+  tray_remove_icon();
+}

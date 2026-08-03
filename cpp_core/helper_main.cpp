@@ -5,7 +5,7 @@
 #include "helper_lifecycle.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
-#include "power_watch.h"
+#include "tray_icon.h"
 
 #include <cstdio>
 #include <cstring>
@@ -151,8 +151,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     config_set_last_connected_com(com);
   }
 
-  // 为什么：控制台收不到休眠消息，隐藏窗拦 PBT_APMSUSPEND / 会话结束
-  power_watch_start();
+  // 为什么：托盘窗兼收电源广播；ipc_run 占主线程，托盘在独立消息循环
+  tray_start();
 
   // 阻塞
   if (!ipc_run(9527, &h)) {
@@ -160,7 +160,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   }
 
   helper_shutdown();
-  config_flush();
+  tray_stop();
+  // 为什么：先 join saver 再落盘（config_shutdown 内），避免与 debounce
+  // 线程竞态用旧快照盖掉最新 JSON
   config_shutdown();
   if (g_singleton) {
     CloseHandle(g_singleton);

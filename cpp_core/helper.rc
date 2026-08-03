@@ -1,0 +1,3 @@
+﻿#include "resource.h"
+
+IDI_HELPER_TRAY ICON "resources/helper.ico"

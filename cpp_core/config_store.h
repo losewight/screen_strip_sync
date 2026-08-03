@@ -31,6 +31,8 @@ void config_load();
 void config_apply();
 
 const HelperConfig &config_get();
+// 持锁拷贝，供 IPC 组 cfg 快照
+void config_copy(HelperConfig *out);
 
 void config_set_ema_alpha(float v);
 void config_set_near_black(int v);
@@ -38,6 +40,8 @@ void config_set_blur(int v);
 void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_sleep_sync(bool on);
+void config_set_shutdown_off(bool on);
+void config_set_autostart(bool on); // 本步只落 JSON；注册表 H7
 void config_set_last_connected_com(const char *com);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）
@@ -45,6 +49,6 @@ void config_sync_map_from_engine();
 
 // 约 1s debounce 写盘；热路径只标脏
 void config_request_save();
-// 退出前同步落盘
+// 同步落盘（须在 saver 已停后；退出请用 config_shutdown）
 void config_flush();
 void config_shutdown();
