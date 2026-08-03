@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <windows.h>
 
-// 为什么：休眠唤醒要完整恢复现场已改 Flutter；此处仅记账供 status display
+// 为什么：休眠记账 + 唤醒 / 冷启动按场景恢复；勿被临时黑帧冲掉
 enum class DisplayIntentKind { Idle, Engine, Solid, SoftOff };
 
 struct DisplayIntent {
@@ -33,6 +33,11 @@ void engine_clear_map();
 // 热路径短锁拷贝；*out_custom==false 时走 DXGI 默认顶边
 void engine_copy_map_snapshot(bool *out_custom,
                               SegmentRect out_rects[kSegmentCount]);
+
+// 休眠拆掉 DXGI 后，追色 / 唤醒恢复前必须再 init
+bool engine_ensure_dxgi();
+// 按意图恢复画面（唤醒 / 日后 H8）；h 必须已就绪
+void apply_display_intent(HANDLE h, const DisplayIntent &intent);
 
 void engine_start(HANDLE h);
 void engine_request_stop();

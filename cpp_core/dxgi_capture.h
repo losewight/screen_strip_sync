@@ -16,6 +16,8 @@ enum class DxgiErr {
 
 DxgiErr dxgi_init();
 void dxgi_shutdown();
+// 休眠拆资源后为 false；ensure 时据此决定是否再 init
+bool dxgi_is_ready();
 DxgiErr dxgi_grab_one_frame(UINT timeout_ms);
 // out_rgb[i]={R,G,B}。rects 非空：按矩形步进抽点+丢近黑+RMS；
 // nullptr：现有顶边均分（未校准）。

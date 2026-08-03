@@ -45,6 +45,7 @@ class HelperClient {
 
   final _statusController = StreamController<HelperStatusEvent>.broadcast();
   final _disconnectController = StreamController<void>.broadcast();
+  final _uiShowController = StreamController<void>.broadcast();
 
   /// helper 推来的 `status` 事件（相位 / com / engine）。
   Stream<HelperStatusEvent> get statusStream => _statusController.stream;
@@ -52,13 +53,34 @@ class HelperClient {
   /// Socket 断开（helper 退出或网络错误）。
   Stream<void> get disconnectStream => _disconnectController.stream;
 
+  /// 托盘双击且已有客户端：helper 推 `ui show`，前端置顶窗口。
+  Stream<void> get uiShowStream => _uiShowController.stream;
+
   bool get isConnected => _sock != null;
 
-  /// [comPort] 传给 helper 作 argv[1]，启动时就开对口（不再死开 COM10）。
+  /// 先试连已有 helper；失败才 `Process.start(..., ['--no-ui'])` 再重试。
+  /// [comPort] 保留参数兼容；开口只走 JSON / IPC（H2 后 argv 不再传 COM）。
   Future<void> connect({String? comPort}) async {
     if (isConnected) return;
 
     await _teardownSocket();
+
+    const failMsg = '连接失败：helper 未就绪或已退出，请确认灯带已插上后重试';
+
+    // 为什么：helper 已常驻时直接连，避免再起次实例又立刻退出导致误判失败（H5）
+    try {
+      final existing = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        _ipcPort,
+        timeout: const Duration(milliseconds: 300),
+      );
+      _sock = existing;
+      _listenSocket(existing);
+      debugPrint('helper: connected to existing instance');
+      return;
+    } catch (_) {
+      // 未在听 → 自拉
+    }
 
     if (_proc != null) {
       final exitCode = await _proc!.exitCode.timeout(
@@ -73,20 +95,15 @@ class HelperClient {
     }
 
     final helperFile = resolveHelperExecutable();
-    debugPrint('helper: ${helperFile.path}');
-    final args = <String>[];
-    final com = comPort?.trim();
-    if (com != null && com.isNotEmpty) {
-      args.add(com);
-    }
+    debugPrint('helper: ${helperFile.path} --no-ui');
+    // 为什么：必须 --no-ui，否则 helper 再 CreateProcess 一个 Flutter，互相拉起
     _proc = await Process.start(
       helperFile.path,
-      args,
+      const ['--no-ui'],
       workingDirectory: helperFile.parent.path,
     );
 
     const maxTries = 10;
-    const failMsg = '连接失败：helper 未就绪或已退出，请确认灯带已插上后重试';
     Socket? sock;
     Object? lastErr;
 
@@ -154,6 +171,12 @@ class HelperClient {
 
   void _onLine(String line) {
     if (line.isEmpty) return;
+    if (line == 'ui show') {
+      if (!_uiShowController.isClosed) {
+        _uiShowController.add(null);
+      }
+      return;
+    }
     final event = tryParseStatusLine(line);
     if (event != null) {
       _statusController.add(event);
@@ -203,6 +226,9 @@ class HelperClient {
     }
     if (!_disconnectController.isClosed) {
       await _disconnectController.close();
+    }
+    if (!_uiShowController.isClosed) {
+      await _uiShowController.close();
     }
   }
 

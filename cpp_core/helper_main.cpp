@@ -6,11 +6,11 @@
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "tray_icon.h"
+#include "ui_launcher.h"
 
 #include <cstdio>
 #include <cstring>
 #include <share.h>
-#include <wchar.h>
 
 #include <shellapi.h>
 
@@ -90,7 +90,7 @@ static void parse_cmdline_args() {
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-  // 为什么：第二个实例不得开串口、不得 bind；H5 再加「通知首实例开界面」
+  // 为什么：第二个实例不得开串口、不得 bind；只通知首实例开界面后立刻退出
   g_singleton = CreateMutexW(nullptr, TRUE, L"Local\\ZeerayHelperSingleton");
   if (g_singleton == nullptr) {
     return 1;
@@ -98,6 +98,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   if (GetLastError() == ERROR_ALREADY_EXISTS) {
     CloseHandle(g_singleton);
     g_singleton = nullptr;
+    ui_notify_running_instance();
     return 0;
   }
 
@@ -154,13 +155,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 为什么：托盘窗兼收电源广播；ipc_run 占主线程，托盘在独立消息循环
   tray_start();
 
-  // 阻塞
-  if (!ipc_run(9527, &h)) {
+  // 阻塞；listen 就绪后按需拉 Flutter（--autostart/--no-ui 不拉）
+  if (!ipc_run(9527, &h, !g_silent_start)) {
     printf("ipc_run failed\n");
   }
 
   helper_shutdown();
   tray_stop();
+  ui_shutdown();
   // 为什么：先 join saver 再落盘（config_shutdown 内），避免与 debounce
   // 线程竞态用旧快照盖掉最新 JSON
   config_shutdown();

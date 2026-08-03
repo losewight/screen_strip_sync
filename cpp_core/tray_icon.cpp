@@ -4,6 +4,7 @@
 #include "helper_lifecycle.h"
 #include "light_engine.h"
 #include "resource.h"
+#include "ui_launcher.h"
 
 #include <atomic>
 #include <cstdio>
@@ -27,9 +28,6 @@ static UINT g_taskbar_created = 0;
 static NOTIFYICONDATAW g_nid{};
 static bool g_nid_added = false;
 static DWORD g_tray_tid = 0;
-
-// H5 替换为 ui_launcher；H4 仅占位
-void ui_request_open() { printf("tray: open UI (H5 stub)\n"); }
 
 static HANDLE serial_or_invalid() {
   HANDLE *p = helper_serial();
@@ -166,6 +164,11 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
   }
 
   switch (msg) {
+  case WM_ZEERAY_OPEN_UI:
+    // 次实例 PostMessage：与托盘双击同一条打开逻辑
+    ui_request_open();
+    return 0;
+
   case WM_TRAYICON: {
     // 为什么：NIM_SETVERSION(NOTIFYICON_VERSION_4) 后事件在 LOWORD(lParam)，
     // HIWORD 是图标 ID；整 lParam 去比永远对不上，右键会像“没反应”
@@ -201,20 +204,16 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
     return 0;
 
   case WM_POWERBROADCAST:
-    // 方案三：开=硬关进程；关=不插手；H6 再改软关保活
+    // H6：休眠统一拆资源；sleep_sync 只决定醒来是否恢复
     if (wParam == PBT_APMSUSPEND || wParam == PBT_APMQUERYSUSPEND) {
-      if (helper_get_sleep_sync()) {
-        printf("power: suspend (wParam=0x%Ix) -> helper_shutdown\n", wParam);
-        helper_shutdown();
-      } else {
-        printf("power: suspend (wParam=0x%Ix) sleep_sync off, skip\n", wParam);
-      }
+      printf("power: suspend (wParam=0x%Ix) -> on_suspend\n", wParam);
+      helper_on_suspend();
       return TRUE;
     }
     if (wParam == PBT_APMRESUMESUSPEND || wParam == PBT_APMRESUMEAUTOMATIC ||
         wParam == PBT_APMRESUMECRITICAL) {
-      printf("power: resume (wParam=0x%Ix) ignored (H6 will restore)\n",
-             wParam);
+      printf("power: resume (wParam=0x%Ix) -> resume_from_sleep\n", wParam);
+      helper_resume_from_sleep();
       return TRUE;
     }
     break;
@@ -254,7 +253,7 @@ static void tray_thread_main() {
   wc.cbSize = sizeof(wc);
   wc.lpfnWndProc = tray_wnd_proc;
   wc.hInstance = GetModuleHandleW(nullptr);
-  wc.lpszClassName = L"ZeerayHelperTray";
+  wc.lpszClassName = kTrayWndClass;
   wc.hIcon = LoadIconW(wc.hInstance, MAKEINTRESOURCEW(IDI_HELPER_TRAY));
   if (!RegisterClassExW(&wc)) {
     if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
@@ -265,9 +264,9 @@ static void tray_thread_main() {
   }
 
   // 为什么：HWND_MESSAGE 收不到电源广播；必须用隐藏顶层窗
-  HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"ZeerayTray",
-                              WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
-                              wc.hInstance, nullptr);
+  HWND hwnd =
+      CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWndClass, L"ZeerayTray", WS_POPUP,
+                      0, 0, 0, 0, nullptr, nullptr, wc.hInstance, nullptr);
   if (!hwnd) {
     printf("tray CreateWindowEx failed: %lu\n", (unsigned long)GetLastError());
     return;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
 import 'crash_log.dart';
 
@@ -24,6 +25,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
 
   AppLifecycleState? _lastLifecycle;
   bool _closing = false;
+  StreamSubscription<void>? _uiShowSub;
 
   @override
   void initState() {
@@ -32,6 +34,20 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     windowManager.addListener(this);
     // 为什么：不拦截则 close 立刻杀进程，quit 来不及写，helper 易僵尸占 COM
     unawaited(_armPreventClose());
+    // H5：托盘双击推 ui show → 置顶现有窗口（完整关窗 bye 语义仍属 F3）
+    _uiShowSub = ref.read(helperClientProvider).uiShowStream.listen((_) {
+      unawaited(_bringToFront());
+    });
+  }
+
+  Future<void> _bringToFront() async {
+    try {
+      await windowManager.setSkipTaskbar(false);
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (e, st) {
+      CrashLog.error('lifecycle ui show', e, st);
+    }
   }
 
   Future<void> _armPreventClose() async {
@@ -44,6 +60,8 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
 
   @override
   void dispose() {
+    unawaited(_uiShowSub?.cancel());
+    _uiShowSub = null;
     windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

@@ -78,7 +78,9 @@ class ControlPage extends ConsumerWidget {
                 children: [
                   _SwitchRow(
                     title: '自动休眠同步',
-                    subtitle: '系统休眠时关闭灯带并结束 helper，唤醒后自动重连并恢复状态',
+                    subtitle:
+                        '休眠时软关灯带并释放串口；打开则唤醒后自动恢复睡前灯效，'
+                        '关闭则醒来不恢复',
                     value: cfg.autoSleepSync,
                     onChanged: (v) {
                       config.setAutoSleepSync(v);

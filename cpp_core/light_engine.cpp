@@ -418,10 +418,64 @@ DisplayIntent engine_get_display_intent() {
   return g_intent;
 }
 
+bool engine_ensure_dxgi() {
+  if (dxgi_is_ready())
+    return true;
+  DxgiErr e = dxgi_init();
+  if (e != DxgiErr::Ok) {
+    printf("engine_ensure_dxgi failed: %d\n", (int)e);
+    return false;
+  }
+  printf("engine_ensure_dxgi: re-inited\n");
+  return true;
+}
+
+void apply_display_intent(HANDLE h, const DisplayIntent &intent) {
+  if (h == nullptr || h == INVALID_HANDLE_VALUE) {
+    printf("apply_display_intent: no serial\n");
+    return;
+  }
+  switch (intent.kind) {
+  case DisplayIntentKind::Engine:
+    if (!engine_ensure_dxgi())
+      return;
+    engine_start(h);
+    engine_set_intent_engine();
+    printf("apply_display_intent: engine\n");
+    break;
+  case DisplayIntentKind::Solid:
+    engine_stop();
+    engine_set_intent_solid(intent.solid);
+    send_solid(h, intent.solid);
+    printf("apply_display_intent: solid %s\n", intent.solid);
+    break;
+  case DisplayIntentKind::SoftOff:
+    engine_stop();
+    engine_set_intent_soft_off();
+    send_solid(h, "000000");
+    printf("apply_display_intent: soft_off\n");
+    break;
+  case DisplayIntentKind::Idle:
+  default:
+    engine_stop();
+    engine_set_intent_idle();
+    printf("apply_display_intent: idle\n");
+    break;
+  }
+}
+
 void engine_start(HANDLE h) {
   std::lock_guard<std::mutex> lock(g_engine_mu);
   if (g_running.load())
     return; // 避免重复 start 起两个线程
+  // 为什么：休眠 teardown 会 dxgi_shutdown；追色前必须再 init
+  if (!dxgi_is_ready()) {
+    DxgiErr e = dxgi_init();
+    if (e != DxgiErr::Ok) {
+      printf("engine_start: dxgi_init failed: %d\n", (int)e);
+      return;
+    }
+  }
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }

@@ -7,6 +7,7 @@
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "serial_port.h"
+#include "ui_launcher.h"
 
 #include <atomic>
 #include <cstdarg>
@@ -373,8 +374,7 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     while (*p == ' ' || *p == '\t')
       ++p;
     if ((*p == '0' || *p == '1') && p[1] == '\0') {
-      helper_set_sleep_sync(*p == '1');
-      config_set_sleep_sync(*p == '1');
+      config_set_sleep_sync(*p == '1'); // 内含 helper_set_sleep_sync
       printf("cmd=set sleep_sync %c\n", *p);
     } else {
       printf("bad set sleep_sync: [%s]\n", p);
@@ -440,6 +440,8 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
       close_com(*serial);
       *serial = INVALID_HANDLE_VALUE;
     }
+    // 为什么：休眠 teardown 关过 DXGI；重连后追色要能抓屏
+    engine_ensure_dxgi();
     HANDLE neu = INVALID_HANDLE_VALUE;
     bool ok = false;
     for (int i = 1; i <= 10; ++i) {
@@ -453,6 +455,7 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     }
     if (ok) {
       *serial = neu;
+      helper_note_resources_ready();
       printf("cmd=reconnect ok\n");
       send_status(client, "reconnect_ok");
       push_runtime_status(client, true);
@@ -490,7 +493,7 @@ static void close_listen_sock() {
 // 5) 对外：听端口 → 循环 accept（select）→ quit/cancel 才退出
 // ---------------------------------------------------------------------------
 
-bool ipc_run(unsigned short port, HANDLE *serial) {
+bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
   g_ipc_quit.store(false);
 
   WSADATA wsa;
@@ -532,6 +535,9 @@ bool ipc_run(unsigned short port, HANDLE *serial) {
   }
   g_listen_sock = listen_sock;
   printf("listen ok 127.0.0.1:%u\n", (unsigned)port);
+
+  // 为什么：必须在 listen 之后再拉 UI，否则 Flutter 试连失败会误起次实例
+  ui_maybe_launch_on_start(!launch_ui);
 
   while (!g_ipc_quit.load()) {
     fd_set readfds;
@@ -616,4 +622,28 @@ void ipc_cancel() {
   g_ipc_quit.store(true);
   close_listen_sock();
   drop_client();
+}
+
+bool ipc_has_client() { return g_client_sock != INVALID_SOCKET; }
+
+// 为什么：托盘线程可能调用；先拷贝句柄再 send，避免与 drop_client
+// 竞态 double-close。非热路径，偶发失败可接受（下次再点）。
+bool ipc_push_ui_show() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  send_line(cs, "ui show\n");
+  printf("ipc: pushed ui show\n");
+  return true;
+}
+
+bool ipc_push_runtime_status() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  HANDLE *sp = helper_serial();
+  bool has_com = sp != nullptr && *sp != INVALID_HANDLE_VALUE;
+  push_runtime_status(cs, has_com);
+  printf("ipc: pushed runtime status (com=%d)\n", has_com ? 1 : 0);
+  return true;
 }

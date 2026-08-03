@@ -18,6 +18,7 @@ add_executable(helper WIN32
   ipc_loop.cpp
   dxgi_capture.cpp
   tray_icon.cpp
+  ui_launcher.cpp
   helper.rc
 )
 target_link_libraries(helper PRIVATE kernel32 shell32 comctl32 ws2_32 d3d11 dxgi)

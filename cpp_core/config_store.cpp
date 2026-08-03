@@ -760,10 +760,14 @@ void config_set_com(const char *com) {
 }
 
 void config_set_sleep_sync(bool on) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.autoSleepSync = on;
-  mark_dirty_unlocked();
-  ensure_saver_started();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.autoSleepSync = on;
+    mark_dirty_unlocked();
+    ensure_saver_started();
+  }
+  // 为什么：JSON 与运行时旗标必须一起改，否则只落盘、休眠仍读旧 g_sleep_sync
+  helper_set_sleep_sync(on);
 }
 
 void config_set_shutdown_off(bool on) {

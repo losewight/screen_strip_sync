@@ -65,6 +65,10 @@ static unsigned half_to_u8(unsigned short h) {
 }
 
 DxgiErr dxgi_init() {
+  // 为什么：失败半截或休眠 teardown 后再 init，必须先清干净再重建
+  if (g_device || g_context || g_duplication || g_staging)
+    dxgi_shutdown();
+
   D3D_FEATURE_LEVEL level_out = {};
   HRESULT hr = D3D11CreateDevice(
       nullptr,                  // 默认适配器（主显卡）
@@ -76,6 +80,7 @@ DxgiErr dxgi_init() {
 
   if (FAILED(hr) || !g_device || !g_context) {
     printf("D3D11CreateDevice failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::DeviceCreateFailed;
   }
 
@@ -85,6 +90,7 @@ DxgiErr dxgi_init() {
   hr = g_device->QueryInterface(__uuidof(IDXGIDevice), (void **)&dxgi_device);
   if (FAILED(hr) || !dxgi_device) {
     printf("QueryInterface IDXGIDevice failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::QueryDxgiFailed;
   }
 
@@ -94,6 +100,7 @@ DxgiErr dxgi_init() {
   dxgi_device = nullptr;
   if (FAILED(hr) || !adapter) {
     printf("GetParent IDXGIAdapter failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::QueryDxgiFailed;
   }
 
@@ -103,6 +110,7 @@ DxgiErr dxgi_init() {
   adapter = nullptr;
   if (FAILED(hr) || !output) {
     printf("EnumOutputs(0) failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::NoOutput;
   }
 
@@ -112,6 +120,7 @@ DxgiErr dxgi_init() {
   output = nullptr;
   if (FAILED(hr) || !output1) {
     printf("QueryInterface IDXGIOutput1 failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::DuplicateFailed;
   }
 
@@ -121,6 +130,7 @@ DxgiErr dxgi_init() {
   output1 = nullptr;
   if (FAILED(hr) || !g_duplication) {
     printf("DuplicateOutput failed: 0x%08lx\n", (unsigned long)hr);
+    dxgi_shutdown();
     return DxgiErr::DuplicateFailed;
   }
 
@@ -475,3 +485,5 @@ void dxgi_shutdown() {
     g_device = nullptr;
   }
 }
+
+bool dxgi_is_ready() { return g_device != nullptr && g_duplication != nullptr; }

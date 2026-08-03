@@ -62,15 +62,9 @@ class HelperStateNotifier extends _HelperStateBase
     );
   }
 
-  /// 主控「开机时灯带自动启动」：进程起来后直连上次成功口，不等扫描。
-  /// Windows 注册表自启仍属阶段 C；此处只响应 [AppConfig.startOnBoot]。
+  /// 界面起来后始终试连 helper（v3：开关/参数必须落到 helper）。
+  /// [AppConfig.startOnBoot] 不再挡连接；它只影响「是否自动开追色」等后续语义。
   Future<void> _maybeConnectOnBoot() async {
-    final cfg = ref.read(configProvider);
-    if (!cfg.startOnBoot) return;
-    if (cfg.lastConnectedCom.trim().isEmpty) {
-      _patch(message: '已开启开机启动，但尚无上次成功口，请先手动连接一次');
-      return;
-    }
     await connect();
   }
 
