@@ -158,7 +158,7 @@ static void format_scene(char *out, size_t cap) {
 }
 
 // 连接建立 / sync：全量 cfg + cfg end + status
-static void push_config_snapshot(SOCKET client) {
+static void push_config_lines(SOCKET client) {
   HelperConfig c{};
   config_copy(&c);
 
@@ -212,7 +212,10 @@ static void push_config_snapshot(SOCKET client) {
   format_scene(scene, sizeof(scene));
   send_line(client, "cfg scene %s\n", scene);
   send_line(client, "cfg end\n");
+}
 
+static void push_config_snapshot(SOCKET client) {
+  push_config_lines(client);
   send_status(client, "ready");
   push_runtime_status(client, true);
 }
@@ -645,5 +648,15 @@ bool ipc_push_runtime_status() {
   bool has_com = sp != nullptr && *sp != INVALID_HANDLE_VALUE;
   push_runtime_status(cs, has_com);
   printf("ipc: pushed runtime status (com=%d)\n", has_com ? 1 : 0);
+  return true;
+}
+
+bool ipc_push_config_snapshot() {
+  // 为什么：只推 cfg，不带 status ready，避免托盘改自启时重置 UI 相位
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  push_config_lines(cs);
+  printf("ipc: pushed config snapshot\n");
   return true;
 }

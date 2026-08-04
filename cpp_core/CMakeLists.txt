@@ -12,6 +12,7 @@ add_executable(helper WIN32
   helper_main.cpp
   helper_lifecycle.cpp
   config_store.cpp
+  autostart.cpp
   serial_port.cpp
   fake_bgra.cpp
   light_engine.cpp
@@ -21,6 +22,6 @@ add_executable(helper WIN32
   ui_launcher.cpp
   helper.rc
 )
-target_link_libraries(helper PRIVATE kernel32 shell32 comctl32 ws2_32 d3d11 dxgi)
+target_link_libraries(helper PRIVATE kernel32 shell32 comctl32 advapi32 ws2_32 d3d11 dxgi)
 # 为什么：GUI 子系统下 freopen 后原生 printf 仍可能丢；/FI 宏转到 g_helper_log
 target_compile_options(helper PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/helper_log.h")

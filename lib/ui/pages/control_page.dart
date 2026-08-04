@@ -10,7 +10,7 @@ import '../widgets/win11_switch.dart';
 
 /// 主控：顶部灯带状态栏 + 连接操作 + 休眠 / 开关机联动开关。
 ///
-/// 连接走 [helperStateProvider]；休眠同步开关落盘并下发 helper。
+/// 连接走 [helperStateProvider]；开关乐观改本地并由 helper 快照对齐。
 class ControlPage extends ConsumerWidget {
   const ControlPage({super.key});
 
@@ -91,15 +91,21 @@ class ControlPage extends ConsumerWidget {
                     title: '关机时灯带自动关闭',
                     subtitle: 'Windows 关机时自动关闭灯带',
                     value: cfg.turnOffOnShutdown,
-                    onChanged: config.setTurnOffOnShutdown,
+                    onChanged: (v) {
+                      config.setTurnOffOnShutdown(v);
+                      notifier.sendShutdownOff(v);
+                    },
                   ),
                   _SwitchRow(
-                    title: '开机时灯带自动启动',
+                    title: '开机软件自启',
                     subtitle:
-                        '打开后，App 启动时自动连接上次成功的口；'
-                        '随 Windows 开机还需在软件设置中开启软件开机自启动',
+                        '打开后随 Windows 开机静默启动后台服务，'
+                        '并按上次灯效自动亮起',
                     value: cfg.startOnBoot,
-                    onChanged: config.setStartOnBoot,
+                    onChanged: (v) {
+                      config.setStartOnBoot(v);
+                      notifier.sendAutostart(v);
+                    },
                   ),
                 ],
               ),

@@ -17,3 +17,5 @@ bool ipc_has_client();
 bool ipc_push_ui_show();
 // 有客户端则推 status com/engine/display；休眠末 / 唤醒后调用。
 bool ipc_push_runtime_status();
+// 有客户端则推全量 cfg … + cfg end（不含 status ready）；托盘改自启等用。
+bool ipc_push_config_snapshot();

@@ -10,8 +10,8 @@ const int kIpcMaxLineChars = 200;
 ///
 /// 调用约定：
 /// - UI 拖框结束 → [rectFromDisplayDrag] → [SegmentSample]
-/// - 落盘用 [SegmentSample.toJson]；读盘用 [parseSegmentMapJson]
-/// - 下发 helper：`set map ${encodeIpcMap(list)}` 或 `set map default`
+/// - helper `cfg map` / IPC：`encodeIpcPayload` / `decodeIpcPayload`
+/// - 下发 helper：`set map ${encodeIpcPayload(list)}` 或 `set map default`
 abstract final class SegmentMapCodec {
   /// JSON 数组 → 恰好 10 段；任一非法则整表 `null`（未校准）。
   static List<SegmentSample>? parseSegmentMapJson(Object? raw) {

@@ -1,5 +1,6 @@
 ﻿// helper 入口：无黑窗壳 + 单实例 + 参数；串口属主启动编排交给 ipc_loop。
 // 关灯 / 休眠软关 / 唤醒恢复见 helper_lifecycle.cpp。
+#include "autostart.h"
 #include "config_store.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
@@ -115,6 +116,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   config_load();
   config_apply();
+  // 为什么：JSON 真源纠注册表路径漂移；off 时清孤儿键
+  autostart_reconcile(config_get().startOnBoot);
 
   // 为什么：engine 线程里会反复 grab，DXGI 必须常驻到进程结束
   DxgiErr dxgi = dxgi_init();

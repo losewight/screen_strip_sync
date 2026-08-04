@@ -14,7 +14,7 @@ class CrashLog {
 
   static bool _trimChecked = false;
 
-  /// 日志绝对路径（exe 同目录，与 [config_store] / [helper_client] 一致）。
+  /// 日志绝对路径（exe 同目录，与 [helper_client] 一致）。
   static String get filePath =>
       '${File(Platform.resolvedExecutable).parent.path}'
       '${Platform.pathSeparator}$fileName';

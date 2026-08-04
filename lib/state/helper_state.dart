@@ -63,7 +63,7 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   /// 界面起来后始终试连 helper（v3：开关/参数必须落到 helper）。
-  /// [AppConfig.startOnBoot] 不再挡连接；它只影响「是否自动开追色」等后续语义。
+  /// [AppConfig.startOnBoot] 经 `set autostart` 写注册表自启，不挡连接。
   Future<void> _maybeConnectOnBoot() async {
     await connect();
   }
@@ -210,12 +210,34 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  /// 休眠同步开关：已连接则下发；未连接静默（配置已落盘）。
+  /// 休眠同步开关：已连接则下发；未连接静默。
   @override
   void sendSleepSync(bool enabled) {
     if (!_client.isConnected) return;
     try {
       _sendIpc('set sleep_sync ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  /// 开机自启：已连接则下发；未连接静默。
+  @override
+  void sendAutostart(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set autostart ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  /// 关机关灯：已连接则下发；未连接静默。
+  @override
+  void sendShutdownOff(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set shutdown_off ${enabled ? 1 : 0}');
     } catch (e) {
       _patch(message: '$e');
     }

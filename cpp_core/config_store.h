@@ -41,7 +41,7 @@ void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_sleep_sync(bool on);
 void config_set_shutdown_off(bool on);
-void config_set_autostart(bool on); // 本步只落 JSON；注册表 H7
+void config_set_autostart(bool on); // JSON + HKCU Run
 void config_set_last_connected_com(const char *com);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）

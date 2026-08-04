@@ -55,7 +55,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
     }
   }
 
-  /// helper 真值 COM：更新 UI 并落盘，供下次快速连接。
+  /// helper 真值 COM：更新 UI 内存配置，供下次快速连接展示。
   void _onStatusCom(String port) {
     final name = port.trim();
     if (name.isEmpty) return;
@@ -104,22 +104,14 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void _onStatusPhase(HelperStatusWord word) {
     switch (word) {
       case HelperStatusWord.ready:
-        final cfg = ref.read(configProvider);
         _hadSession = true;
-        // 为什么：COM 真值等随后的 status com，此处不猜 cfg.comPort
+        // 为什么：配置真源是 helper 已推的 cfg 快照；此处不再回推本地值
         _patch(
           message: '串口就绪',
           phase: HelperPhase.ready,
           hasDevice: true,
           engineRunning: false,
         );
-        sendEmaAlpha(cfg.emaAlpha);
-        sendNearBlack(cfg.nearBlack);
-        sendBlur(cfg.blurStep);
-        sendMode(cfg.mode);
-        sendComPort(cfg.comPort);
-        sendSleepSync(cfg.autoSleepSync);
-        syncSegmentMapFromConfig();
       case HelperStatusWord.reconnecting:
         _patch(
           message: '正在重连串口…',
@@ -153,12 +145,14 @@ mixin _HelperStatusHandlers on _HelperStateBase {
     return '串口就绪（$com）';
   }
 
-  // 由 HelperStateNotifier 实现（ready 时下发配置）。
+  // 由 HelperStateNotifier 实现（UI 改参时下发）。
   void sendEmaAlpha(double alpha);
   void sendNearBlack(int nearBlack);
   void sendBlur(int blurStep);
   void sendMode(ColorMode mode);
   void sendComPort(String port);
   void sendSleepSync(bool enabled);
+  void sendAutostart(bool enabled);
+  void sendShutdownOff(bool enabled);
   void syncSegmentMapFromConfig();
 }

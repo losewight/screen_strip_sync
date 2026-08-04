@@ -1,67 +1,75 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
-import '../config/config_store.dart';
 import '../config/segment_map_codec.dart';
+import '../ipc/helper_client.dart';
 
 export '../config/app_config.dart';
 
-/// 设置页读写的配置 Notifier：启动 load，改完 save。
+/// 配置 Notifier：由 helper `cfg …`/`cfg end` 快照驱动；setter 只乐观改内存。
 ///
-/// 下发 helper 由 [HelperStateNotifier] 负责，此处只管本地值。
+/// 落盘与注册表属主是 helper；下发 IPC 由 [HelperStateNotifier] 负责。
 class ConfigNotifier extends Notifier<AppConfig> {
-  final _store = ConfigStore();
+  StreamSubscription<AppConfig>? _cfgSub;
+  bool _hasSnapshot = false;
+
+  bool get hasSnapshot => _hasSnapshot;
 
   @override
-  AppConfig build() => _store.load();
+  AppConfig build() {
+    final client = ref.watch(helperClientProvider);
+    _cfgSub?.cancel();
+    _cfgSub = client.configSnapshots.listen((snap) {
+      _hasSnapshot = true;
+      state = snap;
+    });
+    ref.onDispose(() {
+      _cfgSub?.cancel();
+      _cfgSub = null;
+    });
+    return const AppConfig();
+  }
 
   void setEmaAlpha(double value) {
     state = state.copyWith(emaAlpha: value.clamp(0.05, 1.0));
-    _store.save(state);
   }
 
   void setNearBlack(int value) {
     state = state.copyWith(nearBlack: value.clamp(0, 64));
-    _store.save(state);
   }
 
   void setBlurStep(int value) {
     state = state.copyWith(blurStep: value.clamp(0, 8));
-    _store.save(state);
   }
 
   void setMode(ColorMode mode) {
     state = state.copyWith(mode: mode);
-    _store.save(state);
   }
 
   void setComPort(String value) {
     state = state.copyWith(comPort: value.trim());
-    _store.save(state);
   }
 
-  /// helper 确认连通后写入；供快速连接 / 开机自启读取。
+  /// helper `status com` / 快照后的内存更新；不写盘。
   void setLastConnectedCom(String value) {
     final name = value.trim();
     if (name.isEmpty) return;
-    if (name == state.lastConnectedCom) return;
+    if (name == state.lastConnectedCom && name == state.comPort) return;
     state = state.copyWith(lastConnectedCom: name, comPort: name);
-    _store.save(state);
   }
 
   void setAutoSleepSync(bool value) {
     state = state.copyWith(autoSleepSync: value);
-    _store.save(state);
   }
 
   void setTurnOffOnShutdown(bool value) {
     state = state.copyWith(turnOffOnShutdown: value);
-    _store.save(state);
   }
 
   void setStartOnBoot(bool value) {
     state = state.copyWith(startOnBoot: value);
-    _store.save(state);
   }
 
   /// 写入恰好 [kSegmentCount] 段；长度不对则忽略。
@@ -70,16 +78,20 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(
       segmentMap: List<SegmentSample>.unmodifiable(map),
     );
-    _store.save(state);
   }
 
   /// 清除校准，helper 侧应随后 `set map default`。
   void clearSegmentMap() {
     state = state.copyWith(clearSegmentMap: true);
-    _store.save(state);
   }
 }
 
 final configProvider = NotifierProvider<ConfigNotifier, AppConfig>(
   ConfigNotifier.new,
 );
+
+/// 是否已收到过至少一次 helper `cfg end` 快照。
+final configReadyProvider = Provider<bool>((ref) {
+  ref.watch(configProvider);
+  return ref.read(configProvider.notifier).hasSnapshot;
+});

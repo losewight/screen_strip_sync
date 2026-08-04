@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
 import 'helper_status.dart';
 
 const _ipcPort = 9527;
@@ -46,6 +47,8 @@ class HelperClient {
   final _statusController = StreamController<HelperStatusEvent>.broadcast();
   final _disconnectController = StreamController<void>.broadcast();
   final _uiShowController = StreamController<void>.broadcast();
+  final _configController = StreamController<AppConfig>.broadcast();
+  final _cfgBuf = <String>[];
 
   /// helper 推来的 `status` 事件（相位 / com / engine）。
   Stream<HelperStatusEvent> get statusStream => _statusController.stream;
@@ -55,6 +58,9 @@ class HelperClient {
 
   /// 托盘双击且已有客户端：helper 推 `ui show`，前端置顶窗口。
   Stream<void> get uiShowStream => _uiShowController.stream;
+
+  /// 每次 `cfg …` + `cfg end` 组成的完整快照（可多次推送）。
+  Stream<AppConfig> get configSnapshots => _configController.stream;
 
   bool get isConnected => _sock != null;
 
@@ -177,6 +183,18 @@ class HelperClient {
       }
       return;
     }
+    if (line.startsWith('cfg ')) {
+      if (line == 'cfg end') {
+        final snap = AppConfig.fromCfgLines(_cfgBuf);
+        _cfgBuf.clear();
+        if (!_configController.isClosed) {
+          _configController.add(snap);
+        }
+        return;
+      }
+      _cfgBuf.add(line);
+      return;
+    }
     final event = tryParseStatusLine(line);
     if (event != null) {
       _statusController.add(event);
@@ -230,12 +248,16 @@ class HelperClient {
     if (!_uiShowController.isClosed) {
       await _uiShowController.close();
     }
+    if (!_configController.isClosed) {
+      await _configController.close();
+    }
   }
 
   Future<void> _teardownSocket() async {
     await _socketSub?.cancel();
     _socketSub = null;
     _rxBuf.clear();
+    _cfgBuf.clear();
     final sock = _sock;
     _sock = null;
     if (sock != null) {
