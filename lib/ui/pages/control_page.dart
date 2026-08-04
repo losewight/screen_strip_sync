@@ -20,6 +20,8 @@ class ControlPage extends ConsumerWidget {
     final config = ref.read(configProvider.notifier);
     final ui = ref.watch(helperStateProvider);
     final notifier = ref.read(helperStateProvider.notifier);
+    final cfgReady = ref.watch(configReadyProvider);
+    final canEdit = ui.canControl && cfgReady;
     // 锚点：当前打开口，或换口失败后仍保留的 lastGoodCom
     final anchor = ui.anchorCom;
     final portChanged =
@@ -82,19 +84,23 @@ class ControlPage extends ConsumerWidget {
                         '休眠时软关灯带并释放串口；打开则唤醒后自动恢复睡前灯效，'
                         '关闭则醒来不恢复',
                     value: cfg.autoSleepSync,
-                    onChanged: (v) {
-                      config.setAutoSleepSync(v);
-                      notifier.sendSleepSync(v);
-                    },
+                    onChanged: canEdit
+                        ? (v) {
+                            config.setAutoSleepSync(v);
+                            notifier.sendSleepSync(v);
+                          }
+                        : null,
                   ),
                   _SwitchRow(
                     title: '关机时灯带自动关闭',
                     subtitle: 'Windows 关机时自动关闭灯带',
                     value: cfg.turnOffOnShutdown,
-                    onChanged: (v) {
-                      config.setTurnOffOnShutdown(v);
-                      notifier.sendShutdownOff(v);
-                    },
+                    onChanged: canEdit
+                        ? (v) {
+                            config.setTurnOffOnShutdown(v);
+                            notifier.sendShutdownOff(v);
+                          }
+                        : null,
                   ),
                   _SwitchRow(
                     title: '开机软件自启',
@@ -102,10 +108,12 @@ class ControlPage extends ConsumerWidget {
                         '打开后随 Windows 开机静默启动后台服务，'
                         '并按上次灯效自动亮起',
                     value: cfg.startOnBoot,
-                    onChanged: (v) {
-                      config.setStartOnBoot(v);
-                      notifier.sendAutostart(v);
-                    },
+                    onChanged: canEdit
+                        ? (v) {
+                            config.setStartOnBoot(v);
+                            notifier.sendAutostart(v);
+                          }
+                        : null,
                   ),
                 ],
               ),
@@ -210,13 +218,13 @@ class _SwitchRow extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.value,
-    required this.onChanged,
+    this.onChanged,
   });
 
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   State<_SwitchRow> createState() => _SwitchRowState();

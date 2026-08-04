@@ -70,6 +70,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
+    final canEdit = can && ref.watch(configReadyProvider);
 
     return Center(
       child: SingleChildScrollView(
@@ -122,8 +123,8 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 max: 1.0,
                 divisions: 19,
                 label: cfg.emaAlpha.toStringAsFixed(2),
-                onChanged: config.setEmaAlpha,
-                onChangeEnd: notifier.sendEmaAlpha,
+                onChanged: canEdit ? config.setEmaAlpha : null,
+                onChangeEnd: canEdit ? notifier.sendEmaAlpha : null,
               ),
               const SizedBox(height: AppSpacing.section),
               _sectionLabel(
@@ -136,8 +137,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 max: 8,
                 divisions: 8,
                 label: '${cfg.blurStep}',
-                onChanged: (v) => config.setBlurStep(v.round()),
-                onChangeEnd: (v) => notifier.sendBlur(v.round()),
+                onChanged: canEdit
+                    ? (v) => config.setBlurStep(v.round())
+                    : null,
+                onChangeEnd: canEdit
+                    ? (v) => notifier.sendBlur(v.round())
+                    : null,
               ),
               const SizedBox(height: AppSpacing.section),
               _sectionLabel(
@@ -150,31 +155,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 max: 64,
                 divisions: 64,
                 label: '${cfg.nearBlack}',
-                onChanged: (v) => config.setNearBlack(v.round()),
-                onChangeEnd: (v) => notifier.sendNearBlack(v.round()),
-              ),
-              const SizedBox(height: AppSpacing.section),
-              _sectionLabel(context, '调色方案'),
-              const SizedBox(height: AppSpacing.text),
-              SegmentedButton<ColorMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: ColorMode.a,
-                    label: Text('方案 A'),
-                    tooltip: '高亮度 + RGB 跟屏色',
-                  ),
-                  ButtonSegment(
-                    value: ColorMode.b,
-                    label: Text('方案 B'),
-                    tooltip: '亮度跟 luma（阶段 C）',
-                  ),
-                ],
-                selected: {cfg.mode},
-                onSelectionChanged: (set) {
-                  if (set.isEmpty) return;
-                  config.setMode(set.first);
-                  notifier.sendMode(set.first);
-                },
+                onChanged: canEdit
+                    ? (v) => config.setNearBlack(v.round())
+                    : null,
+                onChangeEnd: canEdit
+                    ? (v) => notifier.sendNearBlack(v.round())
+                    : null,
               ),
             ],
           ),

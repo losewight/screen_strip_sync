@@ -114,7 +114,8 @@ class HelperStateNotifier extends _HelperStateBase
     _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
     try {
       await _client.connect(comPort: targetCom);
-      _patch(message: '已连接 IPC，等待串口状态…');
+      _patch(message: '已连接 IPC，等待配置…');
+      unawaited(_ensureConfigSnapshot());
     } catch (e) {
       _patch(
         message: '$e',
@@ -125,7 +126,25 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过（配置已由 ConfigNotifier 落盘）。
+  /// 首包超时才发 `sync`；正常 accept 已推全量，不主动刷。
+  Future<void> _ensureConfigSnapshot() async {
+    const step = Duration(milliseconds: 100);
+    for (var i = 0; i < 20; i++) {
+      if (!_client.isConnected) return;
+      if (ref.read(configProvider.notifier).hasSnapshot) return;
+      await Future<void>.delayed(step);
+    }
+    if (!_client.isConnected) return;
+    if (ref.read(configProvider.notifier).hasSnapshot) return;
+    try {
+      _sendIpc('sync');
+      _patch(message: '后台配置超时，已请求同步…');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过。
   @override
   void sendEmaAlpha(double alpha) {
     if (!_client.isConnected) return;

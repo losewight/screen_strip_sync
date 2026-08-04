@@ -1,12 +1,12 @@
 ﻿part of 'helper_state.dart';
 
-/// 段映射 IPC：编码后下发；未连接静默（配置已由 ConfigNotifier 落盘）。
+/// 段映射 IPC：编码后下发；未连接静默。
 ///
 /// 调用约定：
 /// - 矫正完成 → [sendSegmentMap]
 /// - 恢复默认 → [clearSegmentMapRemote]（须先/同时 ConfigNotifier.clearSegmentMap）
 /// - 向导逐段 → [highlightSegment]
-/// - status ready → [syncSegmentMapFromConfig]（有表才下发）
+/// - 映射真源是 cfg 快照；[syncSegmentMapFromConfig] 保留备用
 mixin _HelperSegmentMapIpc on _HelperStateBase {
   void sendSegmentMap(List<SegmentSample> map) {
     if (!_client.isConnected) return;

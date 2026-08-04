@@ -13,6 +13,7 @@ export '../config/app_config.dart';
 /// 落盘与注册表属主是 helper；下发 IPC 由 [HelperStateNotifier] 负责。
 class ConfigNotifier extends Notifier<AppConfig> {
   StreamSubscription<AppConfig>? _cfgSub;
+  StreamSubscription<void>? _disconnectSub;
   bool _hasSnapshot = false;
 
   bool get hasSnapshot => _hasSnapshot;
@@ -21,13 +22,22 @@ class ConfigNotifier extends Notifier<AppConfig> {
   AppConfig build() {
     final client = ref.watch(helperClientProvider);
     _cfgSub?.cancel();
+    _disconnectSub?.cancel();
     _cfgSub = client.configSnapshots.listen((snap) {
       _hasSnapshot = true;
       state = snap;
     });
+    // 为什么：断线后旧快照只读展示，但标记未就绪，等下次 cfg end 再可编辑
+    _disconnectSub = client.disconnectStream.listen((_) {
+      if (!_hasSnapshot) return;
+      _hasSnapshot = false;
+      state = state.copyWith(emaAlpha: state.emaAlpha);
+    });
     ref.onDispose(() {
       _cfgSub?.cancel();
       _cfgSub = null;
+      _disconnectSub?.cancel();
+      _disconnectSub = null;
     });
     return const AppConfig();
   }

@@ -2,7 +2,6 @@
 
 #include "autostart.h"
 #include "helper_lifecycle.h"
-#include "ipc_loop.h"
 #include "light_engine.h"
 
 #include <atomic>
@@ -781,6 +780,7 @@ void config_set_shutdown_off(bool on) {
 
 void config_set_autostart(bool on) {
   // 为什么：JSON 是逻辑真源；注册表在锁外写，避免 Reg* 阻塞 saver
+  // IPC 回推由调用方决定（托盘推；UI set 不推，避免回声）
   {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg.startOnBoot = on;
@@ -788,8 +788,6 @@ void config_set_autostart(bool on) {
     ensure_saver_started();
   }
   autostart_apply(on);
-  // 为什么：托盘改自启时界面开着也要马上看到 cfg autostart
-  ipc_push_config_snapshot();
 }
 
 void config_set_last_scene(const char *scene) {

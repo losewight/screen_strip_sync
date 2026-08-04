@@ -2,6 +2,7 @@
 
 #include "config_store.h"
 #include "helper_lifecycle.h"
+#include "ipc_loop.h"
 #include "light_engine.h"
 #include "resource.h"
 #include "ui_launcher.h"
@@ -114,6 +115,8 @@ static void tray_soft_off() {
   engine_set_intent_soft_off();
   send_solid(h, "000000");
   config_set_last_scene("off");
+  // 为什么：托盘改灯 UI 不知情；有客户端才推 engine/display，不回声整包 cfg
+  ipc_push_runtime_status();
   printf("tray soft_off\n");
 }
 
@@ -135,6 +138,7 @@ static void tray_engine_toggle() {
     config_set_last_scene("engine");
     printf("tray engine start\n");
   }
+  ipc_push_runtime_status();
 }
 
 static void tray_toggle_autostart() {
@@ -142,6 +146,8 @@ static void tray_toggle_autostart() {
   config_copy(&c);
   bool next = !c.startOnBoot;
   config_set_autostart(next);
+  // 为什么：托盘改自启，界面开着要看到 cfg；UI 自己 set 不走这里故无回声
+  ipc_push_config_snapshot();
   printf("tray autostart -> %d\n", next ? 1 : 0);
 }
 

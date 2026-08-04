@@ -10,10 +10,12 @@
 #include "ui_launcher.h"
 
 #include <atomic>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
 
 static SOCKET g_listen_sock = INVALID_SOCKET;
 static SOCKET g_client_sock = INVALID_SOCKET;
@@ -304,6 +306,11 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     } else {
       engine_set_alpha(v);
       config_set_ema_alpha(v);
+      // 为什么：仅 clamp 纠偏才回推；UI 已乐观采纳合法值时不回声
+      HelperConfig after{};
+      config_copy(&after);
+      if (fabsf(after.emaAlpha - v) > 0.0005f)
+        ipc_push_config_snapshot();
       printf("cmd=set alpha\n");
     }
     return DispatchResult::Continue;
@@ -321,6 +328,10 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     } else {
       engine_set_near_black((int)v);
       config_set_near_black((int)v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.nearBlack != (int)v)
+        ipc_push_config_snapshot();
       printf("cmd=set near_black\n");
     }
     return DispatchResult::Continue;
@@ -338,6 +349,10 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     } else {
       engine_set_blur((int)v);
       config_set_blur((int)v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.blurStep != (int)v)
+        ipc_push_config_snapshot();
       printf("cmd=set blur\n");
     }
     return DispatchResult::Continue;
@@ -374,6 +389,9 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
       char norm[16];
       engine_get_com(norm, sizeof(norm));
       config_set_com(norm);
+      // 为什么：仅规范化结果与请求字面不同才纠偏（大小写相同则不算）
+      if (_stricmp(p, norm) != 0)
+        ipc_push_config_snapshot();
       printf("cmd=set com\n");
     }
     return DispatchResult::Continue;
@@ -646,14 +664,13 @@ bool ipc_push_ui_show() {
   return true;
 }
 
-bool ipc_push_runtime_status() {
+bool ipc_push_runtime_status(bool include_com) {
+  // 为什么：无 UI 时托盘/电源仍可能调用；先看 socket，再读 intent，避免无谓组包
   SOCKET cs = g_client_sock;
   if (cs == INVALID_SOCKET)
     return false;
-  HANDLE *sp = helper_serial();
-  bool has_com = sp != nullptr && *sp != INVALID_HANDLE_VALUE;
-  push_runtime_status(cs, has_com);
-  printf("ipc: pushed runtime status (com=%d)\n", has_com ? 1 : 0);
+  push_runtime_status(cs, include_com);
+  printf("ipc: pushed runtime status (com=%d)\n", include_com ? 1 : 0);
   return true;
 }
 
