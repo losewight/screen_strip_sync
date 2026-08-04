@@ -128,7 +128,7 @@ class HelperStateNotifier extends _HelperStateBase
         _intentionalDisconnect = false;
       }
       _patch(
-        message: portChanged ? '换口，重启 helper…' : '重新连接…',
+        message: portChanged ? '换口，重新连接…' : '重新连接…',
         phase: HelperPhase.disconnected,
         hasDevice: false,
         currentCom: '',
@@ -136,7 +136,7 @@ class HelperStateNotifier extends _HelperStateBase
       );
     }
 
-    _patch(message: '启动 helper…', phase: HelperPhase.connecting);
+    _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
     try {
       await _client.connect(comPort: targetCom);
       _patch(message: '已连接 IPC，等待串口状态…');

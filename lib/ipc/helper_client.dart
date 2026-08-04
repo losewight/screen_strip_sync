@@ -85,43 +85,51 @@ class HelperClient {
       debugPrint('helper: connected to existing instance');
       return;
     } catch (_) {
-      // 未在听 → 自拉
+      // 未在听 → 自拉或等已有子进程就绪
     }
 
+    // 为什么：前端绝不杀 helper。若上次自拉的进程还在，只重试连，不再 spawn。
+    var needSpawn = true;
     if (_proc != null) {
       final exitCode = await _proc!.exitCode.timeout(
         Duration.zero,
         onTimeout: () => _stillRunning,
       );
       if (exitCode == _stillRunning) {
-        await _killHelper();
+        needSpawn = false;
+        debugPrint('helper: child still running, retry connect only');
       } else {
         _proc = null;
       }
     }
 
-    final helperFile = resolveHelperExecutable();
-    debugPrint('helper: ${helperFile.path} --no-ui');
-    // 为什么：必须 --no-ui，否则 helper 再 CreateProcess 一个 Flutter，互相拉起
-    _proc = await Process.start(
-      helperFile.path,
-      const ['--no-ui'],
-      workingDirectory: helperFile.parent.path,
-    );
+    if (needSpawn) {
+      final helperFile = resolveHelperExecutable();
+      debugPrint('helper: ${helperFile.path} --no-ui');
+      // 为什么：必须 --no-ui，否则 helper 再 CreateProcess 一个 Flutter，互相拉起
+      _proc = await Process.start(
+        helperFile.path,
+        const ['--no-ui'],
+        workingDirectory: helperFile.parent.path,
+      );
+    }
 
     const maxTries = 10;
     Socket? sock;
     Object? lastErr;
 
     for (var i = 1; i <= maxTries; i++) {
-      final exitCode = await _proc!.exitCode.timeout(
-        Duration.zero,
-        onTimeout: () => _stillRunning,
-      );
-      if (exitCode != _stillRunning) {
-        debugPrint('helper exited early: code=$exitCode');
-        _proc = null;
-        throw StateError(failMsg);
+      final proc = _proc;
+      if (proc != null) {
+        final exitCode = await proc.exitCode.timeout(
+          Duration.zero,
+          onTimeout: () => _stillRunning,
+        );
+        if (exitCode != _stillRunning) {
+          debugPrint('helper exited early: code=$exitCode');
+          _proc = null;
+          throw StateError(failMsg);
+        }
       }
 
       try {
@@ -141,7 +149,8 @@ class HelperClient {
 
     if (sock == null) {
       debugPrint('Socket.connect failed: $lastErr');
-      await _killHelper();
+      // 松手句柄，不 kill：常驻实例由托盘 / quit IPC 管生命周期
+      _proc = null;
       throw StateError(failMsg);
     }
 
@@ -216,29 +225,19 @@ class HelperClient {
     sock.write('$cmd\n');
   }
 
-  /// 礼貌退出：发 quit，关 Socket；helper 自行关灯后进程结束。
+  /// 前端退出 / 断连：发 `bye`，只关 Socket；helper 灯效与进程保持。
   Future<void> quit() async {
     final sock = _sock;
     if (sock != null) {
       try {
-        sock.write('quit\n');
+        sock.write('bye\n');
       } catch (_) {}
       await _teardownSocket();
-    }
-
-    final proc = _proc;
-    if (proc != null) {
-      await proc.exitCode.timeout(
-        const Duration(milliseconds: 500),
-        onTimeout: () => _stillRunning,
-      );
-      _proc = null;
     }
   }
 
   Future<void> dispose() async {
     await quit();
-    await _killHelper();
     if (!_statusController.isClosed) {
       await _statusController.close();
     }
@@ -264,18 +263,6 @@ class HelperClient {
       try {
         sock.destroy();
       } catch (_) {}
-    }
-  }
-
-  Future<void> _killHelper() async {
-    await _teardownSocket();
-    final proc = _proc;
-    _proc = null;
-    if (proc != null) {
-      try {
-        proc.kill();
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
   }
 }
