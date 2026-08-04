@@ -155,6 +155,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     config_set_last_connected_com(com);
   }
 
+  // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
+  {
+    DisplayIntent boot{};
+    if (parse_last_scene(config_get().lastScene, &boot)) {
+      apply_display_intent(h, boot);
+    } else {
+      printf("boot scene: bad lastScene [%s], stay idle\n",
+             config_get().lastScene);
+    }
+  }
+
   // 为什么：托盘窗兼收电源广播；ipc_run 占主线程，托盘在独立消息循环
   tray_start();
 

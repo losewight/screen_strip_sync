@@ -257,6 +257,7 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
   if (strcmp(line, "soft_off") == 0) {
     engine_stop();
     engine_set_intent_soft_off();
+    config_set_last_scene("off");
     printf("cmd=soft_off\n");
     send_solid(*serial, "000000");
     return DispatchResult::Continue;
@@ -264,12 +265,14 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
   if (strcmp(line, "start") == 0) {
     engine_start(*serial);
     engine_set_intent_engine();
+    config_set_last_scene("engine");
     printf("cmd=start\n");
     return DispatchResult::Continue;
   }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
     engine_set_intent_idle();
+    config_set_last_scene("idle");
     printf("cmd=stop\n");
     return DispatchResult::Continue;
   }
@@ -282,6 +285,9 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
       engine_stop();
       engine_set_intent_solid(color);
       send_solid(*serial, color);
+      char scene[32];
+      snprintf(scene, sizeof(scene), "solid %s", color);
+      config_set_last_scene(scene);
     }
     return DispatchResult::Continue;
   }

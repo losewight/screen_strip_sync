@@ -464,6 +464,41 @@ void apply_display_intent(HANDLE h, const DisplayIntent &intent) {
   }
 }
 
+bool parse_last_scene(const char *s, DisplayIntent *out) {
+  if (!s || !out)
+    return false;
+  DisplayIntent intent{};
+  if (strcmp(s, "engine") == 0) {
+    intent.kind = DisplayIntentKind::Engine;
+  } else if (strcmp(s, "idle") == 0) {
+    intent.kind = DisplayIntentKind::Idle;
+  } else if (strcmp(s, "off") == 0) {
+    intent.kind = DisplayIntentKind::SoftOff;
+  } else if (strncmp(s, "solid ", 6) == 0) {
+    const char *hex = s + 6;
+    if (strlen(hex) != 6)
+      return false;
+    for (int i = 0; i < 6; ++i) {
+      char c = hex[i];
+      if (c >= 'A' && c <= 'F')
+        c = (char)(c - 'A' + 'a');
+      else if (c >= 'a' && c <= 'f')
+        ;
+      else if (c >= '0' && c <= '9')
+        ;
+      else
+        return false;
+      intent.solid[i] = c;
+    }
+    intent.solid[6] = '\0';
+    intent.kind = DisplayIntentKind::Solid;
+  } else {
+    return false;
+  }
+  *out = intent;
+  return true;
+}
+
 void engine_start(HANDLE h) {
   std::lock_guard<std::mutex> lock(g_engine_mu);
   if (g_running.load())

@@ -80,6 +80,7 @@ static void tray_soft_off() {
   engine_stop();
   engine_set_intent_soft_off();
   send_solid(h, "000000");
+  config_set_last_scene("off");
   printf("tray soft_off\n");
 }
 
@@ -93,10 +94,12 @@ static void tray_engine_toggle() {
     engine_stop();
     engine_set_intent_soft_off();
     send_solid(h, "000000");
+    config_set_last_scene("off");
     printf("tray engine stop + soft_off\n");
   } else {
     engine_start(h);
     engine_set_intent_engine();
+    config_set_last_scene("engine");
     printf("tray engine start\n");
   }
 }

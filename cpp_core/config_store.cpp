@@ -792,6 +792,40 @@ void config_set_autostart(bool on) {
   ipc_push_config_snapshot();
 }
 
+void config_set_last_scene(const char *scene) {
+  if (!scene)
+    return;
+  // 为什么：先 parse 校验+规范化 solid hex，再落盘，避免脏字符串进 JSON
+  DisplayIntent parsed{};
+  if (!parse_last_scene(scene, &parsed)) {
+    printf("config_set_last_scene: reject [%s]\n", scene);
+    return;
+  }
+  char normalized[32];
+  switch (parsed.kind) {
+  case DisplayIntentKind::Engine:
+    snprintf(normalized, sizeof(normalized), "engine");
+    break;
+  case DisplayIntentKind::SoftOff:
+    snprintf(normalized, sizeof(normalized), "off");
+    break;
+  case DisplayIntentKind::Solid:
+    snprintf(normalized, sizeof(normalized), "solid %s", parsed.solid);
+    break;
+  case DisplayIntentKind::Idle:
+  default:
+    snprintf(normalized, sizeof(normalized), "idle");
+    break;
+  }
+  std::lock_guard<std::mutex> lock(g_mu);
+  if (strcmp(g_cfg.lastScene, normalized) == 0)
+    return;
+  snprintf(g_cfg.lastScene, sizeof(g_cfg.lastScene), "%s", normalized);
+  mark_dirty_unlocked();
+  ensure_saver_started();
+  printf("config_set_last_scene: %s\n", normalized);
+}
+
 void config_set_last_connected_com(const char *com) {
   if (!com)
     return;
