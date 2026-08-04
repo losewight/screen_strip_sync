@@ -15,26 +15,13 @@ part 'helper_segment_map_ipc.dart';
 part 'helper_solid_gate.dart';
 part 'helper_state_base.dart';
 part 'helper_status_handlers.dart';
-part 'helper_wake_reconnect.dart';
 
 class HelperStateNotifier extends _HelperStateBase
-    with
-        _HelperSolidGate,
-        _HelperStatusHandlers,
-        _HelperWakeReconnect,
-        _HelperSegmentMapIpc {
+    with _HelperSolidGate, _HelperStatusHandlers, _HelperSegmentMapIpc {
   @override
   HelperUiState build() {
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);
     _disconnectSub ??= _client.disconnectStream.listen((_) {
-      // 快照须在改 phase 之前，否则熄灯态会丢
-      final cfg = ref.read(configProvider);
-      if (!_intentionalDisconnect && cfg.autoSleepSync && _hadSession) {
-        _wakeReconnectArmed = true;
-        _resumeWantEngine = _engineWanted;
-        _resumeSolid = _lastSentSolid;
-        _resumePoweredOff = state.phase == HelperPhase.poweredOff;
-      }
       _cancelPendingSolid();
       _patch(
         message: 'helper 已断开',
@@ -49,10 +36,10 @@ class HelperStateNotifier extends _HelperStateBase
       _statusSub?.cancel();
       _disconnectSub?.cancel();
     });
-    // 为什么：后台扫口刷新列表，不阻塞连接、不覆盖连接态文案
+    // 为什么：界面起来就试连；startOnBoot 只走 set autostart，不挡连接
     Future.microtask(() async {
       unawaited(scanPorts(background: true));
-      await _maybeConnectOnBoot();
+      await connect();
     });
     final cfg = ref.read(configProvider);
     return HelperUiState(
@@ -60,12 +47,6 @@ class HelperStateNotifier extends _HelperStateBase
       message: '未连接',
       lastGoodCom: cfg.lastConnectedCom,
     );
-  }
-
-  /// 界面起来后始终试连 helper（v3：开关/参数必须落到 helper）。
-  /// [AppConfig.startOnBoot] 经 `set autostart` 写注册表自启，不挡连接。
-  Future<void> _maybeConnectOnBoot() async {
-    await connect();
   }
 
   /// 点「连接」时实际传给 helper 的口。
@@ -98,7 +79,6 @@ class HelperStateNotifier extends _HelperStateBase
     sendComPort(name);
   }
 
-  @override
   Future<void> connect() async {
     if (state.phase == HelperPhase.connecting) return;
 
@@ -121,12 +101,7 @@ class HelperStateNotifier extends _HelperStateBase
 
     if (_client.isConnected) {
       _cancelPendingSolid();
-      _intentionalDisconnect = true;
-      try {
-        await _client.quit();
-      } finally {
-        _intentionalDisconnect = false;
-      }
+      await _client.quit();
       _patch(
         message: portChanged ? '换口，重新连接…' : '重新连接…',
         phase: HelperPhase.disconnected,
@@ -294,7 +269,6 @@ class HelperStateNotifier extends _HelperStateBase
 
   /// UI「关灯」：发 `soft_off`（停引擎 + 纯黑一帧），不掉电。
   /// 勿与备用命令 `off`（`set_power 0`）混淆；真下电只走 `quit`。
-  @override
   void softOff() {
     if (!_client.isConnected) return;
     try {
@@ -313,7 +287,6 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  @override
   void send(String cmd) {
     if (!_client.isConnected) return;
     try {
@@ -381,13 +354,7 @@ class HelperStateNotifier extends _HelperStateBase
 
   Future<void> quit() async {
     _cancelPendingSolid();
-    _intentionalDisconnect = true;
-    _wakeReconnectArmed = false;
-    try {
-      await _client.quit();
-    } finally {
-      _intentionalDisconnect = false;
-    }
+    await _client.quit();
   }
 }
 

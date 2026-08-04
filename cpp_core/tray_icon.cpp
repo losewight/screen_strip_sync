@@ -20,6 +20,11 @@
 static constexpr UINT WM_TRAYICON = WM_APP + 1;
 static constexpr UINT kTrayId = 1;
 
+// NOTIFYICON_VERSION_4 下悬停 tip 需要 NIF_SHOWTIP，否则部分 shell 不显示
+#ifndef NIF_SHOWTIP
+#define NIF_SHOWTIP 0x00000080
+#endif
+
 static std::atomic_bool g_started{false};
 static std::atomic_bool g_stop_requested{false};
 static HWND g_hwnd = nullptr;
@@ -36,13 +41,41 @@ static HANDLE serial_or_invalid() {
   return *p;
 }
 
+// 为什么：经典 TrackPopupMenu 默认跟系统浅色；uxtheme
+// 未文档化入口可强制暗色菜单
+static void tray_enable_dark_menus() {
+  static bool done = false;
+  if (done)
+    return;
+  done = true;
+
+  HMODULE ux =
+      LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  if (!ux)
+    return;
+
+  // ordinal 135 = SetPreferredAppMode (Win10 1903+)；ForceDark = 2
+  using SetPreferredAppModeFn = int(WINAPI *)(int);
+  auto set_mode = reinterpret_cast<SetPreferredAppModeFn>(
+      GetProcAddress(ux, MAKEINTRESOURCEA(135)));
+  if (set_mode)
+    set_mode(2);
+
+  // ordinal 136 = FlushMenuThemes：立刻刷新，否则下次右键才变暗
+  using FlushMenuThemesFn = void(WINAPI *)();
+  auto flush = reinterpret_cast<FlushMenuThemesFn>(
+      GetProcAddress(ux, MAKEINTRESOURCEA(136)));
+  if (flush)
+    flush();
+}
+
 static void tray_add_icon(HWND hwnd) {
   HINSTANCE inst = GetModuleHandleW(nullptr);
   ZeroMemory(&g_nid, sizeof(g_nid));
   g_nid.cbSize = sizeof(g_nid);
   g_nid.hWnd = hwnd;
   g_nid.uID = kTrayId;
-  g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+  g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
   g_nid.uCallbackMessage = WM_TRAYICON;
   g_nid.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(IDI_HELPER_TRAY));
   if (!g_nid.hIcon)
@@ -176,7 +209,8 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
     // 为什么：NIM_SETVERSION(NOTIFYICON_VERSION_4) 后事件在 LOWORD(lParam)，
     // HIWORD 是图标 ID；整 lParam 去比永远对不上，右键会像“没反应”
     const UINT ev = LOWORD(lParam);
-    if (ev == WM_LBUTTONDBLCLK) {
+    // VERSION_4：单击优先 NIN_SELECT；兼容旧路径保留 WM_LBUTTONUP
+    if (ev == NIN_SELECT || ev == NIN_KEYSELECT || ev == WM_LBUTTONUP) {
       ui_request_open();
     } else if (ev == WM_RBUTTONUP || ev == WM_CONTEXTMENU) {
       tray_show_menu(hwnd);
@@ -286,6 +320,7 @@ static void tray_thread_main() {
     printf("tray suspend notify ok\n");
   }
 
+  tray_enable_dark_menus();
   tray_add_icon(hwnd);
   printf("tray window ok\n");
 

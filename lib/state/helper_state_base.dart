@@ -8,18 +8,9 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
   StreamSubscription<HelperStatusEvent>? _statusSub;
   StreamSubscription<void>? _disconnectSub;
   bool _engineWanted = false;
-  bool _resumeBusy = false;
   String? _pendingSolid;
   Timer? _solidTimer;
   String? _lastSentSolid;
-
-  /// 方案三：曾成功连过；休眠硬关断连后才允许唤醒自动重连。
-  bool _hadSession = false;
-  bool _wakeReconnectArmed = false;
-  bool _intentionalDisconnect = false;
-  bool _resumeWantEngine = false;
-  String? _resumeSolid;
-  bool _resumePoweredOff = false;
 
   HelperClient get _client => ref.read(helperClientProvider);
 

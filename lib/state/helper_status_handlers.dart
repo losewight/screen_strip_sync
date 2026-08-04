@@ -104,7 +104,6 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void _onStatusPhase(HelperStatusWord word) {
     switch (word) {
       case HelperStatusWord.ready:
-        _hadSession = true;
         // 为什么：配置真源是 helper 已推的 cfg 快照；此处不再回推本地值
         _patch(
           message: '串口就绪',

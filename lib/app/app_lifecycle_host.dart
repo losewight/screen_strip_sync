@@ -9,7 +9,7 @@ import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
 import 'crash_log.dart';
 
-/// App 级生命周期：关窗先 hide 再清理；休眠唤醒仅靠 armed 标志重连（方案三）。
+/// App 级生命周期：关窗视觉立刻消失，后台 bye 后 exit(0)；托盘 `ui show` 置顶。
 class AppLifecycleHost extends ConsumerStatefulWidget {
   const AppLifecycleHost({super.key, required this.child});
 
@@ -20,21 +20,19 @@ class AppLifecycleHost extends ConsumerStatefulWidget {
 }
 
 class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
-    with WidgetsBindingObserver, WindowListener {
+    with WindowListener {
   static const _helperQuitTimeout = Duration(milliseconds: 300);
 
-  AppLifecycleState? _lastLifecycle;
   bool _closing = false;
   StreamSubscription<void>? _uiShowSub;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
-    // 为什么：不拦截则 close 立刻杀进程，quit 来不及写，helper 易僵尸占 COM
+    // 为什么：不拦截则 close 立刻杀进程，bye 来不及写
     unawaited(_armPreventClose());
-    // H5：托盘双击推 ui show → 置顶现有窗口（完整关窗 bye 语义仍属 F3）
+    // 托盘双击且客户端仍在：helper 推 ui show → 置顶
     _uiShowSub = ref.read(helperClientProvider).uiShowStream.listen((_) {
       unawaited(_bringToFront());
     });
@@ -63,44 +61,20 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     unawaited(_uiShowSub?.cancel());
     _uiShowSub = null;
     windowManager.removeListener(this);
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final prev = _lastLifecycle;
-    _lastLifecycle = state;
-
-    // 为什么：仅后台→前台；最小化若不断开 socket 则 armed 为 false，不会误连
-    final cameFromBackground = switch (prev) {
-      AppLifecycleState.paused ||
-      AppLifecycleState.hidden ||
-      AppLifecycleState.detached => true,
-      _ => false,
-    };
-
-    if (state == AppLifecycleState.resumed && cameFromBackground) {
-      ref.read(helperStateProvider.notifier).reconnectAfterResume();
-    }
-  }
-
-  @override
-  void onWindowFocus() {
-    // 仅当 _wakeReconnectArmed（休眠硬关断连）时才会真正重连；最小化不断开则无操作
-    ref.read(helperStateProvider.notifier).reconnectAfterResume();
   }
 
   @override
   void onWindowClose() {
     if (_closing) return;
     _closing = true;
-    unawaited(_hideThenShutdown());
+    unawaited(_shutdown());
   }
 
-  Future<void> _hideThenShutdown() async {
-    CrashLog.event('lifecycle', 'onWindowClose -> _hideThenShutdown');
-    // 为什么：用户点关闭后立刻藏窗，清理在后台做，避免等 destroy 才消失
+  /// 第一拍：立刻 hide（视觉零延迟）；第二拍：bye → exit(0)。
+  /// hide 只服务观感，禁止停在藏后台态。
+  Future<void> _shutdown() async {
+    CrashLog.event('lifecycle', 'onWindowClose -> _shutdown');
     try {
       await windowManager.hide();
       await windowManager.setSkipTaskbar(true);
@@ -108,32 +82,19 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
       // 插件未就绪时忽略
     }
 
-    await _cleanupHelper();
-
     try {
-      await windowManager.setPreventClose(false);
-      await windowManager.destroy();
-    } catch (_) {
-      // destroy 失败时仍 exit 兜底
-    }
-
-    // 为什么：Timer/Socket 等未释放时 VM 可能不退，显式杀主进程
-    CrashLog.event('lifecycle', 'exit(0)');
-    exit(0);
-  }
-
-  Future<void> _cleanupHelper() async {
-    try {
-      await _quitHelperIfConnected().timeout(_helperQuitTimeout);
+      await ref
+          .read(helperStateProvider.notifier)
+          .quit()
+          .timeout(_helperQuitTimeout);
     } on TimeoutException {
-      // helper 挂起或串口卡死：超时后仍走 destroy + exit
+      // helper 挂起：超时后仍 exit
     } catch (_) {
       // 未连接等：忽略
     }
-  }
 
-  Future<void> _quitHelperIfConnected() async {
-    await ref.read(helperStateProvider.notifier).quit();
+    CrashLog.event('lifecycle', 'exit(0)');
+    exit(0);
   }
 
   @override

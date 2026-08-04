@@ -278,8 +278,8 @@ lib/
       *验收*：`flutter run` 能在 helper 已跑时直接连上（不新起进程）；helper 没跑时能自己拉起且只拉一个。
 - [ ] **F2 配置层反转**：`ConfigNotifier` 由 `cfg …` 快照驱动，所有 setter 只发 IPC；删除 `ConfigStore` 写盘（文件与引用一并清理）。
       *验收*：全项目搜不到 Flutter 侧写 `zeeray_config.json` 的代码；改参数后重启 helper 值仍在。
-- [ ] **F3 生命周期归零**：删除 `lib/state/helper_wake_reconnect.dart` 与 `_maybeConnectOnBoot`；`AppLifecycleHost` 的 `setPreventClose` / `hide` / `setSkipTaskbar` 改成「发 `bye` → `exit(0)`」；处理 `ui show`（`windowManager.show()` + `focus()`）；`main.dart` 加命名互斥体单实例。
-      *验收*：点 X 后任务管理器无 Flutter 残留、灯照常亮；托盘双击能唤回窗口；手动双击 Flutter exe 不会开出第二个窗口。
+- [x] **F3 生命周期归零**：删除 `lib/state/helper_wake_reconnect.dart` 与 `_maybeConnectOnBoot`；`AppLifecycleHost` 关窗 = 瞬间 hide 后 `bye` → `exit(0)`；处理 `ui show`；`main.dart` 加 `Local\ZeerayUiSingleton`。
+ *验收*：点 X 后任务管理器无 Flutter 残留、灯照常亮；托盘双击能唤回窗口；手动双击 Flutter exe 不会开出第二个窗口。
 - [ ] **F4 UI 文案与开关**：「连接 / 断开」概念改为「后台服务运行中 / 未运行」；`startOnBoot` 开关改为下发 `set autostart`；连接失败页给「启动后台服务」按钮。
       *验收*：拔掉 helper 后界面文案说人话且能一键恢复。
 
