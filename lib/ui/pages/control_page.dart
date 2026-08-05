@@ -57,67 +57,71 @@ class ControlPage extends ConsumerWidget {
       connectLabel = '连接';
     }
 
+    // 与灯光方案面板（screen_sync / ambience）同宽；SizedBox 防止 Center 下按内容收缩。
     return Center(
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ConnectBar(
-                canConnect: canConnect,
-                connectLabel: connectLabel,
-                canReconnectSerial: canReconnectSerial,
-                onConnect: notifier.connect,
-                onReconnectSerial: notifier.reconnectSerial,
-              ),
-              const SizedBox(height: AppSpacing.text),
-              const SerialPortPicker(radius: _SwitchGroup.radius),
-              const SizedBox(height: AppSpacing.card),
-              _SwitchGroup(
-                children: [
-                  _SwitchRow(
-                    title: '自动休眠同步',
-                    subtitle:
-                        '休眠时软关灯带并释放串口；打开则唤醒后自动恢复睡前灯效，'
-                        '关闭则醒来不恢复',
-                    value: cfg.autoSleepSync,
-                    onChanged: canEdit
-                        ? (v) {
-                            config.setAutoSleepSync(v);
-                            notifier.sendSleepSync(v);
-                          }
-                        : null,
-                  ),
-                  _SwitchRow(
-                    title: '关机时灯带自动关闭',
-                    subtitle: 'Windows 关机时自动关闭灯带',
-                    value: cfg.turnOffOnShutdown,
-                    onChanged: canEdit
-                        ? (v) {
-                            config.setTurnOffOnShutdown(v);
-                            notifier.sendShutdownOff(v);
-                          }
-                        : null,
-                  ),
-                  _SwitchRow(
-                    title: '开机软件自启',
-                    subtitle:
-                        '打开后随 Windows 开机静默启动后台服务，'
-                        '并按上次灯效自动亮起',
-                    value: cfg.startOnBoot,
-                    onChanged: canEdit
-                        ? (v) {
-                            config.setStartOnBoot(v);
-                            notifier.sendAutostart(v);
-                          }
-                        : null,
-                  ),
-                ],
-              ),
-            ],
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ConnectBar(
+                  canConnect: canConnect,
+                  connectLabel: connectLabel,
+                  canReconnectSerial: canReconnectSerial,
+                  onConnect: notifier.connect,
+                  onReconnectSerial: notifier.reconnectSerial,
+                ),
+                const SizedBox(height: AppSpacing.text),
+                const SerialPortPicker(radius: _SwitchGroup.radius),
+                const SizedBox(height: AppSpacing.card),
+                _SwitchGroup(
+                  children: [
+                    _SwitchRow(
+                      title: '自动休眠同步',
+                      subtitle:
+                          '休眠时软关灯带并释放串口；打开则唤醒后自动恢复睡前灯效，'
+                          '关闭则醒来不恢复',
+                      value: cfg.autoSleepSync,
+                      onChanged: canEdit
+                          ? (v) {
+                              config.setAutoSleepSync(v);
+                              notifier.sendSleepSync(v);
+                            }
+                          : null,
+                    ),
+                    _SwitchRow(
+                      title: '关机时灯带自动关闭',
+                      subtitle: 'Windows 关机时自动关闭灯带',
+                      value: cfg.turnOffOnShutdown,
+                      onChanged: canEdit
+                          ? (v) {
+                              config.setTurnOffOnShutdown(v);
+                              notifier.sendShutdownOff(v);
+                            }
+                          : null,
+                    ),
+                    _SwitchRow(
+                      title: '开机软件自启',
+                      subtitle:
+                          '打开后随 Windows 开机静默启动后台服务，'
+                          '并按上次灯效自动亮起',
+                      value: cfg.startOnBoot,
+                      onChanged: canEdit
+                          ? (v) {
+                              config.setStartOnBoot(v);
+                              notifier.sendAutostart(v);
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

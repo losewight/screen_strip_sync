@@ -2,8 +2,6 @@
 
 #include "dxgi_mapped.h"
 
-#include <cstdio>
-
 // 屏幕氛围 region 采样：与 map 路径正交；抓帧走 dxgi_map_desktop。
 DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
                                     char algo, int blur, int dark,

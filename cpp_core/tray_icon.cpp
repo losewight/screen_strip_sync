@@ -120,25 +120,30 @@ static void tray_soft_off() {
   printf("tray soft_off\n");
 }
 
-static void tray_engine_toggle() {
+static void tray_start_engine() {
   HANDLE h = serial_or_invalid();
   if (h == INVALID_HANDLE_VALUE) {
-    printf("tray engine: no serial\n");
+    printf("tray start engine: no serial\n");
     return;
   }
-  if (engine_is_running()) {
-    engine_stop();
-    engine_set_intent_soft_off();
-    send_solid(h, "000000");
-    config_set_last_scene("off");
-    printf("tray engine stop + soft_off\n");
-  } else {
-    engine_start(h);
-    engine_set_intent_engine();
-    config_set_last_scene("engine");
-    printf("tray engine start\n");
-  }
+  engine_start(h);
+  engine_set_intent_engine();
+  config_set_last_scene("engine");
   ipc_push_runtime_status();
+  printf("tray start engine (map)\n");
+}
+
+static void tray_start_region() {
+  HANDLE h = serial_or_invalid();
+  if (h == INVALID_HANDLE_VALUE) {
+    printf("tray start region: no serial\n");
+    return;
+  }
+  engine_start_region(h);
+  engine_set_intent_region();
+  config_set_last_scene("region");
+  ipc_push_runtime_status();
+  printf("tray start region\n");
 }
 
 static void tray_toggle_autostart() {
@@ -158,12 +163,12 @@ static void tray_show_menu(HWND hwnd) {
   if (!menu)
     return;
 
+  // 打开界面 | 流光溢彩 屏幕氛围 关灯 | 开机自启 | 退出并关灯
   AppendMenuW(menu, MF_STRING, IDM_TRAY_OPEN_UI, L"打开界面");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
-  const bool running = engine_is_running();
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_ENGINE_TOGGLE,
-              running ? L"停止追色" : L"开始追色");
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_ENGINE, L"流光溢彩");
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_REGION, L"屏幕氛围");
   AppendMenuW(menu, MF_STRING, IDM_TRAY_SOFT_OFF, L"关灯");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
@@ -172,11 +177,12 @@ static void tray_show_menu(HWND hwnd) {
   AppendMenuW(menu, MF_STRING | (c.startOnBoot ? MF_CHECKED : 0),
               IDM_TRAY_AUTOSTART, L"开机自启");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_EXIT, L"退出");
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_EXIT, L"退出并关灯");
 
   HANDLE h = serial_or_invalid();
   if (h == INVALID_HANDLE_VALUE) {
-    EnableMenuItem(menu, IDM_TRAY_ENGINE_TOGGLE, MF_GRAYED);
+    EnableMenuItem(menu, IDM_TRAY_START_ENGINE, MF_GRAYED);
+    EnableMenuItem(menu, IDM_TRAY_START_REGION, MF_GRAYED);
     EnableMenuItem(menu, IDM_TRAY_SOFT_OFF, MF_GRAYED);
   }
 
@@ -229,8 +235,11 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
     case IDM_TRAY_OPEN_UI:
       ui_request_open();
       break;
-    case IDM_TRAY_ENGINE_TOGGLE:
-      tray_engine_toggle();
+    case IDM_TRAY_START_ENGINE:
+      tray_start_engine();
+      break;
+    case IDM_TRAY_START_REGION:
+      tray_start_region();
       break;
     case IDM_TRAY_SOFT_OFF:
       tray_soft_off();

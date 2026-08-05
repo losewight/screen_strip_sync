@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
 import '../../app/spacing.dart';
+import '../../app/theme.dart';
 import 'screen_color_picker.dart';
 
 /// 纯色预设色卡：点一下发 `solid RRGGBB`。
@@ -11,6 +12,7 @@ class ColorSwatchButton extends StatelessWidget {
     required this.enabled,
     required this.onPressed,
     this.tooltip,
+    this.outlined = false,
   });
 
   final Color color;
@@ -18,11 +20,18 @@ class ColorSwatchButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final String? tooltip;
 
+  /// 自定义色圈描边，与预设区分。
+  final bool outlined;
+
   @override
   Widget build(BuildContext context) {
     final child = Material(
       color: enabled ? color : color.withValues(alpha: 0.35),
-      shape: const CircleBorder(),
+      shape: CircleBorder(
+        side: outlined
+            ? const BorderSide(color: AppTheme.accent, width: 2)
+            : BorderSide.none,
+      ),
       elevation: enabled ? 2 : 0,
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -46,6 +55,15 @@ String colorToSolidHex(Color c) {
   return '${r.toRadixString(16).padLeft(2, '0')}'
       '${g.toRadixString(16).padLeft(2, '0')}'
       '${b.toRadixString(16).padLeft(2, '0')}';
+}
+
+/// 解析 6 位 hex；非法返回 `null`。
+Color? colorFromSolidHex(String hex) {
+  final h = hex.trim().toLowerCase();
+  if (h.length != 6) return null;
+  final v = int.tryParse(h, radix: 16);
+  if (v == null) return null;
+  return Color(0xFF000000 | v);
 }
 
 /// 屏幕取色器；确认返回选中色，取消返回 `null`。

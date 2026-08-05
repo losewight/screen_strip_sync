@@ -20,101 +20,110 @@ class ScreenSyncPanel extends ConsumerWidget {
     final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
     final canEdit = can && ref.watch(configReadyProvider);
+    // 与 regionSmooth 同概念、极性相反：UI 平滑度 = 1 − α（α∈[0.05,1] → 平滑∈[0,0.95]）。
+    final smooth = (1.0 - cfg.emaAlpha).clamp(0.0, 0.95);
 
     return Center(
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SchemeCard(
-                title: '引擎',
-                actions: [
-                  FilledButton(
-                    onPressed: can ? () => notifier.send('start') : null,
-                    child: const Text('开始'),
-                  ),
-                  OutlinedButton(
-                    onPressed: can ? notifier.softOff : null,
-                    child: const Text('关灯'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.text),
-              SchemeCard(
-                title: '映射校准',
-                titleTrailing: Tooltip(
-                  message:
-                      '逐段点亮灯带并框选屏幕区域，\n'
-                      '把每段灯珠映射到对应画面位置，\n'
-                      '用于跟色采样；未校准时按顶边均分。',
-                  child: Icon(
-                    Icons.error_outline,
-                    size: 16,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                child: const SegmentMapCalibrator(),
-              ),
-              const SizedBox(height: AppSpacing.text),
-              SchemeCard(
-                title: '跟色参数',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SchemeParamLabel(
-                      '颜色跟进速度: ${cfg.emaAlpha.toStringAsFixed(2)}（越大越跟手）',
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SchemeCard(
+                  title: '流光溢彩引擎',
+                  actions: [
+                    FilledButton(
+                      onPressed: can ? () => notifier.send('start') : null,
+                      child: const Text('开始'),
                     ),
-                    Slider(
-                      value: cfg.emaAlpha,
-                      min: 0.05,
-                      max: 1.0,
-                      divisions: 19,
-                      label: cfg.emaAlpha.toStringAsFixed(2),
-                      onChanged: canEdit ? config.setEmaAlpha : null,
-                      onChangeEnd: canEdit ? notifier.sendEmaAlpha : null,
-                    ),
-                    const SizedBox(height: AppSpacing.control),
-                    SchemeParamLabel(
-                      '画面柔化: ${cfg.blurStep}（越大越稳，0 为不柔化）',
-                    ),
-                    Slider(
-                      value: cfg.blurStep.toDouble(),
-                      min: 0,
-                      max: 8,
-                      divisions: 8,
-                      label: '${cfg.blurStep}',
-                      onChanged: canEdit
-                          ? (v) => config.setBlurStep(v.round())
-                          : null,
-                      onChangeEnd: canEdit
-                          ? (v) => notifier.sendBlur(v.round())
-                          : null,
-                    ),
-                    const SizedBox(height: AppSpacing.control),
-                    SchemeParamLabel(
-                      '暗部过滤: ${cfg.nearBlack}（越大越忽略黑边）',
-                    ),
-                    Slider(
-                      value: cfg.nearBlack.toDouble(),
-                      min: 0,
-                      max: 64,
-                      divisions: 64,
-                      label: '${cfg.nearBlack}',
-                      onChanged: canEdit
-                          ? (v) => config.setNearBlack(v.round())
-                          : null,
-                      onChangeEnd: canEdit
-                          ? (v) => notifier.sendNearBlack(v.round())
-                          : null,
+                    OutlinedButton(
+                      onPressed: can ? notifier.softOff : null,
+                      child: const Text('关灯'),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.text),
+                SchemeCard(
+                  title: '映射校准',
+                  titleTrailing: Tooltip(
+                    message:
+                        '逐段点亮灯带并框选屏幕区域，\n'
+                        '把每段灯珠映射到对应画面位置，\n'
+                        '用于跟色采样；未校准时按顶边均分。',
+                    child: Icon(
+                      Icons.error_outline,
+                      size: 16,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  child: const SegmentMapCalibrator(),
+                ),
+                const SizedBox(height: AppSpacing.text),
+                SchemeCard(
+                  title: '跟色参数',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SchemeParamLabel(
+                        '时间过渡平滑度: ${smooth.toStringAsFixed(2)}',
+                      ),
+                      Slider(
+                        value: smooth,
+                        min: 0.0,
+                        max: 0.95,
+                        divisions: 19,
+                        label: smooth.toStringAsFixed(2),
+                        onChanged: canEdit
+                            ? (v) => config.setEmaAlpha(1.0 - v)
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendEmaAlpha(1.0 - v)
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel(
+                        '画面模糊/降噪程度: ${cfg.blurStep}（0为不模糊）',
+                      ),
+                      Slider(
+                        value: cfg.blurStep.toDouble(),
+                        min: 0,
+                        max: 8,
+                        divisions: 8,
+                        label: '${cfg.blurStep}',
+                        onChanged: canEdit
+                            ? (v) => config.setBlurStep(v.round())
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendBlur(v.round())
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel(
+                        '暗部过滤: ${cfg.nearBlack}（越大越忽略黑边）',
+                      ),
+                      Slider(
+                        value: cfg.nearBlack.toDouble(),
+                        min: 0,
+                        max: 64,
+                        divisions: 64,
+                        label: '${cfg.nearBlack}',
+                        onChanged: canEdit
+                            ? (v) => config.setNearBlack(v.round())
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendNearBlack(v.round())
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
