@@ -12,16 +12,27 @@ add_executable(helper WIN32
   helper_main.cpp
   helper_lifecycle.cpp
   config_store.cpp
+  config_json.cpp
   autostart.cpp
   serial_port.cpp
   fake_bgra.cpp
-  light_engine.cpp
+  engine_params.cpp
+  engine_serial.cpp
+  engine_frame.cpp
+  engine_intent.cpp
   ipc_loop.cpp
+  ipc_push.cpp
+  ipc_dispatch.cpp
   dxgi_capture.cpp
+  dxgi_region.cpp
   tray_icon.cpp
   ui_launcher.cpp
   helper.rc
 )
 target_link_libraries(helper PRIVATE kernel32 shell32 comctl32 advapi32 ws2_32 d3d11 dxgi)
 # 为什么：GUI 子系统下 freopen 后原生 printf 仍可能丢；/FI 宏转到 g_helper_log
-target_compile_options(helper PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/helper_log.h")
+# /utf-8：源文件与执行字符集均按 UTF-8，消掉中文注释触发的 C4819（代码页 936）
+target_compile_options(helper PRIVATE
+  "/FI${CMAKE_CURRENT_SOURCE_DIR}/helper_log.h"
+  /utf-8
+)

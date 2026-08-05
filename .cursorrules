@@ -122,13 +122,15 @@ flowchart LR
 |------|------|------|
 | `helper_main.cpp` | 入口：`WinMain` → 单实例 → 参数解析 → 日志重定向 → 读配置 → DXGI → 串口就绪 → 托盘 + 电源窗 → 恢复场景 → `ipc_run` 阻塞 → `helper_shutdown` | 阶段 H 改造 |
 | `helper_lifecycle.{h,cpp}` | 退出序列（`helper_shutdown` 多路径防重入）、休眠软关 / 唤醒恢复 | 阶段 H 扩 |
-| `config_store.{h,cpp}` | 读写 exe 同目录 `zeeray_config.json`；字段与 Dart `AppConfig` 一一对齐；debounce 写盘 | **H2 新增** |
+| `config_store.{h,cpp}` | 配置属主：load/apply/setter/debounce 写盘 | H2 |
+| `config_json.{h,cpp}` + `config_clamp.h` | JSON 解析/格式化与数值夹紧（从 store 拆出） | |
+| `dxgi_capture.cpp` + `dxgi_mapped.h` | Desktop Duplication、共享 map/unmap、map 路径采样 | 就绪 |
+| `dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
 | `tray_icon.{h,cpp}` | 隐藏顶层窗 + `Shell_NotifyIcon` + 右键菜单 + `WM_TASKBARCREATED` 重加；**合并原 `power_watch` 的电源消息** | **H4 新增** |
 | `ui_launcher.{h,cpp}` | 解析 Flutter exe 路径、三级判定后 `CreateProcess`、记子进程句柄 | **H5 新增** |
 | `autostart.{h,cpp}` | 读写 `HKCU\...\Run`，值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移 | **H7 新增** |
-| `ipc_loop.cpp` | Winsock 监听 / 循环 accept / 按行读 / `dispatch_line` / `send_status` / `push_config_snapshot` / `ipc_cancel` | 阶段 H 改造 |
-| `light_engine.cpp` | 握手、纯色、`produce_colors`（DXGI 采样 → EMA → 组帧）、`consumer_to_serial`、`frame_loop`、start/stop、intent 记账 | 基本就绪 |
-| `dxgi_capture.cpp` | Desktop Duplication、stride 采样、10 段边缘、blurStep 水平平均 | 就绪 |
+| `ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 状态·配置回推 / 命令分派；对外仍只暴露 `ipc_loop.h` | 阶段 H 改造 |
+| `engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop+start/stop、intent 记账与场景恢复 | 基本就绪 |
 | `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
 | `power_watch.cpp` | 隐藏窗拦截休眠 / 会话结束 | H4 并入 `tray_icon.cpp` 后删除 |
 
@@ -139,8 +141,8 @@ lib/
 ├── main.dart               # 单实例守卫 + 窗口初始化 + runApp
 ├── app/                    # MaterialApp 壳、生命周期（关窗 = bye + exit）
 ├── ui/
-│   ├── pages/              # control / lighting_schemes / settings
-│   └── widgets/            # 含 segment_map_calibrator、segment_rect_overlay
+│   ├── pages/              # control / lighting_schemes（薄壳）/ settings / region_bbox_pick
+│   └── widgets/            # scheme 面板、calibrator、screen_mask_select 等
 ├── state/                  # helper_state（含 map IPC mixin）、config_state（由 cfg 快照驱动）
 ├── ipc/                    # helper_client、primary_monitor_capture（截屏）
 └── config/                 # app_config（只读模型 + cfg 行解析）、segment_sample、segment_map_codec
