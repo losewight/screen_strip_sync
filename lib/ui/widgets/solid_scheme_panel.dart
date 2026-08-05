@@ -27,22 +27,27 @@ class SolidSchemePanel extends ConsumerStatefulWidget {
 }
 
 class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
-  late Color _customColor;
   late Color _activeColor;
 
   @override
   void initState() {
     super.initState();
-    final seeded = _seedColor(ref.read(configProvider).lastScene);
-    _customColor = seeded;
-    _activeColor = seeded;
+    final cfg = ref.read(configProvider);
+    _activeColor = _seedActive(cfg);
   }
 
-  static Color _seedColor(String lastScene) {
+  static Color _seedActive(AppConfig cfg) {
     const prefix = 'solid ';
-    if (!lastScene.startsWith(prefix)) return SolidSchemePanel._defaultCustom;
-    final c = colorFromSolidHex(lastScene.substring(prefix.length));
-    return c ?? SolidSchemePanel._defaultCustom;
+    if (cfg.lastScene.startsWith(prefix)) {
+      final c = colorFromSolidHex(cfg.lastScene.substring(prefix.length));
+      if (c != null) return c;
+    }
+    return _customFromCfg(cfg);
+  }
+
+  static Color _customFromCfg(AppConfig cfg) {
+    return colorFromSolidHex(cfg.lastCustomSolid) ??
+        SolidSchemePanel._defaultCustom;
   }
 
   void _sendSolid(HelperStateNotifier notifier, Color color) {
@@ -50,40 +55,47 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
     notifier.sendSolid(colorToSolidHex(color));
   }
 
-  void _applyCustom(HelperStateNotifier notifier, Color picked) {
-    setState(() {
-      _customColor = picked;
-      _activeColor = picked;
-    });
-    notifier.sendSolid(colorToSolidHex(picked));
+  void _applyCustom(
+    ConfigNotifier config,
+    HelperStateNotifier notifier,
+    Color picked,
+  ) {
+    final hex = colorToSolidHex(picked);
+    setState(() => _activeColor = picked);
+    config.setLastCustomSolid(hex);
+    notifier.sendLastCustomSolid(hex);
+    notifier.sendSolid(hex);
   }
 
   Future<void> _pickColor(
     BuildContext context,
+    ConfigNotifier config,
     HelperStateNotifier notifier,
   ) async {
     final picked = await showSolidColorPicker(context);
     if (picked == null || !context.mounted) return;
-    _applyCustom(notifier, picked);
+    _applyCustom(config, notifier, picked);
   }
 
   Future<void> _pickPalette(
     BuildContext context,
+    ConfigNotifier config,
     HelperStateNotifier notifier,
+    Color initial,
   ) async {
-    final picked = await showPaletteColorPicker(
-      context,
-      initial: _customColor,
-    );
+    final picked = await showPaletteColorPicker(context, initial: initial);
     if (picked == null || !context.mounted) return;
-    _applyCustom(notifier, picked);
+    _applyCustom(config, notifier, picked);
   }
 
   @override
   Widget build(BuildContext context) {
     final ui = ref.watch(helperStateProvider);
     final notifier = ref.read(helperStateProvider.notifier);
+    final cfg = ref.watch(configProvider);
+    final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
+    final customColor = _customFromCfg(cfg);
 
     return Center(
       child: SingleChildScrollView(
@@ -127,16 +139,21 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
                         const SizedBox(width: AppSpacing.text),
                       ],
                       ColorSwatchButton(
-                        color: _customColor,
+                        color: customColor,
                         enabled: can,
                         outlined: true,
                         tooltip: '自定义',
-                        onPressed: () => _pickPalette(context, notifier),
+                        onPressed: () => _pickPalette(
+                          context,
+                          config,
+                          notifier,
+                          customColor,
+                        ),
                       ),
                       const Spacer(),
                       OutlinedButton.icon(
                         onPressed: can
-                            ? () => _pickColor(context, notifier)
+                            ? () => _pickColor(context, config, notifier)
                             : null,
                         icon: const Icon(Icons.colorize, size: 18),
                         label: const Text('取色'),
@@ -144,7 +161,12 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
                       const SizedBox(width: AppSpacing.control),
                       OutlinedButton.icon(
                         onPressed: can
-                            ? () => _pickPalette(context, notifier)
+                            ? () => _pickPalette(
+                                context,
+                                config,
+                                notifier,
+                                customColor,
+                              )
                             : null,
                         icon: const Icon(Icons.palette_outlined, size: 18),
                         label: const Text('调色盘'),

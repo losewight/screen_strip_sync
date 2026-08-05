@@ -398,6 +398,33 @@ bool config_set_region_bbox(int l, int t, int w, int h) {
   return true;
 }
 
+bool config_set_last_custom_solid(const char *rrggbb) {
+  if (!rrggbb || strlen(rrggbb) != 6)
+    return false;
+  char norm[8];
+  for (int i = 0; i < 6; ++i) {
+    char c = rrggbb[i];
+    bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F');
+    if (!ok)
+      return false;
+    if (c >= 'A' && c <= 'F')
+      c = (char)(c - 'A' + 'a');
+    norm[i] = c;
+  }
+  norm[6] = '\0';
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (strcmp(g_cfg.lastCustomSolid, norm) == 0)
+      return true;
+    snprintf(g_cfg.lastCustomSolid, sizeof(g_cfg.lastCustomSolid), "%s", norm);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  printf("config_set_last_custom_solid: %s\n", norm);
+  return true;
+}
+
 void config_set_last_scene(const char *scene) {
   if (!scene)
     return;

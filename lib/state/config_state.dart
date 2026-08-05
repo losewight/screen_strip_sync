@@ -79,6 +79,12 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(regionBBox: box);
   }
 
+  void setLastCustomSolid(String hex) {
+    final h = hex.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
+    state = state.copyWith(lastCustomSolid: h);
+  }
+
   void setComPort(String value) {
     state = state.copyWith(comPort: value.trim());
   }

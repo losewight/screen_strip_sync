@@ -112,6 +112,8 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg region_dark %d\n", c.regionDark);
   send_line(client, "cfg region_bbox %d,%d,%d,%d\n", c.regionBBox.l,
             c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
+  // 空串也推，便于 UI 区分「未设」与缺字段
+  send_line(client, "cfg last_custom_solid %s\n", c.lastCustomSolid);
 
   if (!c.hasMap) {
     send_line(client, "cfg map default\n");

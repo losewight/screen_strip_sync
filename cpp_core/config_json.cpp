@@ -1,4 +1,4 @@
-#include "config_json.h"
+﻿#include "config_json.h"
 
 #include "config_clamp.h"
 
@@ -400,6 +400,26 @@ bool config_parse_json(const char *json, HelperConfig *cfg) {
         return false;
       if (s[0] != '\0')
         snprintf(cfg->lastScene, sizeof(cfg->lastScene), "%s", s);
+    } else if (strcmp(key, "lastCustomSolid") == 0) {
+      char s[8];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      // 缺/非法保持默认空串；合法则小写落内存
+      if (strlen(s) == 6) {
+        bool ok = true;
+        for (int i = 0; i < 6; ++i) {
+          char c = s[i];
+          if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                (c >= 'A' && c <= 'F'))) {
+            ok = false;
+            break;
+          }
+          if (c >= 'A' && c <= 'F')
+            s[i] = (char)(c - 'A' + 'a');
+        }
+        if (ok)
+          snprintf(cfg->lastCustomSolid, sizeof(cfg->lastCustomSolid), "%s", s);
+      }
     } else if (strcmp(key, "regionAlgo") == 0) {
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
@@ -510,6 +530,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append("  \"lastScene\": ");
   append_escaped(&o, c.lastScene);
   o.append(",\n");
+  o.append("  \"lastCustomSolid\": ");
+  append_escaped(&o, c.lastCustomSolid);
+  o.append(",\n");
 
   o.append("  \"regionAlgo\": ");
   append_escaped(&o, c.regionAlgo == 'x' ? "max" : "mean");
@@ -545,4 +568,3 @@ std::string config_format_json(const HelperConfig &c) {
   o.append("}\n");
   return o;
 }
-

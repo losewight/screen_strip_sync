@@ -220,6 +220,7 @@ lib/
 | `set region_smooth <0..0.99>` | 屏幕氛围时间惯性（高=更钝；与 map `alpha` 极性相反） |
 | `set region_dark <0..50>` | 屏幕氛围暗场：R/G/B 皆低于阈值 → 该段置黑 |
 | `set region_bbox L,T,W,H` | 屏幕氛围取色框（主屏百分比整数 0..100）；非法整句忽略 |
+| `set last_custom_solid RRGGBB` | 纯色「自定义」色圈；6 位 hex，helper clamp 小写后存盘 |
 
 **所有 `set …` 生效后 helper 都要 debounce 写回 JSON。** 场景类命令（`start` / `start_region` / `stop` / `solid` / `soft_off`）同时更新 `lastScene`。
 
@@ -227,7 +228,7 @@ lib/
 
 | 文本 | 含义 |
 |------|------|
-| `cfg alpha 0.30` 等 | 配置快照逐项回推，key 与 5.1 的 `set` 同名（含 `region_algo` / `region_blur` / `region_smooth` / `region_dark` / `region_bbox`） |
+| `cfg alpha 0.30` 等 | 配置快照逐项回推，key 与 5.1 的 `set` 同名（含 `region_algo` / `region_blur` / `region_smooth` / `region_dark` / `region_bbox` / `last_custom_solid`） |
 | `cfg map default` / `cfg map x0,y0,...` | 当前采样映射 |
 | `cfg scene engine\|region\|solid RRGGBB\|off\|idle` | 上次 / 当前场景，供 UI 高亮对应按钮 |
 | `cfg end` | **快照结束标记**；Flutter 收到才认为配置完整、可渲染 |
@@ -245,7 +246,7 @@ lib/
 
 ### 5.3 配置文件字段（`zeeray_config.json`，exe 同目录）
 
-`emaAlpha` / `nearBlack` / `blurStep` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）。
+`emaAlpha` / `nearBlack` / `blurStep` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）/ **`lastCustomSolid`**（纯色自定义色圈，6 位 hex，可空）。
 
 字段名保持与旧 Dart `AppConfig` 一致，**老配置文件必须能被新 helper 直接读**；缺字段回退默认，解析失败整体回退默认且不阻塞启动。
 

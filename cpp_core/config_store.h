@@ -34,6 +34,8 @@ struct HelperConfig {
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
   // 合法：engine|region|idle|off|solid RRGGBB
   char lastScene[32] = "idle";
+  // 纯色 UI「自定义」色圈；6 位小写 hex，空=未设（UI 用默认紫）
+  char lastCustomSolid[8] = "";
 };
 
 bool config_path(char *out, size_t cap);
@@ -58,6 +60,8 @@ void config_set_shutdown_off(bool on);
 void config_set_autostart(bool on); // JSON + HKCU Run
 void config_set_last_scene(
     const char *scene); // engine|region|idle|off|solid RRGGBB
+// 6 位 hex；非法返回 false（调用方忽略）
+bool config_set_last_custom_solid(const char *rrggbb);
 void config_set_last_connected_com(const char *com);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）

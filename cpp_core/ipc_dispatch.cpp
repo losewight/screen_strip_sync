@@ -347,6 +347,22 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set last_custom_solid ", 22) == 0) {
+    const char *p = line + 22;
+    if (!is_rrggbb(p)) {
+      printf("bad set last_custom_solid: [%s]\n", p);
+    } else if (!config_set_last_custom_solid(p)) {
+      printf("bad set last_custom_solid: [%s]\n", p);
+    } else {
+      // 为什么：大小写纠偏才回推（存盘小写）；合法小写 UI 已乐观采纳
+      HelperConfig after{};
+      config_copy(&after);
+      if (strcmp(after.lastCustomSolid, p) != 0)
+        ipc_push_config_snapshot();
+      printf("cmd=set last_custom_solid\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set region_bbox ", 16) == 0) {
     const char *p = line + 16;
     int l = 0, t = 0, w = 0, h = 0;

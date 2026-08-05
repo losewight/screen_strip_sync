@@ -35,6 +35,7 @@ class AppConfig {
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
     this.lastScene = 'idle',
+    this.lastCustomSolid = '',
   });
 
   /// EMA 平滑系数；取值域约 0.05..1.0（流光溢彩 map 路径）。
@@ -84,6 +85,9 @@ class AppConfig {
   /// helper `cfg scene`；含 `engine` / `region` / …
   final String lastScene;
 
+  /// 纯色「自定义」色圈；6 位小写 hex，空=未设。
+  final String lastCustomSolid;
+
   bool get hasSegmentMap =>
       segmentMap != null && segmentMap!.length == kSegmentCount;
 
@@ -105,6 +109,7 @@ class AppConfig {
     int? regionDark,
     RegionBBox? regionBBox,
     String? lastScene,
+    String? lastCustomSolid,
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
@@ -123,6 +128,7 @@ class AppConfig {
       regionDark: regionDark ?? this.regionDark,
       regionBBox: regionBBox ?? this.regionBBox,
       lastScene: lastScene ?? this.lastScene,
+      lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
     );
   }
 
@@ -146,6 +152,7 @@ class AppConfig {
     var regionDark = 15;
     var regionBBox = const RegionBBox();
     var scene = 'idle';
+    var lastCustomSolid = '';
 
     for (final raw in lines) {
       var line = raw.trim();
@@ -209,6 +216,13 @@ class AppConfig {
           if (box != null) regionBBox = box;
         case 'scene':
           if (val.isNotEmpty) scene = val;
+        case 'last_custom_solid':
+          final h = val.trim().toLowerCase();
+          if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) {
+            lastCustomSolid = h;
+          } else if (h.isEmpty) {
+            lastCustomSolid = '';
+          }
         default:
           break;
       }
@@ -231,6 +245,7 @@ class AppConfig {
       regionDark: regionDark,
       regionBBox: regionBBox,
       lastScene: scene,
+      lastCustomSolid: lastCustomSolid,
     );
   }
 }

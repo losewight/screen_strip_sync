@@ -106,13 +106,15 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
           runSpacing: AppSpacing.text,
           alignment: WrapAlignment.center,
           children: [
-            FilledButton(
+            FilledButton.icon(
               onPressed: (_busy || !can) ? null : _start,
-              child: Text(_busy ? '准备中…' : '开始校准'),
+              icon: const Icon(Icons.center_focus_strong, size: 18),
+              label: Text(_busy ? '准备中…' : '开始校准'),
             ),
-            OutlinedButton(
+            OutlinedButton.icon(
               onPressed: cfg.hasSegmentMap && can ? _restoreDefault : null,
-              child: const Text('恢复默认映射'),
+              icon: const Icon(Icons.restart_alt, size: 18),
+              label: const Text('恢复默认映射'),
             ),
           ],
         ),

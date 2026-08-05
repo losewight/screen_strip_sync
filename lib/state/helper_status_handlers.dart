@@ -168,4 +168,5 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendRegionSmooth(double smooth);
   void sendRegionDark(int dark);
   void sendRegionBBox(RegionBBox box);
+  void sendLastCustomSolid(String rrggbb);
 }

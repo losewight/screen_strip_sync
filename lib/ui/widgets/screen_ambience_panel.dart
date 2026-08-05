@@ -71,7 +71,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                   title: '取色区域',
                   child: Row(
                     children: [
-                      FilledButton.tonalIcon(
+                      FilledButton.icon(
                         onPressed: canEdit
                             ? () => _pickRegionBBox(context, ref)
                             : null,
