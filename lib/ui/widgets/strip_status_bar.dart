@@ -55,16 +55,16 @@ class StripStatusBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.text),
-          _StatusPill(color: accent, label: label),
+          StripStatusPill(color: accent, label: label),
         ],
       ),
     );
   }
 }
 
-/// 右侧状态胶囊：色点 + 短标签，Win11 风格弱底色。
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.color, required this.label});
+/// 状态胶囊：色点 + 短标签，Win11 风格弱底色。
+class StripStatusPill extends StatelessWidget {
+  const StripStatusPill({super.key, required this.color, required this.label});
 
   final Color color;
   final String label;

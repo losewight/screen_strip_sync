@@ -7,6 +7,7 @@ import '../../state/lighting_scheme_tab.dart';
 import '../pages/control_page.dart';
 import '../pages/lighting_schemes_page.dart';
 import '../pages/settings_page.dart';
+import '../widgets/helper_phase_style.dart';
 import '../widgets/mode_tab_bar.dart';
 import '../widgets/store_sidebar.dart';
 import '../widgets/store_title_bar.dart';
@@ -38,6 +39,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final phase = ref.watch(helperStateProvider).phase;
+    final phaseStyle = HelperPhaseStyle.of(phase);
     final lightingTab = ref.watch(lightingSchemeTabProvider);
 
     return Scaffold(
@@ -81,6 +83,10 @@ class _MainShellState extends ConsumerState<MainShell> {
                           onSelected: ref
                               .read(lightingSchemeTabProvider.notifier)
                               .select,
+                          trailing: StripStatusPill(
+                            color: phaseStyle.accent,
+                            label: phaseStyle.label,
+                          ),
                         ),
                       // 软件设置无顶栏，进度条一并藏起；Offstage 保单实例状态
                       Offstage(

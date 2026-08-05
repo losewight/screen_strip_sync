@@ -156,8 +156,8 @@ class _SegmentMapCalibratePageState
   @override
   Widget build(BuildContext context) {
     final hint =
-        '拖拽鼠标划定屏幕区域\n'
-        '第 ${_seg + 1} / $kSegmentCount 段 · 按 ESC 取消';
+        '第 ${_seg + 1}/$kSegmentCount 段灯带已亮起，请框选需要映射到屏幕上的位置\n'
+        '按 ESC 取消';
 
     return PopScope(
       canPop: false,

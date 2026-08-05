@@ -103,6 +103,21 @@ abstract final class AppTheme {
       ),
     ),
     iconTheme: const IconThemeData(color: textPrimary, size: 24),
+    tooltipTheme: TooltipThemeData(
+      waitDuration: const Duration(milliseconds: 400),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: menuBorderRadius,
+        border: Border.all(color: divider),
+      ),
+      textStyle: const TextStyle(
+        fontFamily: fontFamily,
+        fontSize: 12,
+        height: 1.45,
+        color: textPrimary,
+      ),
+    ),
     dropdownMenuTheme: DropdownMenuThemeData(
       menuStyle: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(cardBg),

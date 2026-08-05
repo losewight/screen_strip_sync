@@ -3,26 +3,27 @@
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
 
-/// 顶部模式页签的一项：图标 + 文案 + 图标专属色。
+/// 顶部模式页签的一项：可选图标 + 文案。
 class ModeTabItem {
   const ModeTabItem({
-    required this.icon,
-    required this.selectedIcon,
+    this.icon,
+    this.selectedIcon,
     required this.label,
   });
 
-  final IconData icon;
-  final IconData selectedIcon;
+  final IconData? icon;
+  final IconData? selectedIcon;
   final String label;
 }
 
-/// 内容区顶部的模式切换条（屏幕同步 / 纯色 / 特效 / 音乐）。
+/// 内容区顶部的模式切换条（流光溢彩 / 屏幕氛围 / 纯色 / 特效）。
 class ModeTabBar extends StatelessWidget {
   const ModeTabBar({
     super.key,
     required this.items,
     required this.selectedIndex,
     required this.onSelected,
+    this.trailing,
   });
 
   static const double height = 64;
@@ -31,6 +32,9 @@ class ModeTabBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
+  /// 右侧附加控件（如状态胶囊）。
+  final Widget? trailing;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -38,20 +42,29 @@ class ModeTabBar extends StatelessWidget {
       decoration: const BoxDecoration(
         color: AppTheme.tabBarBg,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.text),
-      alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < items.length; i++)
-              _ModeTab(
-                item: items[i],
-                selected: i == selectedIndex,
-                onTap: () => onSelected(i),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.card),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    _ModeTab(
+                      item: items[i],
+                      selected: i == selectedIndex,
+                      onTap: () => onSelected(i),
+                    ),
+                ],
               ),
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.text),
+            trailing!,
           ],
-        ),
+        ],
       ),
     );
   }
@@ -110,12 +123,16 @@ class _ModeTabState extends State<_ModeTab> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  widget.selected ? widget.item.selectedIcon : widget.item.icon,
-                  size: 20,
-                  color: fg,
-                ),
-                const SizedBox(width: AppSpacing.control),
+                if (widget.item.icon != null) ...[
+                  Icon(
+                    widget.selected
+                        ? (widget.item.selectedIcon ?? widget.item.icon!)
+                        : widget.item.icon!,
+                    size: 20,
+                    color: fg,
+                  ),
+                  const SizedBox(width: AppSpacing.control),
+                ],
                 AnimatedDefaultTextStyle(
                   duration: AppTheme.navDuration,
                   curve: AppTheme.navCurve,

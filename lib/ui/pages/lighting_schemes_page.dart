@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
+import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
@@ -15,7 +16,12 @@ const lightingSchemeTabs = <ModeTabItem>[
   ModeTabItem(
     icon: Icons.desktop_windows_outlined,
     selectedIcon: Icons.desktop_windows,
-    label: '屏幕同步',
+    label: '流光溢彩',
+  ),
+  ModeTabItem(
+    icon: Icons.flare_outlined,
+    selectedIcon: Icons.flare,
+    label: '屏幕氛围',
   ),
   ModeTabItem(
     icon: Icons.palette_outlined,
@@ -59,7 +65,7 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
 
     return switch (tab) {
       0 => _buildScreenSync(context),
-      1 => _buildSolid(context),
+      2 => _buildSolid(context),
       _ => _ComingSoonPanel(label: lightingSchemeTabs[tab].label),
     };
   }
@@ -109,7 +115,14 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                 ],
               ),
               const SizedBox(height: AppSpacing.pageSection),
-              _sectionLabel(context, '映射校准'),
+              _sectionLabel(
+                context,
+                '映射校准',
+                tooltip:
+                    '逐段点亮灯带并框选屏幕区域，\n'
+                    '把每段灯珠映射到对应画面位置，\n'
+                    '用于跟色采样；未校准时按顶边均分。',
+              ),
               const SizedBox(height: AppSpacing.text),
               const SegmentMapCalibrator(),
               const SizedBox(height: AppSpacing.pageSection),
@@ -218,13 +231,32 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     );
   }
 
-  Widget _sectionLabel(BuildContext context, String text) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: Colors.white54,
-        letterSpacing: 0.6,
-      ),
+  Widget _sectionLabel(
+    BuildContext context,
+    String text, {
+    String? tooltip,
+  }) {
+    final style = Theme.of(context).textTheme.labelLarge?.copyWith(
+      color: AppTheme.textSecondary,
+      letterSpacing: 0.6,
+    );
+    final label = Text(text, style: style);
+    if (tooltip == null) return label;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        label,
+        const SizedBox(width: AppSpacing.compact),
+        Tooltip(
+          message: tooltip,
+          child: Icon(
+            Icons.error_outline,
+            size: 16,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }
