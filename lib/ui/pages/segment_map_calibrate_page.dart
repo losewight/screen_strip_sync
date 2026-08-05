@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../app/spacing.dart';
+import '../../app/theme.dart';
 import '../../config/segment_map_codec.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
@@ -188,65 +189,82 @@ class _SegmentMapCalibratePageState
                   _currentRect = r;
                   _error = null;
                 }),
-                hint: hint,
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.page),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_error != null)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.compact,
-                            ),
-                            child: Text(
-                              _error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                shadows: const [
-                                  Shadow(blurRadius: 4, color: Colors.black),
-                                ],
-                              ),
+              // 提示 + 按钮居中叠在蒙版上；文字不挡拖框，按钮可点
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.page,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IgnorePointer(
+                        child: Text(
+                          hint,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            color: AppTheme.textPrimary,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
+                            shadows: [
+                              Shadow(blurRadius: 8, color: Colors.black54),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: AppSpacing.text),
+                        IgnorePointer(
+                          child: Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              color: Theme.of(context).colorScheme.error,
+                              shadows: const [
+                                Shadow(blurRadius: 4, color: Colors.black),
+                              ],
                             ),
                           ),
-                        Wrap(
-                          spacing: AppSpacing.text,
-                          runSpacing: AppSpacing.text,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            OutlinedButton(
-                              onPressed: _seg > 0 ? _goBack : null,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.white54),
-                              ),
-                              child: const Text('返回上一段'),
-                            ),
-                            FilledButton(
-                              onPressed: _confirmNext,
-                              child: Text(
-                                _seg >= kSegmentCount - 1
-                                    ? '完成并保存'
-                                    : '确认 / 下一段',
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _popCancel,
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white70,
-                              ),
-                              child: const Text('取消'),
-                            ),
-                          ],
                         ),
                       ],
-                    ),
+                      const SizedBox(height: AppSpacing.section),
+                      Wrap(
+                        spacing: AppSpacing.text,
+                        runSpacing: AppSpacing.text,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: _seg > 0 ? _goBack : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.textPrimary,
+                              side: BorderSide(
+                                color: AppTheme.textSecondary.withValues(
+                                  alpha: 0.7,
+                                ),
+                              ),
+                            ),
+                            child: const Text('返回上一段'),
+                          ),
+                          FilledButton(
+                            onPressed: _confirmNext,
+                            child: Text(
+                              _seg >= kSegmentCount - 1 ? '完成并保存' : '确认 / 下一段',
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _popCancel,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.textSecondary,
+                            ),
+                            child: const Text('取消'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

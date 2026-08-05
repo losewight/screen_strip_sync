@@ -13,14 +13,12 @@ class ScreenMaskSelectLayer extends StatefulWidget {
     required this.currentIndex,
     required this.currentRect,
     required this.onRectChanged,
-    this.hint,
   });
 
   final List<SegmentSample?> committed;
   final int currentIndex;
   final SegmentSample? currentRect;
   final ValueChanged<SegmentSample> onRectChanged;
-  final String? hint;
 
   @override
   State<ScreenMaskSelectLayer> createState() => _ScreenMaskSelectLayerState();
@@ -71,7 +69,6 @@ class _ScreenMaskSelectLayerState extends State<ScreenMaskSelectLayer> {
               committed: widget.committed,
               currentIndex: widget.currentIndex,
               currentRect: widget.currentRect,
-              hint: widget.hint,
             ),
           ),
         );
@@ -85,13 +82,11 @@ class _MaskPainter extends CustomPainter {
     required this.committed,
     required this.currentIndex,
     required this.currentRect,
-    this.hint,
   });
 
   final List<SegmentSample?> committed;
   final int currentIndex;
   final SegmentSample? currentRect;
-  final String? hint;
 
   Rect _toPixel(SegmentSample s, Size size) {
     return Rect.fromLTRB(
@@ -140,34 +135,11 @@ class _MaskPainter extends CustomPainter {
           ..strokeWidth = 2,
       );
     }
-
-    final text = hint;
-    if (text != null && text.isNotEmpty && cur == null) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.w500,
-            height: 1.4,
-            shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
-          ),
-        ),
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: size.width * 0.85);
-      tp.paint(
-        canvas,
-        Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
-      );
-    }
   }
 
   @override
   bool shouldRepaint(covariant _MaskPainter old) =>
       old.currentIndex != currentIndex ||
       old.currentRect != currentRect ||
-      old.hint != hint ||
       old.committed != committed;
 }

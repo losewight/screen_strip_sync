@@ -7,8 +7,8 @@ import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
 import '../widgets/color_swatch_button.dart';
-import '../widgets/helper_status_badge.dart';
 import '../widgets/mode_tab_bar.dart';
+import '../widgets/palette_color_picker.dart';
 import '../widgets/segment_map_calibrator.dart';
 
 /// 灯光方案页签（壳层 [ModeTabBar] 与正文共用）。
@@ -59,6 +59,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     notifier.sendSolid(colorToSolidHex(picked));
   }
 
+  Future<void> _pickPalette(HelperStateNotifier notifier) async {
+    final picked = await showPaletteColorPicker(context);
+    if (picked == null || !mounted) return;
+    notifier.sendSolid(colorToSolidHex(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     final tab = ref.watch(lightingSchemeTabProvider);
@@ -87,26 +93,12 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HelperStatusBadge(
-                phase: ui.phase,
-                message: ui.message,
-                ipcLine: ui.ipcLine,
-              ),
-              const SizedBox(height: AppSpacing.pageSection),
-              _sectionLabel(context, '引擎'),
-              const SizedBox(height: AppSpacing.text),
-              Wrap(
-                spacing: AppSpacing.text,
-                runSpacing: AppSpacing.text,
-                alignment: WrapAlignment.center,
-                children: [
+              _SchemeCard(
+                title: '引擎',
+                actions: [
                   FilledButton(
                     onPressed: can ? () => notifier.send('start') : null,
                     child: const Text('开始'),
-                  ),
-                  OutlinedButton(
-                    onPressed: can ? () => notifier.send('stop') : null,
-                    child: const Text('停止'),
                   ),
                   OutlinedButton(
                     onPressed: can ? notifier.softOff : null,
@@ -114,66 +106,76 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.pageSection),
-              _sectionLabel(
-                context,
-                '映射校准',
-                tooltip:
-                    '逐段点亮灯带并框选屏幕区域，\n'
-                    '把每段灯珠映射到对应画面位置，\n'
-                    '用于跟色采样；未校准时按顶边均分。',
+              const SizedBox(height: AppSpacing.text),
+              _SchemeCard(
+                title: '映射校准',
+                titleTrailing: Tooltip(
+                  message:
+                      '逐段点亮灯带并框选屏幕区域，\n'
+                      '把每段灯珠映射到对应画面位置，\n'
+                      '用于跟色采样；未校准时按顶边均分。',
+                  child: Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                child: const SegmentMapCalibrator(),
               ),
               const SizedBox(height: AppSpacing.text),
-              const SegmentMapCalibrator(),
-              const SizedBox(height: AppSpacing.pageSection),
-              _sectionLabel(
-                context,
-                '颜色跟进速度: ${cfg.emaAlpha.toStringAsFixed(2)}（越大越跟手）',
-              ),
-              Slider(
-                value: cfg.emaAlpha,
-                min: 0.05,
-                max: 1.0,
-                divisions: 19,
-                label: cfg.emaAlpha.toStringAsFixed(2),
-                onChanged: canEdit ? config.setEmaAlpha : null,
-                onChangeEnd: canEdit ? notifier.sendEmaAlpha : null,
-              ),
-              const SizedBox(height: AppSpacing.section),
-              _sectionLabel(
-                context,
-                '画面柔化: ${cfg.blurStep}（越大越稳，0 为不柔化）',
-              ),
-              Slider(
-                value: cfg.blurStep.toDouble(),
-                min: 0,
-                max: 8,
-                divisions: 8,
-                label: '${cfg.blurStep}',
-                onChanged: canEdit
-                    ? (v) => config.setBlurStep(v.round())
-                    : null,
-                onChangeEnd: canEdit
-                    ? (v) => notifier.sendBlur(v.round())
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.section),
-              _sectionLabel(
-                context,
-                '暗部过滤: ${cfg.nearBlack}（越大越忽略黑边）',
-              ),
-              Slider(
-                value: cfg.nearBlack.toDouble(),
-                min: 0,
-                max: 64,
-                divisions: 64,
-                label: '${cfg.nearBlack}',
-                onChanged: canEdit
-                    ? (v) => config.setNearBlack(v.round())
-                    : null,
-                onChangeEnd: canEdit
-                    ? (v) => notifier.sendNearBlack(v.round())
-                    : null,
+              _SchemeCard(
+                title: '跟色参数',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _paramLabel(
+                      '颜色跟进速度: ${cfg.emaAlpha.toStringAsFixed(2)}（越大越跟手）',
+                    ),
+                    Slider(
+                      value: cfg.emaAlpha,
+                      min: 0.05,
+                      max: 1.0,
+                      divisions: 19,
+                      label: cfg.emaAlpha.toStringAsFixed(2),
+                      onChanged: canEdit ? config.setEmaAlpha : null,
+                      onChangeEnd: canEdit ? notifier.sendEmaAlpha : null,
+                    ),
+                    const SizedBox(height: AppSpacing.control),
+                    _paramLabel(
+                      '画面柔化: ${cfg.blurStep}（越大越稳，0 为不柔化）',
+                    ),
+                    Slider(
+                      value: cfg.blurStep.toDouble(),
+                      min: 0,
+                      max: 8,
+                      divisions: 8,
+                      label: '${cfg.blurStep}',
+                      onChanged: canEdit
+                          ? (v) => config.setBlurStep(v.round())
+                          : null,
+                      onChangeEnd: canEdit
+                          ? (v) => notifier.sendBlur(v.round())
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.control),
+                    _paramLabel(
+                      '暗部过滤: ${cfg.nearBlack}（越大越忽略黑边）',
+                    ),
+                    Slider(
+                      value: cfg.nearBlack.toDouble(),
+                      min: 0,
+                      max: 64,
+                      divisions: 64,
+                      label: '${cfg.nearBlack}',
+                      onChanged: canEdit
+                          ? (v) => config.setNearBlack(v.round())
+                          : null,
+                      onChangeEnd: canEdit
+                          ? (v) => notifier.sendNearBlack(v.round())
+                          : null,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -191,38 +193,37 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: 520),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HelperStatusBadge(
-                phase: ui.phase,
-                message: ui.message,
-                ipcLine: ui.ipcLine,
-              ),
-              const SizedBox(height: AppSpacing.pageSection),
-              _sectionLabel(context, '纯色'),
-              const SizedBox(height: AppSpacing.text),
-              Wrap(
-                spacing: AppSpacing.text,
-                runSpacing: AppSpacing.text,
-                alignment: WrapAlignment.center,
-                children: [
-                  for (final (name, color) in _presets)
-                    ColorSwatchButton(
-                      color: color,
-                      enabled: can,
-                      tooltip: name,
-                      onPressed: () =>
-                          notifier.sendSolid(colorToSolidHex(color)),
+              _SchemeCard(
+                title: '纯色',
+                child: Wrap(
+                  spacing: AppSpacing.text,
+                  runSpacing: AppSpacing.text,
+                  children: [
+                    for (final (name, color) in _presets)
+                      ColorSwatchButton(
+                        color: color,
+                        enabled: can,
+                        tooltip: name,
+                        onPressed: () =>
+                            notifier.sendSolid(colorToSolidHex(color)),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: can ? () => _pickColor(notifier) : null,
+                      icon: const Icon(Icons.colorize, size: 18),
+                      label: const Text('取色'),
                     ),
-                  OutlinedButton.icon(
-                    onPressed: can ? () => _pickColor(notifier) : null,
-                    icon: const Icon(Icons.colorize, size: 18),
-                    label: const Text('取色'),
-                  ),
-                ],
+                    OutlinedButton.icon(
+                      onPressed: can ? () => _pickPalette(notifier) : null,
+                      icon: const Icon(Icons.palette_outlined, size: 18),
+                      label: const Text('调色盘'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -231,32 +232,98 @@ class _LightingSchemesPageState extends ConsumerState<LightingSchemesPage> {
     );
   }
 
-  Widget _sectionLabel(
-    BuildContext context,
-    String text, {
-    String? tooltip,
-  }) {
-    final style = Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: AppTheme.textSecondary,
-      letterSpacing: 0.6,
+  Widget _paramLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontFamily: AppTheme.fontFamily,
+        fontSize: 12,
+        color: AppTheme.textSecondary,
+        letterSpacing: 0.4,
+      ),
     );
-    final label = Text(text, style: style);
-    if (tooltip == null) return label;
+  }
+}
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        label,
-        const SizedBox(width: AppSpacing.compact),
-        Tooltip(
-          message: tooltip,
-          child: Icon(
-            Icons.error_outline,
-            size: 16,
-            color: AppTheme.textSecondary,
+/// 与主控页同款的小卡片：圆角 + 描边 + [AppTheme.cardBg]。
+///
+/// - 传 [actions]：标题左、操作右（同主控「连接」条）
+/// - 传 [child]：标题在上、内容在下
+class _SchemeCard extends StatelessWidget {
+  const _SchemeCard({
+    this.title,
+    this.titleTrailing,
+    this.actions,
+    this.child,
+  }) : assert(actions != null || child != null);
+
+  static const double radius = 10;
+
+  final String? title;
+  final Widget? titleTrailing;
+  final List<Widget>? actions;
+  final Widget? child;
+
+  static const _titleStyle = TextStyle(
+    fontFamily: AppTheme.fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: AppTheme.textPrimary,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget body;
+    if (actions != null) {
+      body = Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Text(title ?? '', style: _titleStyle),
+                if (titleTrailing != null) ...[
+                  const SizedBox(width: AppSpacing.compact),
+                  titleTrailing!,
+                ],
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: AppSpacing.text),
+          for (var i = 0; i < actions!.length; i++) ...[
+            if (i > 0) const SizedBox(width: AppSpacing.control),
+            actions![i],
+          ],
+        ],
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (title != null) ...[
+            Row(
+              children: [
+                Text(title!, style: _titleStyle),
+                if (titleTrailing != null) ...[
+                  const SizedBox(width: AppSpacing.compact),
+                  titleTrailing!,
+                ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.text),
+          ],
+          child!,
+        ],
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      padding: AppSpacing.cardInsets,
+      child: body,
     );
   }
 }
@@ -270,22 +337,32 @@ class _ComingSoonPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.construction,
-            size: AppSpacing.page,
-            color: Colors.white24,
-          ),
-          const SizedBox(height: AppSpacing.text),
-          Text(
-            '$label 还没做',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white54,
+      child: Padding(
+        padding: AppSpacing.pageInsets,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _SchemeCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.construction,
+                  size: AppSpacing.page,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(height: AppSpacing.text),
+                Text(
+                  '$label 还没做',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 16,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
