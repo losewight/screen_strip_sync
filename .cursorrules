@@ -298,7 +298,7 @@ lib/
 
 - [ ] **C1 方案 A 确认**：高 Brightness + RGB 跟色的默认通路走通。
 - [ ] **C2 方案 B**：luma → Brightness（`01`~`63`）+ 亮度 EMA；RGB 主跟色相；可选 R/G/B 增益或伽马、亮度上限；参数经 JSON + IPC 下发，禁止写死唯一魔法数。
-- [ ] **C3 helper 自愈**：COM 掉线自动重连、DXGI `ACCESS_LOST` 自动恢复。
+- [x] **C3 helper 自愈（DXGI）**：追色热路径检测 `ACCESS_LOST` → `dxgi_shutdown` + 强制重建；COM 掉线自动重连**暂缓**（仅 IPC `reconnect`）。
 - [x] ~~C3-old 父进程 PID 监测~~ —— **架构翻转后作废**，helper 已是父进程。
 
 ### 已完成（保留存档）
@@ -335,7 +335,7 @@ lib/
 
 ### 其它已知缺口
 
-- COM 掉线不自动重连；DXGI `ACCESS_LOST` 不自动恢复（C3）。
+- COM 掉线不自动重连（仅 IPC `reconnect`；自动重连暂缓）。
 - 翻转期间会短暂出现「helper 已是属主但 Flutter 仍在写 JSON」的双写窗口 —— **F2 必须紧跟 H2/H3 完成**，不得长期停在中间态。
 
 ---

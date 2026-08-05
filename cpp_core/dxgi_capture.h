@@ -12,6 +12,8 @@ enum class DxgiErr {
   DuplicateFailed,
   AcquireTimeout,
   AcquireFailed,
+  // 桌面复制失效（分辨率切换 / 锁屏等）；调用方须 shutdown 再建
+  AccessLost,
 };
 
 DxgiErr dxgi_init();

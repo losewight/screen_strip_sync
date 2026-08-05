@@ -15,6 +15,22 @@ static ID3D11Texture2D *g_staging = nullptr;
 static std::atomic<int> g_near_black{12}; // 0..64
 static std::atomic<int> g_blur_step{2};   // 0..8
 
+// 为什么：ACCESS_LOST 后指针仍活着，必须让上层拆再建；ACCESS_DENIED /
+// INVALID_CALL 在 duplication 已死后走同一条恢复路径（与唤醒 0x80070005 同源）
+static bool is_duplication_lost(HRESULT hr) {
+  return hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED ||
+         hr == DXGI_ERROR_INVALID_CALL;
+}
+
+static DxgiErr acquire_fail_err(HRESULT hr) {
+  if (is_duplication_lost(hr)) {
+    printf("AcquireNextFrame access lost: 0x%08lx\n", (unsigned long)hr);
+    return DxgiErr::AccessLost;
+  }
+  printf("AcquireNextFrame failed: 0x%08lx\n", (unsigned long)hr);
+  return DxgiErr::AcquireFailed;
+}
+
 void dxgi_set_near_black(int v) {
   if (v < 0)
     v = 0;
@@ -150,10 +166,8 @@ DxgiErr dxgi_grab_one_frame(UINT timeout_ms) {
     printf("AcquireNextFrame: timeout (no new frame)\n");
     return DxgiErr::AcquireTimeout;
   }
-  if (FAILED(hr)) {
-    printf("AcquireNextFrame failed: 0x%08lx\n", (unsigned long)hr);
-    return DxgiErr::AcquireFailed;
-  }
+  if (FAILED(hr))
+    return acquire_fail_err(hr);
 
   // printf("AcquireNextFrame ok, LastPresentTime=%lld\n",
   //        (long long)info.LastPresentTime.QuadPart);
@@ -245,10 +259,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
     if (hr == DXGI_ERROR_WAIT_TIMEOUT)
       continue;
 
-    if (FAILED(hr)) {
-      printf("AcquireNextFrame failed: 0x%08lx\n", (unsigned long)hr);
-      return DxgiErr::AcquireFailed;
-    }
+    if (FAILED(hr))
+      return acquire_fail_err(hr);
 
     if (info.LastPresentTime.QuadPart != 0)
       break;

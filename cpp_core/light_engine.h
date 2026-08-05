@@ -36,6 +36,8 @@ void engine_copy_map_snapshot(bool *out_custom,
 
 // 休眠拆掉 DXGI 后，追色 / 唤醒恢复前必须再 init
 bool engine_ensure_dxgi();
+// ACCESS_LOST 后强制拆再建（指针仍非空时 ensure 不够）
+bool engine_recover_dxgi();
 // 按意图恢复画面（唤醒 / 冷启动）；h 必须已就绪
 void apply_display_intent(HANDLE h, const DisplayIntent &intent);
 // 解析 JSON / IPC lastScene 字符串；非法返回 false

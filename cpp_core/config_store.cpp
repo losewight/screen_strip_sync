@@ -36,11 +36,18 @@ bool config_path(char *out, size_t cap) {
   char *slash = strrchr(path, '\\');
   if (!slash)
     return false;
-  strcpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path),
-           "zeeray_config.json");
-  if (strlen(path) + 1 > cap)
+  // 为什么：先算最终长度再拼，避免长路径下 strcpy_s
+  // 截断/失败后仍把坏路径交给调用方
+  static constexpr char kName[] = "zeeray_config.json";
+  const size_t dir_len = (size_t)(slash + 1 - path); // 含末尾 '\'
+  const size_t name_len = sizeof(kName) - 1;
+  const size_t need = dir_len + name_len + 1; // 含 '\0'
+  if (need > MAX_PATH || need > cap)
     return false;
-  strcpy_s(out, cap, path);
+  if (strcpy_s(slash + 1, MAX_PATH - dir_len, kName) != 0)
+    return false;
+  if (strcpy_s(out, cap, path) != 0)
+    return false;
   return true;
 }
 
@@ -724,39 +731,50 @@ void config_copy(HelperConfig *out) {
 }
 
 void config_set_ema_alpha(float v) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.emaAlpha = clamp_alpha(v);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.emaAlpha = clamp_alpha(v);
+    mark_dirty_unlocked();
+  }
+  // 为什么：建线程在锁外，避免 CreateThread 拉长 g_mu 持有时间
   ensure_saver_started();
 }
 
 void config_set_near_black(int v) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.nearBlack = clamp_near_black(v);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.nearBlack = clamp_near_black(v);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
 void config_set_blur(int v) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.blurStep = clamp_blur(v);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.blurStep = clamp_blur(v);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
 void config_set_mode(char mode) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.mode = (mode == 'b' || mode == 'B') ? 'b' : 'a';
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.mode = (mode == 'b' || mode == 'B') ? 'b' : 'a';
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
 void config_set_com(const char *com) {
   if (!com)
     return;
-  std::lock_guard<std::mutex> lock(g_mu);
-  snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "%s", com);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "%s", com);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
@@ -765,16 +783,18 @@ void config_set_sleep_sync(bool on) {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg.autoSleepSync = on;
     mark_dirty_unlocked();
-    ensure_saver_started();
   }
+  ensure_saver_started();
   // 为什么：JSON 与运行时旗标必须一起改，否则只落盘、休眠仍读旧 g_sleep_sync
   helper_set_sleep_sync(on);
 }
 
 void config_set_shutdown_off(bool on) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.turnOffOnShutdown = on;
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.turnOffOnShutdown = on;
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
@@ -785,8 +805,8 @@ void config_set_autostart(bool on) {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg.startOnBoot = on;
     mark_dirty_unlocked();
-    ensure_saver_started();
   }
+  ensure_saver_started();
   autostart_apply(on);
 }
 
@@ -815,11 +835,13 @@ void config_set_last_scene(const char *scene) {
     snprintf(normalized, sizeof(normalized), "idle");
     break;
   }
-  std::lock_guard<std::mutex> lock(g_mu);
-  if (strcmp(g_cfg.lastScene, normalized) == 0)
-    return;
-  snprintf(g_cfg.lastScene, sizeof(g_cfg.lastScene), "%s", normalized);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (strcmp(g_cfg.lastScene, normalized) == 0)
+      return;
+    snprintf(g_cfg.lastScene, sizeof(g_cfg.lastScene), "%s", normalized);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
   printf("config_set_last_scene: %s\n", normalized);
 }
@@ -827,16 +849,20 @@ void config_set_last_scene(const char *scene) {
 void config_set_last_connected_com(const char *com) {
   if (!com)
     return;
-  std::lock_guard<std::mutex> lock(g_mu);
-  snprintf(g_cfg.lastConnectedCom, sizeof(g_cfg.lastConnectedCom), "%s", com);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    snprintf(g_cfg.lastConnectedCom, sizeof(g_cfg.lastConnectedCom), "%s", com);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
 void config_clear_map() {
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.hasMap = false;
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.hasMap = false;
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 
@@ -844,19 +870,23 @@ void config_sync_map_from_engine() {
   bool custom = false;
   SegmentRect rects[kSegmentCount];
   engine_copy_map_snapshot(&custom, rects);
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg.hasMap = custom;
-  if (custom) {
-    for (int i = 0; i < kSegmentCount; ++i)
-      g_cfg.map[i] = rects[i];
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.hasMap = custom;
+    if (custom) {
+      for (int i = 0; i < kSegmentCount; ++i)
+        g_cfg.map[i] = rects[i];
+    }
+    mark_dirty_unlocked();
   }
-  mark_dirty_unlocked();
   ensure_saver_started();
 }
 
 void config_request_save() {
-  std::lock_guard<std::mutex> lock(g_mu);
-  mark_dirty_unlocked();
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    mark_dirty_unlocked();
+  }
   ensure_saver_started();
 }
 

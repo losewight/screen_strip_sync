@@ -307,8 +307,10 @@ bool send_highlight(HANDLE h, int seg) {
   return true;
 }
 
-// 为什么：produce = 抓屏采样；timeout 常见，应跳过本帧而不是当致命错误
-static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
+// 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
+// timeout / 其它失败跳过本帧
+static DxgiErr produce_colors(int frame_index, char *out_frame,
+                              size_t out_cap) {
   unsigned char rgb[10][3] = {};
   bool custom = false;
   SegmentRect rects[kSegmentCount];
@@ -316,7 +318,7 @@ static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
   // 调用：有自定义表则按矩形采；否则顶边默认
   DxgiErr e = dxgi_grab_and_sample(50, rgb, custom ? rects : nullptr);
   if (e != DxgiErr::Ok)
-    return false;
+    return e;
 
   // α 越小越拖影；由 IPC set alpha 写入 g_alpha
   const float alpha = g_alpha.load();
@@ -355,8 +357,8 @@ static bool produce_colors(int frame_index, char *out_frame, size_t out_cap) {
 
   // 红线：组完再查长度
   if (strlen(out_frame) >= 120)
-    return false;
-  return true;
+    return DxgiErr::AcquireFailed;
+  return DxgiErr::Ok;
 }
 
 static bool consumer_to_serial(HANDLE h, const char *frame, DWORD frame_len) {
@@ -368,9 +370,32 @@ static bool consumer_to_serial(HANDLE h, const char *frame, DWORD frame_len) {
 
 static void frame_loop(HANDLE h) {
   int i = 0;
+  int recover_fails = 0;
+  DWORD last_recover_log = 0;
   while (g_running.load()) {
     char frame_buf[128];
-    if (!produce_colors(i, frame_buf, sizeof(frame_buf))) {
+    DxgiErr e = produce_colors(i, frame_buf, sizeof(frame_buf));
+    // DuplicateFailed：recover 拆掉后 init 失败，指针已空，须继续试再建
+    if (e == DxgiErr::AccessLost || e == DxgiErr::DuplicateFailed) {
+      // 为什么：ACCESS_LOST 后死指针仍非空，必须 recover 而非 ensure
+      const DWORD now = GetTickCount();
+      if (now - last_recover_log >= 2000) {
+        printf("frame_loop: DXGI access lost, recovering\n");
+        last_recover_log = now;
+      }
+      if (engine_recover_dxgi()) {
+        recover_fails = 0;
+        continue;
+      }
+      ++recover_fails;
+      // 首败已立刻试过；之后 200ms 起，连续失败拉长，上限 2s
+      DWORD sleep_ms = 200u * (DWORD)recover_fails;
+      if (sleep_ms > 2000)
+        sleep_ms = 2000;
+      Sleep(sleep_ms);
+      continue;
+    }
+    if (e != DxgiErr::Ok) {
       Sleep(10);
       continue;
     }
@@ -427,6 +452,18 @@ bool engine_ensure_dxgi() {
     return false;
   }
   printf("engine_ensure_dxgi: re-inited\n");
+  return true;
+}
+
+bool engine_recover_dxgi() {
+  // 为什么：ACCESS_LOST 后指针仍非空，ensure 会误判 ready；必须先拆再建
+  dxgi_shutdown();
+  DxgiErr e = dxgi_init();
+  if (e != DxgiErr::Ok) {
+    printf("engine_recover_dxgi failed: %d\n", (int)e);
+    return false;
+  }
+  printf("engine_recover_dxgi: ok\n");
   return true;
 }
 

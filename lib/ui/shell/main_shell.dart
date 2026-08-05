@@ -2,7 +2,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
 import '../pages/control_page.dart';
@@ -40,47 +39,12 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final phase = ref.watch(helperStateProvider).phase;
     final lightingTab = ref.watch(lightingSchemeTabProvider);
-    final cfgReady = ref.watch(configReadyProvider);
-    final waitingCfg =
-        !cfgReady &&
-        (phase == HelperPhase.connecting ||
-            phase == HelperPhase.ready ||
-            phase == HelperPhase.running ||
-            phase == HelperPhase.poweredOff ||
-            phase == HelperPhase.noDevice);
 
     return Scaffold(
       backgroundColor: AppTheme.contentBg,
       body: Column(
         children: [
           const StoreTitleBar(),
-          if (waitingCfg)
-            Material(
-              color: const Color.fromARGB(255, 45, 50, 67),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      phase == HelperPhase.connecting ? '正在连接后台服务…' : '等待后台配置…',
-                      style: const TextStyle(
-                        color: Color.fromARGB(255, 200, 204, 214),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           Expanded(
             child: Row(
               children: [
