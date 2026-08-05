@@ -1,14 +1,16 @@
-﻿import 'segment_map_codec.dart';
+﻿import 'region_bbox.dart';
+import 'segment_map_codec.dart';
 import 'segment_sample.dart';
 
+export 'region_bbox.dart';
 export 'segment_sample.dart';
 
-/// 双调色方案（阶段 C 才真正进引擎；此处只存用户意图）。
+/// 双调色方案字段保留存盘兼容；亮度模型已废弃，引擎不读。
 enum ColorMode {
-  /// 方案 A：高亮度 + RGB 跟屏色
+  /// 历史方案 A（废弃）
   a,
 
-  /// 方案 B：luma → Brightness + 亮度 EMA
+  /// 历史方案 B（废弃）
   b,
 }
 
@@ -27,10 +29,15 @@ class AppConfig {
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
     this.segmentMap,
+    this.regionAlgo = RegionAlgo.mean,
+    this.regionBlur = 0,
+    this.regionSmooth = 0.0,
+    this.regionDark = 15,
+    this.regionBBox = const RegionBBox(),
     this.lastScene = 'idle',
   });
 
-  /// EMA 平滑系数；取值域约 0.05..1.0。
+  /// EMA 平滑系数；取值域约 0.05..1.0（流光溢彩 map 路径）。
   final double emaAlpha;
 
   /// 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；0..64。
@@ -59,7 +66,22 @@ class AppConfig {
   /// 10 段屏幕采样矩形；`null` = 未校准，helper 用顶边均分默认。
   final List<SegmentSample>? segmentMap;
 
-  /// helper `cfg scene`；H8 前仅展示/记账用。
+  /// 屏幕氛围：均值 / 最大值聚合。
+  final RegionAlgo regionAlgo;
+
+  /// 屏幕氛围空间模糊 0..20。
+  final int regionBlur;
+
+  /// 屏幕氛围时间惯性 0..0.99（高=更钝）。
+  final double regionSmooth;
+
+  /// 屏幕氛围暗场阈值 0..50（RGB 皆低于此 → 段置黑）。
+  final int regionDark;
+
+  /// 屏幕氛围取色框（主屏百分比）。
+  final RegionBBox regionBBox;
+
+  /// helper `cfg scene`；含 `engine` / `region` / …
   final String lastScene;
 
   bool get hasSegmentMap =>
@@ -77,6 +99,11 @@ class AppConfig {
     bool? startOnBoot,
     List<SegmentSample>? segmentMap,
     bool clearSegmentMap = false,
+    RegionAlgo? regionAlgo,
+    int? regionBlur,
+    double? regionSmooth,
+    int? regionDark,
+    RegionBBox? regionBBox,
     String? lastScene,
   }) {
     return AppConfig(
@@ -90,6 +117,11 @@ class AppConfig {
       turnOffOnShutdown: turnOffOnShutdown ?? this.turnOffOnShutdown,
       startOnBoot: startOnBoot ?? this.startOnBoot,
       segmentMap: clearSegmentMap ? null : (segmentMap ?? this.segmentMap),
+      regionAlgo: regionAlgo ?? this.regionAlgo,
+      regionBlur: regionBlur ?? this.regionBlur,
+      regionSmooth: regionSmooth ?? this.regionSmooth,
+      regionDark: regionDark ?? this.regionDark,
+      regionBBox: regionBBox ?? this.regionBBox,
       lastScene: lastScene ?? this.lastScene,
     );
   }
@@ -108,6 +140,11 @@ class AppConfig {
     var shutdownOff = true;
     var autostart = false;
     List<SegmentSample>? map;
+    var regionAlgo = RegionAlgo.mean;
+    var regionBlur = 0;
+    var regionSmooth = 0.0;
+    var regionDark = 15;
+    var regionBBox = const RegionBBox();
     var scene = 'idle';
 
     for (final raw in lines) {
@@ -153,6 +190,23 @@ class AppConfig {
           } else {
             map = SegmentMapCodec.decodeIpcPayload(val);
           }
+        case 'region_algo':
+          regionAlgo = switch (val) {
+            'max' => RegionAlgo.max,
+            _ => RegionAlgo.mean,
+          };
+        case 'region_blur':
+          final v = int.tryParse(val);
+          if (v != null) regionBlur = v.clamp(0, 20);
+        case 'region_smooth':
+          final v = double.tryParse(val);
+          if (v != null) regionSmooth = v.clamp(0.0, 0.99);
+        case 'region_dark':
+          final v = int.tryParse(val);
+          if (v != null) regionDark = v.clamp(0, 50);
+        case 'region_bbox':
+          final box = RegionBBox.tryParse(val);
+          if (box != null) regionBBox = box;
         case 'scene':
           if (val.isNotEmpty) scene = val;
         default:
@@ -171,6 +225,11 @@ class AppConfig {
       turnOffOnShutdown: shutdownOff,
       startOnBoot: autostart,
       segmentMap: map,
+      regionAlgo: regionAlgo,
+      regionBlur: regionBlur,
+      regionSmooth: regionSmooth,
+      regionDark: regionDark,
+      regionBBox: regionBBox,
       lastScene: scene,
     );
   }

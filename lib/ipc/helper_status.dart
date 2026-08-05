@@ -33,8 +33,8 @@ final class HelperStatusEngine extends HelperStatusEvent {
   final bool running;
 }
 
-/// 显示意图：`status display engine|solid|soft_off|idle`
-enum HelperDisplayKind { idle, engine, solid, softOff }
+/// 显示意图：`status display engine|region|solid|soft_off|idle`
+enum HelperDisplayKind { idle, engine, region, solid, softOff }
 
 final class HelperStatusDisplay extends HelperStatusEvent {
   const HelperStatusDisplay(this.kind);
@@ -56,6 +56,7 @@ HelperDisplayKind? parseHelperDisplayKind(String value) {
   return switch (value) {
     'idle' => HelperDisplayKind.idle,
     'engine' => HelperDisplayKind.engine,
+    'region' => HelperDisplayKind.region,
     'solid' => HelperDisplayKind.solid,
     'soft_off' => HelperDisplayKind.softOff,
     _ => null,

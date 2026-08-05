@@ -15,8 +15,17 @@ static std::thread g_worker;
 static std::mutex g_engine_mu;
 // 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
 static std::atomic<float> g_alpha{0.3f};
-// 为什么：'a'|'b'；阶段 C 前 produce_colors 不读，仅防配置丢失
+// 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
 static std::atomic<char> g_mode{'a'};
+// 屏幕氛围参数（与 map alpha/near_black/blur 正交）
+static std::atomic<char> g_region_algo{'m'};
+static std::atomic<int> g_region_blur{0};
+static std::atomic<float> g_region_smooth{0.f};
+static std::atomic<int> g_region_dark{15};
+static std::mutex g_region_bbox_mu;
+static int g_region_l = 10, g_region_t = 20, g_region_w = 80, g_region_h = 60;
+// 为什么：start / start_region 写，frame_loop 读
+static std::atomic<SyncPath> g_sync_path{SyncPath::Map};
 // 为什么：字符串不能 atomic；set/reconnect 都在 IPC 线程，启动在
 // main，仍用锁防竞态
 static std::mutex g_com_mu;
@@ -52,6 +61,66 @@ void engine_set_blur(int v) { dxgi_set_blur(v); }
 void engine_set_mode(char mode) {
   // 调用前已校验；统一存小写
   g_mode.store(mode);
+}
+
+void engine_set_region_algo(char algo) {
+  g_region_algo.store((algo == 'x' || algo == 'X') ? 'x' : 'm');
+}
+
+void engine_set_region_blur(int v) {
+  if (v < 0)
+    v = 0;
+  if (v > 20)
+    v = 20;
+  g_region_blur.store(v);
+}
+
+void engine_set_region_smooth(float v) {
+  if (v < 0.f)
+    v = 0.f;
+  if (v > 0.99f)
+    v = 0.99f;
+  g_region_smooth.store(v);
+}
+
+void engine_set_region_dark(int v) {
+  if (v < 0)
+    v = 0;
+  if (v > 50)
+    v = 50;
+  g_region_dark.store(v);
+}
+
+void engine_set_region_bbox(int l, int t, int w, int h) {
+  if (l < 0)
+    l = 0;
+  if (t < 0)
+    t = 0;
+  if (w < 1)
+    w = 1;
+  if (h < 1)
+    h = 1;
+  if (l > 100)
+    l = 100;
+  if (t > 100)
+    t = 100;
+  if (w > 100)
+    w = 100;
+  if (h > 100)
+    h = 100;
+  if (l + w > 100)
+    w = 100 - l;
+  if (t + h > 100)
+    h = 100 - t;
+  if (w < 1)
+    w = 1;
+  if (h < 1)
+    h = 1;
+  std::lock_guard<std::mutex> lock(g_region_bbox_mu);
+  g_region_l = l;
+  g_region_t = t;
+  g_region_w = w;
+  g_region_h = h;
 }
 
 bool engine_set_com(const char *name) {
@@ -309,8 +378,8 @@ bool send_highlight(HANDLE h, int seg) {
 
 // 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
 // timeout / 其它失败跳过本帧
-static DxgiErr produce_colors(int frame_index, char *out_frame,
-                              size_t out_cap) {
+static DxgiErr produce_colors_map(int frame_index, char *out_frame,
+                                  size_t out_cap) {
   unsigned char rgb[10][3] = {};
   bool custom = false;
   SegmentRect rects[kSegmentCount];
@@ -359,6 +428,67 @@ static DxgiErr produce_colors(int frame_index, char *out_frame,
   if (strlen(out_frame) >= 120)
     return DxgiErr::AcquireFailed;
   return DxgiErr::Ok;
+}
+
+// Python 惯性：out = s*prev + (1-s)*target；s 高更钝（与 map α 极性相反）
+static DxgiErr produce_colors_region(int frame_index, char *out_frame,
+                                     size_t out_cap) {
+  int l, t, w, h;
+  {
+    std::lock_guard<std::mutex> lock(g_region_bbox_mu);
+    l = g_region_l;
+    t = g_region_t;
+    w = g_region_w;
+    h = g_region_h;
+  }
+  unsigned char rgb[10][3] = {};
+  DxgiErr e = dxgi_grab_and_sample_region(50, l, t, w, h, g_region_algo.load(),
+                                          g_region_blur.load(),
+                                          g_region_dark.load(), rgb);
+  if (e != DxgiErr::Ok)
+    return e;
+
+  const float smooth = g_region_smooth.load();
+  char colors[10][7] = {};
+
+  for (int i = 0; i < 10; ++i) {
+    const float r = (float)rgb[i][0];
+    const float g = (float)rgb[i][1];
+    const float b = (float)rgb[i][2];
+
+    if (!g_ema_inited) {
+      g_ema_r[i] = r;
+      g_ema_g[i] = g;
+      g_ema_b[i] = b;
+    } else {
+      g_ema_r[i] = smooth * g_ema_r[i] + (1.f - smooth) * r;
+      g_ema_g[i] = smooth * g_ema_g[i] + (1.f - smooth) * g;
+      g_ema_b[i] = smooth * g_ema_b[i] + (1.f - smooth) * b;
+    }
+
+    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(g_ema_r[i] + 0.5f),
+             (unsigned)(g_ema_g[i] + 0.5f), (unsigned)(g_ema_b[i] + 0.5f));
+  }
+  g_ema_inited = true;
+
+  const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
+  snprintf(out_frame, out_cap,
+           "set_rgb_pc %04x 00 63 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2 "
+           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
+           frame_id, colors[0], colors[1], colors[2], colors[3], colors[4],
+           colors[5], colors[6], colors[7], colors[8], colors[9]);
+
+  if (strlen(out_frame) >= 120)
+    return DxgiErr::AcquireFailed;
+  return DxgiErr::Ok;
+}
+
+static DxgiErr produce_colors(int frame_index, char *out_frame,
+                              size_t out_cap) {
+  if (g_sync_path.load() == SyncPath::Region)
+    return produce_colors_region(frame_index, out_frame, out_cap);
+  return produce_colors_map(frame_index, out_frame, out_cap);
 }
 
 static bool consumer_to_serial(HANDLE h, const char *frame, DWORD frame_len) {
@@ -414,6 +544,12 @@ void engine_set_intent_idle() {
 void engine_set_intent_engine() {
   std::lock_guard<std::mutex> lock(g_intent_mu);
   g_intent.kind = DisplayIntentKind::Engine;
+  g_intent.solid[0] = '\0';
+}
+
+void engine_set_intent_region() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::Region;
   g_intent.solid[0] = '\0';
 }
 
@@ -480,6 +616,13 @@ void apply_display_intent(HANDLE h, const DisplayIntent &intent) {
     engine_set_intent_engine();
     printf("apply_display_intent: engine\n");
     break;
+  case DisplayIntentKind::Region:
+    if (!engine_ensure_dxgi())
+      return;
+    engine_start_region(h);
+    engine_set_intent_region();
+    printf("apply_display_intent: region\n");
+    break;
   case DisplayIntentKind::Solid:
     engine_stop();
     engine_set_intent_solid(intent.solid);
@@ -507,6 +650,8 @@ bool parse_last_scene(const char *s, DisplayIntent *out) {
   DisplayIntent intent{};
   if (strcmp(s, "engine") == 0) {
     intent.kind = DisplayIntentKind::Engine;
+  } else if (strcmp(s, "region") == 0) {
+    intent.kind = DisplayIntentKind::Region;
   } else if (strcmp(s, "idle") == 0) {
     intent.kind = DisplayIntentKind::Idle;
   } else if (strcmp(s, "off") == 0) {
@@ -536,21 +681,33 @@ bool parse_last_scene(const char *s, DisplayIntent *out) {
   return true;
 }
 
-void engine_start(HANDLE h) {
+static void engine_start_path(HANDLE h, SyncPath path) {
   std::lock_guard<std::mutex> lock(g_engine_mu);
-  if (g_running.load())
-    return; // 避免重复 start 起两个线程
-  // 为什么：休眠 teardown 会 dxgi_shutdown；追色前必须再 init
+  // 同路径已在跑：幂等；跨路径：先停再起
+  if (g_running.load() && g_sync_path.load() == path)
+    return;
+  if (g_running.load()) {
+    g_running.store(false);
+    if (g_worker.joinable())
+      g_worker.join();
+    g_ema_inited = false;
+  }
   if (!dxgi_is_ready()) {
     DxgiErr e = dxgi_init();
     if (e != DxgiErr::Ok) {
-      printf("engine_start: dxgi_init failed: %d\n", (int)e);
+      printf("engine_start_path: dxgi_init failed: %d\n", (int)e);
       return;
     }
   }
+  g_sync_path.store(path);
+  g_ema_inited = false;
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }
+
+void engine_start(HANDLE h) { engine_start_path(h, SyncPath::Map); }
+
+void engine_start_region(HANDLE h) { engine_start_path(h, SyncPath::Region); }
 
 void engine_request_stop() { g_running.store(false); }
 
@@ -563,6 +720,8 @@ void engine_stop() {
 }
 
 bool engine_is_running() { return g_running.load(); }
+
+SyncPath engine_sync_path() { return g_sync_path.load(); }
 
 void engine_get_com(char *buf, size_t cap) {
   if (buf == nullptr || cap == 0)

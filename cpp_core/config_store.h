@@ -4,13 +4,20 @@
 
 #include <cstddef>
 
-// 与 Dart AppConfig JSON 字段对齐；helper 为唯一写方（F2 前 Flutter
-// 仍可能双写）
+// 屏幕氛围（region）取色框：主屏百分比整数 0..100
+struct RegionBBox {
+  int l = 10;
+  int t = 20;
+  int w = 80;
+  int h = 60;
+};
+
+// 与 Dart AppConfig JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
   float emaAlpha = 0.3f;
   int nearBlack = 12;
   int blurStep = 2;
-  char mode = 'a'; // 'a' | 'b'
+  char mode = 'a'; // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
   char comPort[16] = "COM10";
   char lastConnectedCom[16] = "";
   bool autoSleepSync = true;
@@ -18,7 +25,14 @@ struct HelperConfig {
   bool startOnBoot = false;
   bool hasMap = false;
   SegmentRect map[kSegmentCount] = {};
+  // 屏幕氛围（Python region 路径）；与 map 参数正交
+  char regionAlgo = 'm';    // 'm'=mean 柔和融合；'x'=max 高亮追踪
+  int regionBlur = 0;       // 0..20
+  float regionSmooth = 0.f; // 0..0.99；高=更钝
+  int regionDark = 15;      // 0..50
+  RegionBBox regionBBox{};
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
+  // 合法：engine|region|idle|off|solid RRGGBB
   char lastScene[32] = "idle";
 };
 
@@ -41,12 +55,20 @@ void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_sleep_sync(bool on);
 void config_set_shutdown_off(bool on);
-void config_set_autostart(bool on);            // JSON + HKCU Run
-void config_set_last_scene(const char *scene); // engine|idle|off|solid RRGGBB
+void config_set_autostart(bool on); // JSON + HKCU Run
+void config_set_last_scene(
+    const char *scene); // engine|region|idle|off|solid RRGGBB
 void config_set_last_connected_com(const char *com);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）
 void config_sync_map_from_engine();
+
+void config_set_region_algo(char algo); // 'm'|'x'
+void config_set_region_blur(int v);
+void config_set_region_smooth(float v);
+void config_set_region_dark(int v);
+// L,T,W,H 百分比；非法返回 false（调用方忽略）
+bool config_set_region_bbox(int l, int t, int w, int h);
 
 // 约 1s debounce 写盘；热路径只标脏
 void config_request_save();

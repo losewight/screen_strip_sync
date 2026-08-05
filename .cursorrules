@@ -146,7 +146,7 @@ lib/
 └── config/                 # app_config（只读模型 + cfg 行解析）、segment_sample、segment_map_codec
 ```
 
-映射校准入口在「灯光方案 → 屏幕同步」，不在设置页。
+映射校准入口在「灯光方案 → 流光溢彩」；屏幕氛围用独立「划定取色区域」。
 
 ---
 
@@ -193,18 +193,19 @@ lib/
 | 文本 | 含义 |
 |------|------|
 | `sync` | 请求全量配置 + 状态快照（连接建立时 helper 会主动推一次，此命令用于手动刷新） |
-| `start` | 启动氛围灯引擎线程 |
-| `stop` | 停止引擎（join 线程） |
+| `start` | **流光溢彩（map）**：启动逐段/顶边均分追色；`lastScene=engine` |
+| `start_region` | **屏幕氛围（region）**：整块 bbox 竖直切 10 段追色；与 `start` 正交、互斥；`lastScene=region` |
+| `stop` | 停止引擎（join 线程）；map / region 共用 |
 | `solid RRGGBB` | 发一帧纯色（6 位 hex，非法值忽略） |
 | `soft_off` | UI 关灯：停引擎 + 纯黑一帧（含 ≥50ms）；**不** `set_power 0` |
 | `off` | 真下电：停引擎 + `set_power 0`（UI 不用；备用） |
 | `bye` | **前端退出**：helper 只关这条连接，灯效 / 引擎 / 托盘全部保持 |
 | `quit` | **关闭后台服务**：关灯 → 停引擎 → 关串口 → helper 进程退出。只由托盘「退出」或 UI 的「完全退出」触发，**不是关窗** |
 | `reconnect` | 关串口并重试就绪（最多 10 次） |
-| `set alpha <0.05..1>` | EMA α；helper 侧 clamp；非法忽略 |
-| `set near_black <0..64>` | 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；默认 12 |
-| `set blur <0..8>` | 采样邻域半宽（空间降噪）；`0` = 不扩邻域；默认 2 |
-| `set mode a\|b` | 存方案；阶段 C 前引擎观感相同 |
+| `set alpha <0.05..1>` | map 路径 EMA α；helper 侧 clamp；非法忽略 |
+| `set near_black <0..64>` | map 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；默认 12 |
+| `set blur <0..8>` | map 采样邻域半宽；`0` = 不扩邻域；默认 2 |
+| `set mode a\|b` | **已废弃亮度方案**，仅存盘兼容；引擎不读 |
 | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步：1 = 挂起时软关、唤醒自恢复；0 = 休眠不插手 |
 | `set shutdown_off 0\|1` | 关机 / 注销时是否关灯 |
@@ -212,30 +213,37 @@ lib/
 | `highlight <0..9>` | 校准：仅该段白、其余黑一帧（≥50ms） |
 | `set map default` | 清空自定义采样表，恢复顶边均分 |
 | `set map x0,y0,x1,y1;...` | 10 段矩形（0..100 整数百分比，`;` 分隔）；非法整句忽略 |
+| `set region_algo mean\|max` | 屏幕氛围：柔和融合 / 高亮追踪 |
+| `set region_blur <0..20>` | 屏幕氛围空间模糊（近似 BoxBlur） |
+| `set region_smooth <0..0.99>` | 屏幕氛围时间惯性（高=更钝；与 map `alpha` 极性相反） |
+| `set region_dark <0..50>` | 屏幕氛围暗场：R/G/B 皆低于阈值 → 该段置黑 |
+| `set region_bbox L,T,W,H` | 屏幕氛围取色框（主屏百分比整数 0..100）；非法整句忽略 |
 
-**所有 `set …` 生效后 helper 都要 debounce 写回 JSON。** 场景类命令（`start` / `stop` / `solid` / `soft_off`）同时更新 `lastScene`。
+**所有 `set …` 生效后 helper 都要 debounce 写回 JSON。** 场景类命令（`start` / `start_region` / `stop` / `solid` / `soft_off`）同时更新 `lastScene`。
 
 ### 5.2 helper → Flutter
 
 | 文本 | 含义 |
 |------|------|
-| `cfg alpha 0.30` 等 | 配置快照逐项回推，key 与 5.1 的 `set` 同名（`alpha` / `near_black` / `blur` / `mode` / `com` / `last_com` / `sleep_sync` / `shutdown_off` / `autostart`） |
+| `cfg alpha 0.30` 等 | 配置快照逐项回推，key 与 5.1 的 `set` 同名（含 `region_algo` / `region_blur` / `region_smooth` / `region_dark` / `region_bbox`） |
 | `cfg map default` / `cfg map x0,y0,...` | 当前采样映射 |
-| `cfg scene engine\|solid RRGGBB\|off\|idle` | 上次 / 当前场景，供 UI 高亮对应按钮 |
+| `cfg scene engine\|region\|solid RRGGBB\|off\|idle` | 上次 / 当前场景，供 UI 高亮对应按钮 |
 | `cfg end` | **快照结束标记**；Flutter 收到才认为配置完整、可渲染 |
 | `status ready` | 客户端接通、串口已就绪 |
 | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
 | `status com COMn` | 当前已打开的串口 |
 | `status engine 0\|1` | 追色发帧线程是否在跑 |
-| `status display engine\|solid\|soft_off\|idle` | 当前显示意图 |
+| `status display engine\|region\|solid\|soft_off\|idle` | 当前显示意图（`engine`=流光溢彩，`region`=屏幕氛围） |
 | `status serial_lost` / `serial_ok` | 串口掉线 / 自愈（阶段 C3） |
 | `ui show` | **托盘双击且已有客户端**：让 Flutter 置顶自己的窗口 |
 
-**采样映射**：与方案 A/B **正交**。无有效 `segmentMap` → DXGI 顶边均分（历史默认）。有表时矩形内步进抽点 + 丢近黑 + RMS（√均值平方）；`set blur` 在格子点上扩 `±n` 邻域。截图与框选只在 Flutter；IPC **不传**逐帧像素。
+**采样映射（流光溢彩）**：与屏幕氛围 region **正交**。无有效 `segmentMap` → DXGI 顶边均分。有表时矩形内步进抽点 + 丢近黑 + RMS；`set blur` 在格子点上扩 `±n` 邻域。
+
+**屏幕氛围（region）**：单块 `region_bbox` 竖直切 10 段；`mean`/`max` 聚合 + `region_blur` + 暗场阈值 + 惯性平滑。截图与框选只在 Flutter；IPC **不传**逐帧像素。
 
 ### 5.3 配置文件字段（`zeeray_config.json`，exe 同目录）
 
-`emaAlpha` / `nearBlack` / `blurStep` / `mode` / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / **`lastScene`**（新增：`"engine"` / `"solid RRGGBB"` / `"off"` / `"idle"`）。
+`emaAlpha` / `nearBlack` / `blurStep` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）。
 
 字段名保持与旧 Dart `AppConfig` 一致，**老配置文件必须能被新 helper 直接读**；缺字段回退默认，解析失败整体回退默认且不阻塞启动。
 
@@ -296,8 +304,8 @@ lib/
 
 ### 阶段 C — 产品债（延后）
 
-- [ ] **C1 方案 A 确认**：高 Brightness + RGB 跟色的默认通路走通。
-- [ ] **C2 方案 B**：luma → Brightness（`01`~`63`）+ 亮度 EMA；RGB 主跟色相；可选 R/G/B 增益或伽马、亮度上限；参数经 JSON + IPC 下发，禁止写死唯一魔法数。
+- [ ] ~~**C1 方案 A 确认**~~ —— **已废弃**（可行性不好；Brightness 仍写死 `63`）。
+- [ ] ~~**C2 方案 B**~~ —— **已废弃**（同上）。屏幕氛围用独立 region 路径（mean/max），与 A/B 无关。
 - [x] **C3 helper 自愈（DXGI）**：追色热路径检测 `ACCESS_LOST` → `dxgi_shutdown` + 强制重建；COM 掉线自动重连**暂缓**（仅 IPC `reconnect`）。
 - [x] ~~C3-old 父进程 PID 监测~~ —— **架构翻转后作废**，helper 已是父进程。
 
@@ -312,26 +320,27 @@ lib/
 - 阶段 A 的 A0-A7 全部视为已完成，其中 A5（Flutter 落盘）被 F2 反转。
 - 阶段 B 的 B1-B3（配置下发 helper）被阶段 H2 吸收并扩大（helper 不只接收，还成为属主）；B4 保留为已完成。
 - 阶段 M 全部保留为已完成，映射逻辑不受本次翻转影响。
-- 阶段 C 的「父进程 PID 监测」「IPC 断连后重回 listen」分别作废与并入 H3；亮度模型产品债原样保留。
+- 阶段 C 的「父进程 PID 监测」「IPC 断连后重回 listen」分别作废与并入 H3；亮度方案 A/B **已废弃**（Brightness 仍写死 `63`）。
 
 ---
 
 ## 7. 已知产品债与诊断纪律
 
-### 亮度模型（阶段 C 才动）
+### 亮度模型（已废弃；Brightness 仍写死 `63`）
 
-- 设备事实：`set_rgb_pc` 的 `{Brightness}` 字段是**全局亮度**（hex ≈ 百分比；`63` ≈ 99%，`01` ≈ 1%）。观感明暗主要跟 Brightness；固定高亮度下改 RGB 灰阶，灯上几乎只有全亮 / 全黑。降 Brightness 时纯白易偏棕褐（硬件混光妥协）。
-- 当前实现：`light_engine.cpp` 的 `send_solid` 与 `produce_colors` 组帧串里 Brightness **写死 `63`**，只对 RGB 做 EMA。
-- **诊断纪律**：用户报「EMA α 无效 / 灯硬切亮灭 / 进黑不丝滑」时，**第一句先说明 BRT 仍写死 `63`、明暗主通道尚未接**，勿误判为超时、采样、调度或线程 bug。
+- 设备事实：`set_rgb_pc` 的 `{Brightness}` 字段是**全局亮度**（hex ≈ 百分比；`63` ≈ 99%，`01` ≈ 1%）。
+- 当前实现：`light_engine.cpp` 的 `send_solid` 与 `produce_colors_*` 组帧串里 Brightness **写死 `63`**。
+- 方案 A/B（luma→Brightness）**不做**。屏幕氛围是 region 路径（mean/max + 暗场阈值），不是亮度模型。
+- **诊断纪律**：用户报「EMA α 无效 / 灯硬切亮灭」时，**第一句先说明 BRT 仍写死 `63`**，勿误判为超时、采样、调度或线程 bug。
 
-### 双调色方案（阶段 C 统筹，默认 A）
+### 双追色路径（与废弃的 A/B 无关）
 
-| 方案 | 定位 | 要点 |
+| 路径 | 入口 | 要点 |
 |------|------|------|
-| A — 简单跟色（默认） | 开箱即用 | 高亮度 + RGB 跟屏色；接受亮↔黑较硬切；UI 选项少 |
-| B — 暗场/亮度调色（可选） | 进阶用户 | luma → Brightness + 亮度 EMA；极暗可 `01` + 黑；可选校正与亮度上限 |
+| 流光溢彩（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` |
+| 屏幕氛围（region） | `start_region` / `lastScene=region` | 整块 bbox 切 10 段；`region_algo` mean\|max + blur/smooth/dark |
 
-映射（阶段 M）与上表无关：A/B 共用 `segmentMap`；未校准用顶边均分。
+映射（阶段 M）只服务 map 路径；region 用独立 `regionBBox`。
 
 ### 其它已知缺口
 
@@ -361,7 +370,7 @@ lib/
 
 1. **前债不可欠**：推进当前项前，若发现更早的实现缺项或与红线不符，先修再继续。
 2. **红线问题立刻改**：帧长、节流、互斥、线程退出顺序、stride、单实例、僵尸进程、配置双写。
-3. **唯一例外**：亮度模型 / 写死 `63` 属用户明确延期的产品债，只在阶段 C 动。
+3. **唯一例外**：写死 `63` 的 Brightness 属已知硬件妥协，勿在排障时当成 bug 去「修」。方案 A/B 已废弃。
 
 ### 稳定性排查顺序
 
@@ -370,4 +379,4 @@ lib/
 
 ### 后置话题
 
-不主动展开调度算法细节、分页段页、死锁检测算法、磁盘调度、虚拟机；方案 B 的实现细节在阶段 C 之前不主动铺开。
+不主动展开调度算法细节、分页段页、死锁检测算法、磁盘调度、虚拟机。

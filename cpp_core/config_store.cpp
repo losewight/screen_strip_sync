@@ -79,6 +79,46 @@ static int clamp_blur(int v) {
   return v;
 }
 
+static int clamp_region_blur(int v) {
+  if (v < 0)
+    return 0;
+  if (v > 20)
+    return 20;
+  return v;
+}
+
+static float clamp_region_smooth(float v) {
+  if (v < 0.f)
+    return 0.f;
+  if (v > 0.99f)
+    return 0.99f;
+  return v;
+}
+
+static int clamp_region_dark(int v) {
+  if (v < 0)
+    return 0;
+  if (v > 50)
+    return 50;
+  return v;
+}
+
+static int clamp_pct(int v) {
+  if (v < 0)
+    return 0;
+  if (v > 100)
+    return 100;
+  return v;
+}
+
+static bool valid_region_bbox(int l, int t, int w, int h) {
+  l = clamp_pct(l);
+  t = clamp_pct(t);
+  w = clamp_pct(w);
+  h = clamp_pct(h);
+  return w > 0 && h > 0 && l + w <= 100 && t + h <= 100;
+}
+
 static bool valid_rect(float x0, float y0, float x1, float y1) {
   return x0 >= 0.f && y0 >= 0.f && x1 <= 1.f && y1 <= 1.f && x0 < x1 && y0 < y1;
 }
@@ -240,6 +280,62 @@ static bool skip_value(const char *&p) {
     return true;
   double dummy = 0;
   return parse_number(p, &dummy);
+}
+
+static bool parse_region_bbox_obj(const char *&p, RegionBBox *out) {
+  skip_ws(p);
+  if (*p != '{')
+    return false;
+  ++p;
+  int l = 10, t = 20, w = 80, h = 60;
+  bool got[4] = {};
+  skip_ws(p);
+  if (*p == '}')
+    return false;
+  for (;;) {
+    char key[16];
+    if (!parse_string(p, key, sizeof(key)))
+      return false;
+    skip_ws(p);
+    if (*p != ':')
+      return false;
+    ++p;
+    double v = 0;
+    if (!parse_number(p, &v))
+      return false;
+    const int iv = (int)(v + (v >= 0 ? 0.5 : -0.5));
+    if (strcmp(key, "l") == 0) {
+      l = iv;
+      got[0] = true;
+    } else if (strcmp(key, "t") == 0) {
+      t = iv;
+      got[1] = true;
+    } else if (strcmp(key, "w") == 0) {
+      w = iv;
+      got[2] = true;
+    } else if (strcmp(key, "h") == 0) {
+      h = iv;
+      got[3] = true;
+    }
+    skip_ws(p);
+    if (*p == ',') {
+      ++p;
+      continue;
+    }
+    if (*p == '}') {
+      ++p;
+      if (!(got[0] && got[1] && got[2] && got[3]))
+        return false;
+      if (!valid_region_bbox(l, t, w, h))
+        return false;
+      out->l = clamp_pct(l);
+      out->t = clamp_pct(t);
+      out->w = clamp_pct(w);
+      out->h = clamp_pct(h);
+      return true;
+    }
+    return false;
+  }
 }
 
 static bool parse_segment_rect(const char *&p, SegmentRect *out) {
@@ -421,6 +517,34 @@ static bool parse_root(const char *json, HelperConfig *cfg) {
         return false;
       if (s[0] != '\0')
         snprintf(cfg->lastScene, sizeof(cfg->lastScene), "%s", s);
+    } else if (strcmp(key, "regionAlgo") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "max") == 0 || s[0] == 'x' || s[0] == 'X')
+        cfg->regionAlgo = 'x';
+      else
+        cfg->regionAlgo = 'm';
+    } else if (strcmp(key, "regionBlur") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->regionBlur = clamp_region_blur((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "regionSmooth") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->regionSmooth = clamp_region_smooth((float)v);
+    } else if (strcmp(key, "regionDark") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->regionDark = clamp_region_dark((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "regionBBox") == 0) {
+      RegionBBox box{};
+      if (!parse_region_bbox_obj(p, &box))
+        return false;
+      cfg->regionBBox = box;
     } else if (strcmp(key, "segmentMap") == 0) {
       if (!parse_segment_map(p, cfg))
         return false;
@@ -502,6 +626,22 @@ static std::string config_to_json(const HelperConfig &c) {
 
   o.append("  \"lastScene\": ");
   append_escaped(&o, c.lastScene);
+  o.append(",\n");
+
+  o.append("  \"regionAlgo\": ");
+  append_escaped(&o, c.regionAlgo == 'x' ? "max" : "mean");
+  o.append(",\n");
+  snprintf(num, sizeof(num), "  \"regionBlur\": %d,\n", c.regionBlur);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"regionSmooth\": %.4g,\n",
+           (double)c.regionSmooth);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"regionDark\": %d,\n", c.regionDark);
+  o.append(num);
+  snprintf(num, sizeof(num),
+           "  \"regionBBox\": {\"l\": %d, \"t\": %d, \"w\": %d, \"h\": %d}",
+           c.regionBBox.l, c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
+  o.append(num);
 
   if (c.hasMap) {
     o.append(",\n  \"segmentMap\": [\n");
@@ -662,6 +802,12 @@ void config_apply() {
   engine_set_near_black(c.nearBlack);
   engine_set_blur(c.blurStep);
   engine_set_mode(c.mode);
+  engine_set_region_algo(c.regionAlgo);
+  engine_set_region_blur(c.regionBlur);
+  engine_set_region_smooth(c.regionSmooth);
+  engine_set_region_dark(c.regionDark);
+  engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
+                         c.regionBBox.h);
   if (!engine_set_com(c.comPort)) {
     printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
     engine_set_com("COM10");
@@ -810,6 +956,57 @@ void config_set_autostart(bool on) {
   autostart_apply(on);
 }
 
+void config_set_region_algo(char algo) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionAlgo = (algo == 'x' || algo == 'X') ? 'x' : 'm';
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_region_blur(int v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionBlur = clamp_region_blur(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_region_smooth(float v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionSmooth = clamp_region_smooth(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_region_dark(int v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionDark = clamp_region_dark(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+bool config_set_region_bbox(int l, int t, int w, int h) {
+  if (!valid_region_bbox(l, t, w, h))
+    return false;
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionBBox.l = clamp_pct(l);
+    g_cfg.regionBBox.t = clamp_pct(t);
+    g_cfg.regionBBox.w = clamp_pct(w);
+    g_cfg.regionBBox.h = clamp_pct(h);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  return true;
+}
+
 void config_set_last_scene(const char *scene) {
   if (!scene)
     return;
@@ -823,6 +1020,9 @@ void config_set_last_scene(const char *scene) {
   switch (parsed.kind) {
   case DisplayIntentKind::Engine:
     snprintf(normalized, sizeof(normalized), "engine");
+    break;
+  case DisplayIntentKind::Region:
+    snprintf(normalized, sizeof(normalized), "region");
     break;
   case DisplayIntentKind::SoftOff:
     snprintf(normalized, sizeof(normalized), "off");

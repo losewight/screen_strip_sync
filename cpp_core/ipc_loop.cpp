@@ -16,7 +16,6 @@
 #include <cstdlib>
 #include <cstring>
 
-
 static SOCKET g_listen_sock = INVALID_SOCKET;
 static SOCKET g_client_sock = INVALID_SOCKET;
 static std::atomic_bool g_ipc_quit{false};
@@ -116,6 +115,9 @@ static void send_display_status(SOCKET client) {
   case DisplayIntentKind::Engine:
     send_status_kv(client, "display", "engine");
     break;
+  case DisplayIntentKind::Region:
+    send_status_kv(client, "display", "region");
+    break;
   case DisplayIntentKind::Solid:
     send_status_kv(client, "display", "solid");
     break;
@@ -146,6 +148,9 @@ static void format_scene(char *out, size_t cap) {
   case DisplayIntentKind::Engine:
     snprintf(out, cap, "engine");
     break;
+  case DisplayIntentKind::Region:
+    snprintf(out, cap, "region");
+    break;
   case DisplayIntentKind::Solid:
     snprintf(out, cap, "solid %s", intent.solid);
     break;
@@ -173,6 +178,13 @@ static void push_config_lines(SOCKET client) {
   send_line(client, "cfg sleep_sync %d\n", c.autoSleepSync ? 1 : 0);
   send_line(client, "cfg shutdown_off %d\n", c.turnOffOnShutdown ? 1 : 0);
   send_line(client, "cfg autostart %d\n", c.startOnBoot ? 1 : 0);
+  send_line(client, "cfg region_algo %s\n",
+            c.regionAlgo == 'x' ? "max" : "mean");
+  send_line(client, "cfg region_blur %d\n", c.regionBlur);
+  send_line(client, "cfg region_smooth %.2f\n", (double)c.regionSmooth);
+  send_line(client, "cfg region_dark %d\n", c.regionDark);
+  send_line(client, "cfg region_bbox %d,%d,%d,%d\n", c.regionBBox.l,
+            c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
 
   if (!c.hasMap) {
     send_line(client, "cfg map default\n");
@@ -269,6 +281,14 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     engine_set_intent_engine();
     config_set_last_scene("engine");
     printf("cmd=start\n");
+    return DispatchResult::Continue;
+  }
+  // 屏幕氛围：与 start（map）正交；共用 stop/soft_off
+  if (strcmp(line, "start_region") == 0) {
+    engine_start_region(*serial);
+    engine_set_intent_region();
+    config_set_last_scene("region");
+    printf("cmd=start_region\n");
     return DispatchResult::Continue;
   }
   if (strcmp(line, "stop") == 0) {
@@ -457,6 +477,138 @@ static DispatchResult dispatch_line(const char *line, HANDLE *serial,
     } else {
       config_sync_map_from_engine();
       printf("cmd=set map\n");
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set region_algo ", 16) == 0) {
+    const char *p = line + 16;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char algo = 0;
+    if (strcmp(p, "mean") == 0)
+      algo = 'm';
+    else if (strcmp(p, "max") == 0)
+      algo = 'x';
+    if (algo == 0) {
+      printf("bad set region_algo: [%s]\n", p);
+    } else {
+      engine_set_region_algo(algo);
+      config_set_region_algo(algo);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.regionAlgo != algo)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_algo\n");
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set region_blur ", 16) == 0) {
+    const char *p = line + 16;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set region_blur: [%s]\n", p);
+    } else {
+      engine_set_region_blur((int)v);
+      config_set_region_blur((int)v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.regionBlur != (int)v)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_blur\n");
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set region_smooth ", 18) == 0) {
+    const char *p = line + 18;
+    char *end = nullptr;
+    float v = strtof(p, &end);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set region_smooth: [%s]\n", p);
+    } else {
+      engine_set_region_smooth(v);
+      config_set_region_smooth(v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (fabsf(after.regionSmooth - v) > 0.0005f)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_smooth\n");
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set region_dark ", 16) == 0) {
+    const char *p = line + 16;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set region_dark: [%s]\n", p);
+    } else {
+      engine_set_region_dark((int)v);
+      config_set_region_dark((int)v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.regionDark != (int)v)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_dark\n");
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set region_bbox ", 16) == 0) {
+    const char *p = line + 16;
+    int l = 0, t = 0, w = 0, h = 0;
+    char *end = nullptr;
+    l = (int)strtol(p, &end, 10);
+    if (end == p || *end != ',') {
+      printf("bad set region_bbox: [%s]\n", p);
+      return DispatchResult::Continue;
+    }
+    p = end + 1;
+    t = (int)strtol(p, &end, 10);
+    if (end == p || *end != ',') {
+      printf("bad set region_bbox: [%s]\n", line + 16);
+      return DispatchResult::Continue;
+    }
+    p = end + 1;
+    w = (int)strtol(p, &end, 10);
+    if (end == p || *end != ',') {
+      printf("bad set region_bbox: [%s]\n", line + 16);
+      return DispatchResult::Continue;
+    }
+    p = end + 1;
+    h = (int)strtol(p, &end, 10);
+    if (end == p) {
+      printf("bad set region_bbox: [%s]\n", line + 16);
+      return DispatchResult::Continue;
+    }
+    while (*end == ' ' || *end == '\t')
+      ++end;
+    if (*end != '\0') {
+      printf("bad set region_bbox: [%s]\n", line + 16);
+      return DispatchResult::Continue;
+    }
+    if (!config_set_region_bbox(l, t, w, h)) {
+      printf("bad set region_bbox: [%s]\n", line + 16);
+    } else {
+      HelperConfig after{};
+      config_copy(&after);
+      engine_set_region_bbox(after.regionBBox.l, after.regionBBox.t,
+                             after.regionBBox.w, after.regionBBox.h);
+      if (after.regionBBox.l != l || after.regionBBox.t != t ||
+          after.regionBBox.w != w || after.regionBBox.h != h)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_bbox\n");
     }
     return DispatchResult::Continue;
   }

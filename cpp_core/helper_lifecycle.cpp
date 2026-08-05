@@ -122,7 +122,8 @@ void helper_resume_from_sleep() {
       *g_serial = neu;
 
     // 2) 追色才要 DXGI；唤醒后 DuplicateOutput 常 0x80070005，多试几次
-    if (snap.kind == DisplayIntentKind::Engine) {
+    if (snap.kind == DisplayIntentKind::Engine ||
+        snap.kind == DisplayIntentKind::Region) {
       bool dxgi_ok = false;
       for (int i = 1; i <= 20; ++i) {
         if (g_shutting_down.load())
@@ -136,7 +137,7 @@ void helper_resume_from_sleep() {
         Sleep(500);
       }
       if (!dxgi_ok) {
-        printf("resume: dxgi give up -> soft_off (was engine)\n");
+        printf("resume: dxgi give up -> soft_off (was engine/region)\n");
         engine_stop();
         engine_set_intent_soft_off();
         send_solid(neu, "000000");

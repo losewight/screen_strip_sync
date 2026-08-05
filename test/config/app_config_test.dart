@@ -98,6 +98,38 @@ void main() {
       expect(cleared.segmentMap, isNull);
     });
 
+    test('parses region fields and scene region', () {
+      final cfg = AppConfig.fromCfgLines(const [
+        'cfg region_algo max',
+        'cfg region_blur 8',
+        'cfg region_smooth 0.80',
+        'cfg region_dark 3',
+        'cfg region_bbox 12,20,70,55',
+        'cfg scene region',
+      ]);
+      expect(cfg.regionAlgo, RegionAlgo.max);
+      expect(cfg.regionBlur, 8);
+      expect(cfg.regionSmooth, 0.80);
+      expect(cfg.regionDark, 3);
+      expect(cfg.regionBBox, const RegionBBox(l: 12, t: 20, w: 70, h: 55));
+      expect(cfg.lastScene, 'region');
+    });
+
+    test('clamps region numeric fields', () {
+      expect(
+        AppConfig.fromCfgLines(const ['cfg region_blur 99']).regionBlur,
+        20,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg region_smooth 1.5']).regionSmooth,
+        0.99,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg region_dark -2']).regionDark,
+        0,
+      );
+    });
+
     test('illegal mode falls back to A', () {
       expect(
         AppConfig.fromCfgLines(const ['cfg mode x']).mode,

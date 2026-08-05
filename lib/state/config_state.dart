@@ -58,6 +58,27 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(mode: mode);
   }
 
+  void setRegionAlgo(RegionAlgo algo) {
+    state = state.copyWith(regionAlgo: algo);
+  }
+
+  void setRegionBlur(int value) {
+    state = state.copyWith(regionBlur: value.clamp(0, 20));
+  }
+
+  void setRegionSmooth(double value) {
+    state = state.copyWith(regionSmooth: value.clamp(0.0, 0.99));
+  }
+
+  void setRegionDark(int value) {
+    state = state.copyWith(regionDark: value.clamp(0, 50));
+  }
+
+  void setRegionBBox(RegionBBox box) {
+    if (!box.isValid) return;
+    state = state.copyWith(regionBBox: box);
+  }
+
   void setComPort(String value) {
     state = state.copyWith(comPort: value.trim());
   }

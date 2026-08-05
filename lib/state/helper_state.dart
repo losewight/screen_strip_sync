@@ -192,6 +192,80 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
+  /// 屏幕氛围：独立于 `start`（map）的追色入口。
+  @override
+  void startRegion() {
+    if (!_client.isConnected) return;
+    try {
+      _cancelPendingSolid();
+      _engineWanted = true;
+      _sendIpc('start_region');
+      _patch(
+        message: '屏幕氛围运行中',
+        phase: HelperPhase.running,
+        engineRunning: true,
+      );
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionAlgo(RegionAlgo algo) {
+    if (!_client.isConnected) return;
+    try {
+      final word = switch (algo) {
+        RegionAlgo.mean => 'mean',
+        RegionAlgo.max => 'max',
+      };
+      _sendIpc('set region_algo $word');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionBlur(int blur) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set region_blur ${blur.clamp(0, 20)}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionSmooth(double smooth) {
+    if (!_client.isConnected) return;
+    try {
+      final v = smooth.clamp(0.0, 0.99);
+      _sendIpc('set region_smooth ${v.toStringAsFixed(2)}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionDark(int dark) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set region_dark ${dark.clamp(0, 50)}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionBBox(RegionBBox box) {
+    if (!_client.isConnected) return;
+    if (!box.isValid) return;
+    try {
+      _sendIpc('set region_bbox ${box.toIpcPayload()}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
   @override
   void sendComPort(String port) {
     if (!_client.isConnected) return;

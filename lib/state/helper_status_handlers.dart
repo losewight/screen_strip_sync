@@ -27,6 +27,14 @@ mixin _HelperStatusHandlers on _HelperStateBase {
           hasDevice: true,
           message: com.isEmpty ? '追色运行中' : '$com · 追色运行中',
         );
+      case HelperDisplayKind.region:
+        _engineWanted = true;
+        _patch(
+          engineRunning: true,
+          phase: HelperPhase.running,
+          hasDevice: true,
+          message: com.isEmpty ? '屏幕氛围运行中' : '$com · 屏幕氛围运行中',
+        );
       case HelperDisplayKind.solid:
         _engineWanted = false;
         _patch(
@@ -154,4 +162,10 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendAutostart(bool enabled);
   void sendShutdownOff(bool enabled);
   void syncSegmentMapFromConfig();
+  void startRegion();
+  void sendRegionAlgo(RegionAlgo algo);
+  void sendRegionBlur(int blur);
+  void sendRegionSmooth(double smooth);
+  void sendRegionDark(int dark);
+  void sendRegionBBox(RegionBBox box);
 }
