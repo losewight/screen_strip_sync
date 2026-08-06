@@ -27,6 +27,15 @@ bool is_rrggbb(const char *s) {
   return true;
 }
 
+// 为什么：无 COM 时常驻；控灯命令短路并告知 UI，避免 WriteFile(INVALID) 刷屏
+static bool require_serial(HANDLE *serial, SOCKET client, const char *cmd) {
+  if (serial != nullptr && *serial != INVALID_HANDLE_VALUE)
+    return true;
+  printf("cmd=%s skipped: no serial\n", cmd);
+  send_status(client, "reconnect_fail");
+  return false;
+}
+
 DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "quit") == 0) {
     // 为什么：关窗走 bye；quit 才关后台服务
@@ -44,6 +53,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     return DispatchResult::Continue;
   }
   if (strcmp(line, "off") == 0) {
+    if (!require_serial(serial, client, "off"))
+      return DispatchResult::Continue;
     engine_stop();
     printf("cmd=off\n");
     power_off(*serial);
@@ -51,6 +62,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   }
   // 为什么：UI「关灯」熄画面不掉电；黑帧走 send_solid，帧间隔 ≥50ms
   if (strcmp(line, "soft_off") == 0) {
+    if (!require_serial(serial, client, "soft_off"))
+      return DispatchResult::Continue;
     engine_stop();
     engine_set_intent_soft_off();
     config_set_last_scene("off");
@@ -59,6 +72,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     return DispatchResult::Continue;
   }
   if (strcmp(line, "start") == 0) {
+    if (!require_serial(serial, client, "start"))
+      return DispatchResult::Continue;
     engine_start(*serial);
     engine_set_intent_engine();
     config_set_last_scene("engine");
@@ -67,6 +82,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   }
   // 屏幕氛围：与 start（map）正交；共用 stop/soft_off
   if (strcmp(line, "start_region") == 0) {
+    if (!require_serial(serial, client, "start_region"))
+      return DispatchResult::Continue;
     engine_start_region(*serial);
     engine_set_intent_region();
     config_set_last_scene("region");
@@ -84,6 +101,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     const char *color = line + 6;
     if (!is_rrggbb(color)) {
       printf("bad solid color: [%s]\n", color);
+    } else if (!require_serial(serial, client, "solid")) {
+      // 已回推 reconnect_fail
     } else {
       printf("cmd=solid color=%s\n", color);
       engine_stop();
@@ -261,6 +280,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     long v = strtol(p, &end, 10);
     if (end == p || *end != '\0' || v < 0 || v >= kSegmentCount) {
       printf("bad highlight: [%s]\n", p);
+    } else if (!require_serial(serial, client, "highlight")) {
+      // 已回推 reconnect_fail
     } else {
       printf("cmd=highlight %ld\n", v);
       send_highlight(*serial, (int)v);

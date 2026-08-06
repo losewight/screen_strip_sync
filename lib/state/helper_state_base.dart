@@ -16,7 +16,6 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
 
   void _patch({
     String? message,
-    String? ipcLine,
     HelperPhase? phase,
     List<ComPortInfo>? ports,
     String? currentCom,
@@ -28,7 +27,6 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     state = HelperUiState(
       phase: phase ?? state.phase,
       message: message ?? state.message,
-      ipcLine: ipcLine ?? state.ipcLine,
       ports: ports ?? state.ports,
       currentCom: currentCom ?? state.currentCom,
       lastGoodCom: lastGoodCom ?? state.lastGoodCom,
@@ -40,6 +38,5 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
 
   void _sendIpc(String cmd) {
     _client.send(cmd);
-    _patch(ipcLine: '$cmd\n');
   }
 }

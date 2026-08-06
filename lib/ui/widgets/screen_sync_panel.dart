@@ -35,11 +35,11 @@ class ScreenSyncPanel extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SchemeCard(
-                  title: '屏幕跟色引擎',
+                  title: '流光溢彩',
                   actions: [
                     FilledButton(
                       onPressed: can ? () => notifier.send('start') : null,
-                      child: const Text('开始'),
+                      child: const Text('开始流光溢彩'),
                     ),
                     OutlinedButton(
                       onPressed: can ? notifier.softOff : null,

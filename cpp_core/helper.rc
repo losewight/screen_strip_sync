@@ -1,3 +1,39 @@
-﻿#include "resource.h"
+﻿#pragma code_page(65001)
+#include "resource.h"
+#include <winres.h>
 
 IDI_HELPER_TRAY ICON "resources/helper.ico"
+
+// 与 Flutter Runner.rc 产品名对齐；扫描器 / 属性页可识别归属
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS__WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904e4"
+        BEGIN
+            VALUE "CompanyName", "Screen Strip Sync" "\0"
+            VALUE "FileDescription", "Screen Strip Sync 后台服务" "\0"
+            VALUE "FileVersion", "1.0.0" "\0"
+            VALUE "InternalName", "helper" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026" "\0"
+            VALUE "OriginalFilename", "helper.exe" "\0"
+            VALUE "ProductName", "Screen Strip Sync" "\0"
+            VALUE "ProductVersion", "1.0.0" "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END

@@ -43,7 +43,8 @@ class StripStatusBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.text),
           Expanded(
             child: Text(
-              '灯带$label',
+              // 无设备：左侧说明串口不是灯带；右侧胶囊仍用相位短标签「无设备」
+              phase == HelperPhase.noDevice ? '非灯带串口' : '灯带$label',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

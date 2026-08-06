@@ -108,8 +108,8 @@ class ControlPage extends ConsumerWidget {
                     _SwitchRow(
                       title: '开机软件自启',
                       subtitle:
-                          '打开后随 Windows 开机静默启动后台服务，'
-                          '并按上次灯效自动亮起',
+                          '打开后随 Windows 开机静默启动 Screen Strip Sync '
+                          '后台服务（托盘常驻），并按上次灯效自动亮起',
                       value: cfg.startOnBoot,
                       onChanged: canEdit
                           ? (v) {

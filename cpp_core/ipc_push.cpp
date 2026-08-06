@@ -3,6 +3,7 @@
 #include <ws2tcpip.h>
 
 #include "config_store.h"
+#include "helper_lifecycle.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
@@ -160,8 +161,17 @@ void push_config_lines(SOCKET client) {
 
 void push_config_snapshot(SOCKET client) {
   push_config_lines(client);
-  send_status(client, "ready");
-  push_runtime_status(client, true);
+  HANDLE *sp = helper_serial();
+  const bool has_serial = sp != nullptr && *sp != INVALID_HANDLE_VALUE;
+  if (has_serial) {
+    send_status(client, "ready");
+    push_runtime_status(client, true);
+  } else {
+    // 为什么：无 COM 时勿推 ready/com，否则 UI 会当成有设备
+    send_status(client, "reconnect_fail");
+    send_engine_status(client);
+    send_display_status(client);
+  }
 }
 
 bool ipc_has_client() { return g_client_sock != INVALID_SOCKET; }

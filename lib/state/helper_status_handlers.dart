@@ -17,6 +17,15 @@ mixin _HelperStatusHandlers on _HelperStateBase {
 
   /// helper 休眠恢复后的显示意图：对齐徽标，避免灯已亮而 UI 仍停在熄灯。
   void _onStatusDisplay(HelperDisplayKind kind) {
+    // 为什么：无 COM 快照仍会推 display idle；勿盖掉 reconnect_fail → noDevice
+    if (!state.hasDevice || state.phase == HelperPhase.noDevice) {
+      if (kind == HelperDisplayKind.idle) {
+        _engineWanted = false;
+        _patch(engineRunning: false);
+      }
+      return;
+    }
+
     final com = state.currentCom;
     switch (kind) {
       case HelperDisplayKind.engine:
@@ -135,7 +144,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         );
       case HelperStatusWord.reconnectFail:
         _patch(
-          message: '重连失败：打不开 ${ref.read(configProvider).comPort}',
+          message: '无法打开 ${ref.read(configProvider).comPort}，请检查灯带连接',
           hasDevice: false,
           phase: HelperPhase.noDevice,
           currentCom: '',

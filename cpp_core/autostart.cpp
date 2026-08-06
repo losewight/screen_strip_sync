@@ -7,7 +7,10 @@
 
 static constexpr wchar_t kRunKey[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static constexpr wchar_t kValueName[] = L"ScreenStripSyncHelper";
+// 对外产品名；与 Flutter Runner.rc ProductName 对齐
+static constexpr wchar_t kValueName[] = L"Screen Strip Sync";
+// 升级清孤儿，避免旧 Helper 名与新品名双项自启
+static constexpr wchar_t kLegacyValueName[] = L"ScreenStripSyncHelper";
 
 // 拼出期望的 Run 值：`"C:\path\helper.exe" --autostart`
 static bool build_run_value(wchar_t *out, size_t out_cap) {
@@ -23,6 +26,28 @@ static bool build_run_value(wchar_t *out, size_t out_cap) {
     return false;
   }
   return true;
+}
+
+static bool delete_named_value(const wchar_t *name) {
+  HKEY key = nullptr;
+  LONG err = RegOpenKeyExW(HKEY_CURRENT_USER, kRunKey, 0, KEY_SET_VALUE, &key);
+  if (err != ERROR_SUCCESS) {
+    printf("autostart: RegOpenKeyEx delete failed %ld\n", err);
+    return false;
+  }
+  err = RegDeleteValueW(key, name);
+  RegCloseKey(key);
+  // 值本来就不存在也算成功（清孤儿幂等）
+  if (err != ERROR_SUCCESS && err != ERROR_FILE_NOT_FOUND) {
+    printf("autostart: RegDeleteValue failed %ld\n", err);
+    return false;
+  }
+  return true;
+}
+
+static void delete_legacy_value() {
+  // 忽略失败：旧键可能从未写过
+  delete_named_value(kLegacyValueName);
 }
 
 static bool write_run_value(const wchar_t *value) {
@@ -43,22 +68,7 @@ static bool write_run_value(const wchar_t *value) {
   return true;
 }
 
-static bool delete_run_value() {
-  HKEY key = nullptr;
-  LONG err = RegOpenKeyExW(HKEY_CURRENT_USER, kRunKey, 0, KEY_SET_VALUE, &key);
-  if (err != ERROR_SUCCESS) {
-    printf("autostart: RegOpenKeyEx delete failed %ld\n", err);
-    return false;
-  }
-  err = RegDeleteValueW(key, kValueName);
-  RegCloseKey(key);
-  // 值本来就不存在也算成功（清孤儿幂等）
-  if (err != ERROR_SUCCESS && err != ERROR_FILE_NOT_FOUND) {
-    printf("autostart: RegDeleteValue failed %ld\n", err);
-    return false;
-  }
-  return true;
-}
+static bool delete_run_value() { return delete_named_value(kValueName); }
 
 // 读出现有值；不存在返回 false，out 清空
 static bool read_run_value(wchar_t *out, size_t out_cap) {
@@ -88,6 +98,8 @@ static bool read_run_value(wchar_t *out, size_t out_cap) {
 }
 
 bool autostart_apply(bool enabled) {
+  // 无论开关：先清旧 Helper 名，避免扫描器看到双项
+  delete_legacy_value();
   if (!enabled) {
     bool ok = delete_run_value();
     printf("autostart: apply off -> %s\n", ok ? "ok" : "fail");
@@ -102,6 +114,7 @@ bool autostart_apply(bool enabled) {
 }
 
 bool autostart_reconcile(bool enabled_from_json) {
+  delete_legacy_value();
   if (!enabled_from_json) {
     // JSON 关：清掉本值名（哪怕用户手改过路径）
     bool ok = delete_run_value();

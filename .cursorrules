@@ -61,8 +61,8 @@ flowchart LR
 
 | 场景 | 流程 |
 |------|------|
-| **正常启动** | 双击 `helper.exe` → 单实例检查 → 挂托盘 → 读配置 → 开串口 → 恢复上次场景 → listen 9527 → 拉起 Flutter 显示界面 |
-| **静默自启** | 注册表 `helper.exe --autostart` → 同上，但**不拉 Flutter**，直接按上次配置干活 |
+| **正常启动** | 双击 `helper.exe` → 单实例检查 → 挂托盘 → 读配置 → 尝试开串口（失败则跳过场景恢复，**进程与托盘仍常驻**）→ listen 9527 → 拉起 Flutter 显示界面 |
+| **静默自启** | 注册表 `HKCU\...\Run\Screen Strip Sync` → `helper.exe --autostart` → 同上，但**不拉 Flutter**；有串口则按上次配置干活 |
 | **打开界面** | 托盘双击 → 已有客户端则推 `ui show` 置顶现有窗口；无客户端则 `CreateProcess` 拉起 Flutter → Flutter 连 9527 → helper 推全量配置快照 → 界面渲染 |
 | **隐藏界面** | Flutter 右上角 X → 发 `bye` → `exit(0)` **整进程退出（内存清零）**；helper、串口、灯效、托盘全部不受影响 |
 | **完全退出** | 托盘「退出」（或 IPC `quit`）→ 关灯 → 停引擎 → 关串口 → 关 DXGI → 摘托盘 → helper 进程退出 |
@@ -128,7 +128,7 @@ flowchart LR
 | `dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
 | `tray_icon.{h,cpp}` | 隐藏顶层窗 + `Shell_NotifyIcon` + 右键菜单 + `WM_TASKBARCREATED` 重加；**合并原 `power_watch` 的电源消息** | **H4 新增** |
 | `ui_launcher.{h,cpp}` | 解析 Flutter exe 路径、三级判定后 `CreateProcess`、记子进程句柄 | **H5 新增** |
-| `autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `ScreenStripSyncHelper`），值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移 | **H7 新增** |
+| `autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `Screen Strip Sync`），值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并清旧键 `ScreenStripSyncHelper` | **H7 新增** |
 | `ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 状态·配置回推 / 命令分派；对外仍只暴露 `ipc_loop.h` | 阶段 H 改造 |
 | `engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop+start/stop、intent 记账与场景恢复 | 基本就绪 |
 | `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
@@ -144,7 +144,7 @@ lib/
 │   ├── pages/              # control / lighting_schemes（薄壳）/ settings / region_bbox_pick
 │   └── widgets/            # scheme 面板、calibrator、screen_mask_select 等
 ├── state/                  # helper_state（含 map IPC mixin）、config_state（由 cfg 快照驱动）
-├── ipc/                    # helper_client、primary_monitor_capture（截屏）
+├── ipc/                    # helper_client、截屏相关（框选蒙版路径）
 └── config/                 # app_config（只读模型 + cfg 行解析）、segment_sample、segment_map_codec
 ```
 
@@ -212,7 +212,7 @@ lib/
 | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步：1 = 挂起时软关、唤醒自恢复；0 = 休眠不插手 |
 | `set shutdown_off 0\|1` | 关机 / 注销时是否关灯 |
-| `set autostart 0\|1` | **写注册表** `HKCU\...\Run`（值名 `ScreenStripSyncHelper`）；helper 是唯一写方 |
+| `set autostart 0\|1` | **写注册表** `HKCU\...\Run`（值名 `Screen Strip Sync`）；helper 是唯一写方 |
 | `highlight <0..9>` | 校准：仅该段白、其余黑一帧（≥50ms） |
 | `set map default` | 清空自定义采样表，恢复顶边均分 |
 | `set map x0,y0,x1,y1;...` | 10 段矩形（0..100 整数百分比，`;` 分隔）；非法整句忽略 |
@@ -278,8 +278,8 @@ lib/
       `PBT_APMSUSPEND` 从「`helper_shutdown` 自杀」改成「关灯 + 停引擎 + `close_com`，进程存活」；`PBT_APMRESUMEAUTOMATIC` 重开串口（重试）+ 按 `lastScene` 恢复 + 有客户端则推 `status`。`sleep_sync=0` 时休眠完全不插手。
       *验收*：睡眠→唤醒后，helper 进程号不变、灯自动恢复到睡前场景；界面开着时状态条同步更新。
 - [ ] **H7 开机自启**
-      `autostart.{h,cpp}` 读写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `ScreenStripSyncHelper`），值 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并纠正；`set autostart` 落到注册表 + JSON。
-      *验收*：UI 打开开关 → 注册表出现 `ScreenStripSyncHelper` 正确项 → 重启电脑后无界面但灯按上次场景亮起。
+      `autostart.{h,cpp}` 读写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `Screen Strip Sync`），值 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并纠正、清旧键 `ScreenStripSyncHelper`；`set autostart` 落到注册表 + JSON。
+      *验收*：UI 打开开关 → 注册表出现 `Screen Strip Sync` 正确项 → 重启电脑后无界面但灯按上次场景亮起。
 - [ ] **H8 场景持久化**
       `start` / `stop` / `solid` / `soft_off` 与参数变更后更新 `lastScene` 并 debounce 写盘；启动与唤醒都据此恢复。
       *验收*：设成纯色紫 → 完全退出 helper → 重开 → 直接是紫色。

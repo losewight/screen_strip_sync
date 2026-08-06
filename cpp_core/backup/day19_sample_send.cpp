@@ -1,7 +1,7 @@
 ﻿// Day19 备份：sample_ok + send_sampled + 握手后发灯示例。
 // 不编入 helper.exe（CMake 未列入）；需要时自行拷回或临时加入工程。
 //
-// 依赖：假图缓冲与 fill 逻辑（现位于 fake_bgra.cpp）；serial_port.h。
+// 依赖：本文件内假图缓冲；serial_port.h。
 // 下列代码为拆分前 helper_main 中的完整可复用片段，当前无人调用。
 
 #if 0 // 整文件默认不编译；需要本地试跑时改为 1 并自行接进工程

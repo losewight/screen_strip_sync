@@ -167,9 +167,13 @@ static void tray_show_menu(HWND hwnd) {
   AppendMenuW(menu, MF_STRING, IDM_TRAY_OPEN_UI, L"打开界面");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_ENGINE, L"屏幕跟色");
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_REGION, L"屏幕氛围");
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_SOFT_OFF, L"关灯");
+  // 为什么：无灯带时控灯项灰显；打开界面 / 自启 / 退出仍可用
+  const bool has_serial = serial_or_invalid() != INVALID_HANDLE_VALUE;
+  const UINT light_flags =
+      MF_STRING | (has_serial ? 0u : (MF_GRAYED | MF_DISABLED));
+  AppendMenuW(menu, light_flags, IDM_TRAY_START_ENGINE, L"屏幕跟色");
+  AppendMenuW(menu, light_flags, IDM_TRAY_START_REGION, L"屏幕氛围");
+  AppendMenuW(menu, light_flags, IDM_TRAY_SOFT_OFF, L"关灯");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
   HelperConfig c{};
@@ -177,14 +181,8 @@ static void tray_show_menu(HWND hwnd) {
   AppendMenuW(menu, MF_STRING | (c.startOnBoot ? MF_CHECKED : 0),
               IDM_TRAY_AUTOSTART, L"开机自启");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_EXIT, L"退出并关灯");
-
-  HANDLE h = serial_or_invalid();
-  if (h == INVALID_HANDLE_VALUE) {
-    EnableMenuItem(menu, IDM_TRAY_START_ENGINE, MF_GRAYED);
-    EnableMenuItem(menu, IDM_TRAY_START_REGION, MF_GRAYED);
-    EnableMenuItem(menu, IDM_TRAY_SOFT_OFF, MF_GRAYED);
-  }
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_EXIT,
+              has_serial ? L"退出并关灯" : L"退出");
 
   // 为什么：否则点菜单外不收起
   SetForegroundWindow(hwnd);
@@ -316,9 +314,9 @@ static void tray_thread_main() {
   }
 
   // 为什么：HWND_MESSAGE 收不到电源广播；必须用隐藏顶层窗
-  HWND hwnd =
-      CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWndClass, L"ScreenStripSyncTray", WS_POPUP,
-                      0, 0, 0, 0, nullptr, nullptr, wc.hInstance, nullptr);
+  HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWndClass,
+                              L"ScreenStripSyncTray", WS_POPUP, 0, 0, 0, 0,
+                              nullptr, nullptr, wc.hInstance, nullptr);
   if (!hwnd) {
     printf("tray CreateWindowEx failed: %lu\n", (unsigned long)GetLastError());
     return;

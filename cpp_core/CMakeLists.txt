@@ -6,7 +6,7 @@ project(ScreenStripSyncCore)
 
 # 3. 主线（Day 15+）：独立 helper.exe = 串口属主 + IPC 命令循环
 # 废案（同进程 DLL / serial_test / dll_test）已移至 废案_同进程FFI_Day11-14/，不再编入。
-# backup/day19_sample_send.cpp 为源码备份，不编入。
+# backup/day19_sample_send.cpp 为源码备份，不编入（自带假图缓冲，无 fake_bgra）。
 # WIN32 = /SUBSYSTEM:WINDOWS，托盘常驻不能挂黑控制台
 add_executable(helper WIN32
   helper_main.cpp
@@ -15,7 +15,6 @@ add_executable(helper WIN32
   config_json.cpp
   autostart.cpp
   serial_port.cpp
-  fake_bgra.cpp
   engine_params.cpp
   engine_serial.cpp
   engine_frame.cpp

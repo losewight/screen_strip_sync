@@ -143,20 +143,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Sleep(500);
   }
   if (!ready) {
-    printf("serial give up after %d tries\n", max_tries);
-    dxgi_shutdown();
-    config_shutdown();
-    return 1;
-  }
-
-  {
+    // 为什么：无灯带也不能退进程；托盘常驻，用户可稍后换口/重连
+    printf("serial give up after %d tries; stay alive without COM\n",
+           max_tries);
+  } else {
     char com[16];
     engine_get_com(com, sizeof(com));
     config_set_last_connected_com(com);
-  }
 
-  // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
-  {
+    // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
     DisplayIntent boot{};
     if (parse_last_scene(config_get().lastScene, &boot)) {
       apply_display_intent(h, boot);

@@ -21,7 +21,6 @@ class HelperUiState {
   const HelperUiState({
     required this.phase,
     required this.message,
-    this.ipcLine = '',
     this.ports = const [],
     this.currentCom = '',
     this.lastGoodCom = '',
@@ -32,9 +31,6 @@ class HelperUiState {
 
   final HelperPhase phase;
   final String message;
-
-  /// 最近经 Socket 发出的 IPC 行（含 `\n`），供状态徽标小字展示。
-  final String ipcLine;
 
   /// 本机扫描结果（preferred 已排前）。
   final List<ComPortInfo> ports;
