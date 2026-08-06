@@ -5,6 +5,8 @@ import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/info_hint.dart';
+import '../widgets/palette_color_picker.dart';
 import '../widgets/serial_port_picker.dart';
 import '../widgets/win11_switch.dart';
 
@@ -78,6 +80,8 @@ class ControlPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.text),
                 const SerialPortPicker(radius: _SwitchGroup.radius),
+                const SizedBox(height: AppSpacing.text),
+                const _WallColorCompCard(),
                 const SizedBox(height: AppSpacing.card),
                 _SwitchGroup(
                   children: [
@@ -175,6 +179,109 @@ class _ConnectBar extends StatelessWidget {
           OutlinedButton(
             onPressed: canReconnectSerial ? onReconnectSerial : null,
             child: const Text('重连串口'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 墙面色彩补偿：开关 + 校正取色；helper 补偿逻辑下一步再接。
+class _WallColorCompCard extends StatefulWidget {
+  const _WallColorCompCard();
+
+  @override
+  State<_WallColorCompCard> createState() => _WallColorCompCardState();
+}
+
+class _WallColorCompCardState extends State<_WallColorCompCard> {
+  static const _defaultPick = Color(0xFF9C27B0);
+
+  bool _enabled = false;
+  Color? _wallColor;
+
+  Future<void> _pickWallColor() async {
+    final picked = await showPaletteColorPicker(
+      context,
+      initial: _wallColor ?? _defaultPick,
+      title: '请选择你的墙面颜色',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _wallColor = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasColor = _wallColor != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(_SwitchGroup.radius),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.card,
+        vertical: AppSpacing.card,
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '墙面色彩补偿',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.compact),
+                    InfoHint(
+                      message:
+                          '墙面不是白/黑中性色时，灯带光会被墙色“染”偏；\n'
+                          '在此按墙面底色做校正。白墙或黑墙一般不必用。',
+                    ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.compact),
+                Text(
+                  '按墙面底色校正灯带输出，减轻偏色与发灰。',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.card),
+          OutlinedButton(
+            onPressed: _pickWallColor,
+            child: const Text('校正'),
+          ),
+          if (hasColor) ...[
+            const SizedBox(width: AppSpacing.control),
+            Container(
+              width: AppSpacing.page,
+              height: AppSpacing.page,
+              decoration: BoxDecoration(
+                color: _wallColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.divider),
+              ),
+            ),
+          ],
+          const SizedBox(width: AppSpacing.control),
+          Win11Switch(
+            value: _enabled,
+            onChanged: hasColor ? (v) => setState(() => _enabled = v) : null,
           ),
         ],
       ),

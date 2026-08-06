@@ -2,9 +2,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
-import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/info_hint.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/segment_map_calibrator.dart';
 
@@ -50,7 +50,7 @@ class ScreenSyncPanel extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '映射校准',
-                  titleTrailing: const _InfoHint(
+                  titleTrailing: const InfoHint(
                     message:
                         '逐段点亮灯带并框选屏幕区域，\n'
                         '把每段灯珠映射到对应画面位置，\n'
@@ -137,43 +137,6 @@ class ScreenSyncPanel extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 悬停与点击都能弹出同一条说明（桌面悬停仍走 Tooltip 默认行为）。
-class _InfoHint extends StatefulWidget {
-  const _InfoHint({required this.message});
-
-  final String message;
-
-  @override
-  State<_InfoHint> createState() => _InfoHintState();
-}
-
-class _InfoHintState extends State<_InfoHint> {
-  final _tooltipKey = GlobalKey<TooltipState>();
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      key: _tooltipKey,
-      message: widget.message,
-      // 点击弹出后多留一会儿，方便读完；悬停离开仍会立刻收起。
-      showDuration: const Duration(seconds: 4),
-      waitDuration: const Duration(milliseconds: 400),
-      child: InkWell(
-        onTap: () => _tooltipKey.currentState?.ensureTooltipVisible(),
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.all(2),
-          child: Icon(
-            Icons.error_outline,
-            size: 16,
-            color: AppTheme.textSecondary,
           ),
         ),
       ),

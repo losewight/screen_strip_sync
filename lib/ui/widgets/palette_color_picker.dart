@@ -8,18 +8,20 @@ import 'color_swatch_button.dart';
 Future<Color?> showPaletteColorPicker(
   BuildContext context, {
   Color initial = const Color(0xFFFF0000),
+  String title = '调色盘',
 }) {
   return showDialog<Color>(
     context: context,
     barrierColor: Colors.black54,
-    builder: (ctx) => _PaletteColorDialog(initial: initial),
+    builder: (ctx) => _PaletteColorDialog(initial: initial, title: title),
   );
 }
 
 class _PaletteColorDialog extends StatefulWidget {
-  const _PaletteColorDialog({required this.initial});
+  const _PaletteColorDialog({required this.initial, required this.title});
 
   final Color initial;
+  final String title;
 
   @override
   State<_PaletteColorDialog> createState() => _PaletteColorDialogState();
@@ -55,9 +57,9 @@ class _PaletteColorDialogState extends State<_PaletteColorDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                '调色盘',
-                style: TextStyle(
+              Text(
+                widget.title,
+                style: const TextStyle(
                   fontFamily: AppTheme.fontFamily,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
