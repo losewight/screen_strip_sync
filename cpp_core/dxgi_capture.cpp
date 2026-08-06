@@ -1,6 +1,7 @@
 ﻿#include "dxgi_capture.h"
 
 #include "dxgi_mapped.h"
+#include "helper_log.h"
 
 #include <atomic>
 #include <cmath>
@@ -17,6 +18,9 @@ static ID3D11Texture2D *g_staging = nullptr;
 static std::atomic<int> g_near_black{12}; // 0..64
 static std::atomic<int> g_blur_step{2};   // 0..8
 
+// 热路径失败限流窗口（ms）；首条立即打，同 key 重复合并
+static constexpr unsigned kDxgiFailLogPeriodMs = 5000;
+
 // 为什么：ACCESS_LOST 后指针仍活着，必须让上层拆再建；ACCESS_DENIED /
 // INVALID_CALL 在 duplication 已死后走同一条恢复路径（与唤醒 0x80070005 同源）
 static bool is_duplication_lost(HRESULT hr) {
@@ -25,11 +29,18 @@ static bool is_duplication_lost(HRESULT hr) {
 }
 
 static DxgiErr acquire_fail_err(HRESULT hr) {
+  // 稳定地址作限流 key（勿直接传临时字面量指针跨编译单元歧义）
+  static const char kKeyLost[] = "dxgi.acquire.lost";
+  static const char kKeyFail[] = "dxgi.acquire.fail";
   if (is_duplication_lost(hr)) {
-    printf("AcquireNextFrame access lost: 0x%08lx\n", (unsigned long)hr);
+    // 为什么：ACCESS_LOST 恢复环可能连打数千行；限流保诊断密度
+    helper_log_rate(kKeyLost, kDxgiFailLogPeriodMs,
+                    "AcquireNextFrame access lost: 0x%08lx\n",
+                    (unsigned long)hr);
     return DxgiErr::AccessLost;
   }
-  printf("AcquireNextFrame failed: 0x%08lx\n", (unsigned long)hr);
+  helper_log_rate(kKeyFail, kDxgiFailLogPeriodMs,
+                  "AcquireNextFrame failed: 0x%08lx\n", (unsigned long)hr);
   return DxgiErr::AcquireFailed;
 }
 
@@ -165,7 +176,10 @@ DxgiErr dxgi_grab_one_frame(UINT timeout_ms) {
   HRESULT hr = g_duplication->AcquireNextFrame(timeout_ms, &info, &resource);
 
   if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-    printf("AcquireNextFrame: timeout (no new frame)\n");
+    // 为什么：桌面无刷新时属常态；勿每帧打日志（曾刷爆诊断包）
+    static const char kKeyTimeout[] = "dxgi.acquire.timeout";
+    helper_log_rate(kKeyTimeout, kDxgiFailLogPeriodMs,
+                    "AcquireNextFrame: timeout (no new frame)\n");
     return DxgiErr::AcquireTimeout;
   }
   if (FAILED(hr))

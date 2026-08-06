@@ -4,6 +4,7 @@
 
 #include "config_store.h"
 #include "helper_lifecycle.h"
+#include "helper_log.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
@@ -50,6 +51,14 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "sync") == 0) {
     printf("cmd=sync\n");
     push_config_snapshot(client);
+    return DispatchResult::Continue;
+  }
+  // 为什么：开源诊断导出前打标记，便于对齐 helper.log 尾部与导出时刻
+  if (strcmp(line, "diag_mark") == 0) {
+    printf("=== diag export ===\n");
+    if (g_helper_log != nullptr) {
+      fflush(g_helper_log);
+    }
     return DispatchResult::Continue;
   }
   if (strcmp(line, "off") == 0) {

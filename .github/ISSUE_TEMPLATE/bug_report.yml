@@ -1,0 +1,73 @@
+﻿name: Bug report
+description: Report a bug in Screen Strip Sync (please attach diagnostics)
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Screen Strip Sync.
+
+        Please attach the diagnostics file from **Settings → 导出诊断信息**
+        (`screen_strip_sync_diag_*.txt` on your Desktop). It is generated locally
+        and is **not** uploaded automatically.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Clear description of the bug.
+      placeholder: e.g. After sleep/resume the strip stays black even with sleep sync on.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that trigger the issue.
+      placeholder: |
+        1. Start helper / open UI
+        2. …
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App / helper version
+      description: From the diagnostics file `## meta` section if unsure.
+      placeholder: "1.0.0+1 / helper 1.0.0"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: diagnostics
+    attributes:
+      label: Diagnostics attached
+      options:
+        - label: I attached `screen_strip_sync_diag_*.txt` from Settings → 导出诊断信息 (or explained why I cannot)
+          required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Screenshots, hardware (COM port brand), dual-monitor layout, etc.
+    validations:
+      required: false

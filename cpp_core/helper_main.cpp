@@ -4,6 +4,7 @@
 #include "config_store.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
+#include "helper_log.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "tray_icon.h"
@@ -12,15 +13,19 @@
 #include <cstdio>
 #include <cstring>
 #include <share.h>
+#include <sys/stat.h>
 
 #include <shellapi.h>
 
-// 供 helper_log.h 宏使用；_fsopen 可边跑边读
-FILE *g_helper_log = nullptr;
+// 与 helper.rc ProductVersion 对齐；开源诊断横幅用
+static constexpr char kHelperVersion[] = "1.0.0";
+// 超过则 rename 为 helper.log.1 再新建（控体积，开源 Issue 可附）
+static constexpr long long kHelperLogMaxBytes = 2LL * 1024 * 1024;
 
 // 供 H5 读取：--autostart / --no-ui 时不拉 Flutter
 static bool g_silent_start = false;
 static HANDLE g_singleton = nullptr;
+static char g_helper_log_path[MAX_PATH] = {};
 
 static BOOL WINAPI on_ctrl(DWORD type) {
   switch (type) {
@@ -36,6 +41,29 @@ static BOOL WINAPI on_ctrl(DWORD type) {
   }
 }
 
+// 为何：大日志不便附 Issue；启动时若超限则滚成 .1（覆盖旧备份）
+static void rotate_helper_log_if_needed(const char *path) {
+  struct _stat64 st{};
+  if (_stat64(path, &st) != 0 || st.st_size < kHelperLogMaxBytes) {
+    return;
+  }
+
+  char bak[MAX_PATH];
+  if (strcpy_s(bak, path) != 0) {
+    return;
+  }
+  char *slash = strrchr(bak, '\\');
+  if (!slash) {
+    return;
+  }
+  if (strcpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - bak),
+               "helper.log.1") != 0) {
+    return;
+  }
+  DeleteFileA(bak);
+  MoveFileA(path, bak);
+}
+
 // exe 同目录 helper.log；保留全项目 printf，不逐个改
 static void redirect_stdio_to_log() {
   char path[MAX_PATH];
@@ -49,10 +77,13 @@ static void redirect_stdio_to_log() {
   }
   // 为什么：截掉文件名，拼 helper.log（与配置同目录规则一致）
   strcpy_s(slash + 1, MAX_PATH - (slash + 1 - path), "helper.log");
+  rotate_helper_log_if_needed(path);
+  strcpy_s(g_helper_log_path, path);
 
   // 为什么：_SH_DENYNO 允许验收时边跑边读；无缓冲避免日志晚到
   g_helper_log = _fsopen(path, "a", _SH_DENYNO);
   if (!g_helper_log) {
+    g_helper_log_path[0] = '\0';
     return;
   }
   setvbuf(g_helper_log, nullptr, _IONBF, 0);
@@ -61,6 +92,20 @@ static void redirect_stdio_to_log() {
   FILE *fp = nullptr;
   freopen_s(&fp, path, "a", stdout);
   freopen_s(&fp, path, "a", stderr);
+}
+
+static void print_startup_banner() {
+  if (g_helper_log == nullptr) {
+    return;
+  }
+#ifdef _DEBUG
+  const char *build = "Debug";
+#else
+  const char *build = "Release";
+#endif
+  printf("=== helper %s %s silent=%d log=%s ===\n", kHelperVersion, build,
+         g_silent_start ? 1 : 0,
+         g_helper_log_path[0] ? g_helper_log_path : "(none)");
 }
 
 static bool arg_is_silent_flag(const wchar_t *w) {
@@ -104,7 +149,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   }
 
   redirect_stdio_to_log();
-  printf("helper WinMain start\n");
 
 #ifdef _DEBUG
   // 为什么：Debug 下额外开控制台方便挂调试器；printf 仍走 helper.log
@@ -113,6 +157,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   SetConsoleCtrlHandler(on_ctrl, TRUE);
   parse_cmdline_args();
+  print_startup_banner();
+  printf("helper WinMain start\n");
 
   config_load();
   config_apply();

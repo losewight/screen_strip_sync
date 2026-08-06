@@ -10,6 +10,7 @@ project(ScreenStripSyncCore)
 # WIN32 = /SUBSYSTEM:WINDOWS，托盘常驻不能挂黑控制台
 add_executable(helper WIN32
   helper_main.cpp
+  helper_log.cpp
   helper_lifecycle.cpp
   config_store.cpp
   config_json.cpp
