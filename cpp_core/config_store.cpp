@@ -192,6 +192,7 @@ void config_apply() {
   engine_set_alpha(c.emaAlpha);
   engine_set_near_black(c.nearBlack);
   engine_set_blur(c.blurStep);
+  engine_set_saturation(c.saturation);
   engine_set_mode(c.mode);
   engine_set_region_algo(c.regionAlgo);
   engine_set_region_blur(c.regionBlur);
@@ -290,6 +291,15 @@ void config_set_blur(int v) {
   {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg.blurStep = clamp_blur(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_saturation(float v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.saturation = clamp_saturation(v);
     mark_dirty_unlocked();
   }
   ensure_saver_started();

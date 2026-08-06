@@ -22,6 +22,7 @@ class AppConfig {
     this.emaAlpha = 0.3,
     this.nearBlack = 12,
     this.blurStep = 2,
+    this.saturation = 1.4,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
     this.lastConnectedCom = '',
@@ -46,6 +47,9 @@ class AppConfig {
 
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
   final int blurStep;
+
+  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.4 略抬「pop」。
+  final double saturation;
 
   final ColorMode mode;
 
@@ -95,6 +99,7 @@ class AppConfig {
     double? emaAlpha,
     int? nearBlack,
     int? blurStep,
+    double? saturation,
     ColorMode? mode,
     String? comPort,
     String? lastConnectedCom,
@@ -115,6 +120,7 @@ class AppConfig {
       emaAlpha: emaAlpha ?? this.emaAlpha,
       nearBlack: nearBlack ?? this.nearBlack,
       blurStep: blurStep ?? this.blurStep,
+      saturation: saturation ?? this.saturation,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
       lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
@@ -139,6 +145,7 @@ class AppConfig {
     var alpha = 0.3;
     var nearBlack = 12;
     var blurStep = 2;
+    var saturation = 1.4;
     var mode = ColorMode.a;
     var com = 'COM10';
     var lastCom = '';
@@ -176,6 +183,9 @@ class AppConfig {
         case 'blur':
           final v = int.tryParse(val);
           if (v != null) blurStep = v.clamp(0, 8);
+        case 'saturation':
+          final v = double.tryParse(val);
+          if (v != null) saturation = v.clamp(0.5, 2.0);
         case 'mode':
           mode = switch (val) {
             'b' || 'B' => ColorMode.b,
@@ -232,6 +242,7 @@ class AppConfig {
       emaAlpha: alpha,
       nearBlack: nearBlack,
       blurStep: blurStep,
+      saturation: saturation,
       mode: mode,
       comPort: com,
       lastConnectedCom: lastCom,

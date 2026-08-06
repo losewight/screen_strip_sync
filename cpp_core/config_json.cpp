@@ -360,6 +360,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg) {
       if (!parse_number(p, &v))
         return false;
       cfg->blurStep = clamp_blur((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "saturation") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->saturation = clamp_saturation((float)v);
     } else if (strcmp(key, "mode") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -505,6 +510,8 @@ std::string config_format_json(const HelperConfig &c) {
   snprintf(num, sizeof(num), "  \"nearBlack\": %d,\n", c.nearBlack);
   o.append(num);
   snprintf(num, sizeof(num), "  \"blurStep\": %d,\n", c.blurStep);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"saturation\": %.4g,\n", (double)c.saturation);
   o.append(num);
   o.append("  \"mode\": \"");
   o.push_back(c.mode);

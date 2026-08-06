@@ -99,6 +99,24 @@ class ScreenSyncPanel extends ConsumerWidget {
                       ),
                       const SizedBox(height: AppSpacing.control),
                       SchemeParamLabel(
+                        '色彩饱和度: ${(cfg.saturation * 100).round()}%'
+                        '（100%=原色，越高越艳）',
+                      ),
+                      Slider(
+                        value: cfg.saturation.clamp(0.5, 2.0),
+                        min: 0.5,
+                        max: 2.0,
+                        divisions: 15,
+                        label: '${(cfg.saturation * 100).round()}%',
+                        onChanged: canEdit
+                            ? (v) => config.setSaturation(v)
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendSaturation(v)
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel(
                         '暗部过滤: ${cfg.nearBlack}（越大越忽略黑边）',
                       ),
                       Slider(

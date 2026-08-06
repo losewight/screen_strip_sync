@@ -13,6 +13,7 @@ extern std::thread g_worker;
 extern std::mutex g_engine_mu;
 
 extern std::atomic<float> g_alpha;
+extern std::atomic<float> g_saturation;
 extern std::atomic<char> g_mode;
 
 extern std::atomic<char> g_region_algo;

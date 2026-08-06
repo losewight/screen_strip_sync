@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // 与 engine / Dart 对齐的夹紧；config_json 与 config_store 共用。
 inline float clamp_alpha(float v) {
@@ -20,6 +20,14 @@ inline int clamp_blur(int v) {
     return 0;
   if (v > 8)
     return 8;
+  return v;
+}
+// 流光溢彩饱和度增益；1.0=原色，>1 更艳；Rec.601 亮度守恒
+inline float clamp_saturation(float v) {
+  if (v < 0.5f)
+    return 0.5f;
+  if (v > 2.f)
+    return 2.f;
   return v;
 }
 inline int clamp_region_blur(int v) {

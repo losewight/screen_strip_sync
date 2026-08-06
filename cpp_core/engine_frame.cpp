@@ -22,6 +22,8 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
 
   // α 越小越拖影；由 IPC set alpha 写入 g_alpha
   const float alpha = g_alpha.load();
+  // 为什么：采样平均易发灰；EMA 后再抬饱和度，避免增益被时间平滑冲掉
+  const float sat = g_saturation.load();
   char colors[10][7] = {};
 
   for (int i = 0; i < 10; ++i) {
@@ -41,9 +43,32 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
       g_ema_b[i] = alpha * b + (1.f - alpha) * g_ema_b[i];
     }
 
+    float or_ = g_ema_r[i];
+    float og = g_ema_g[i];
+    float ob = g_ema_b[i];
+    // Rec.601 亮度守恒：C' = L + s*(C-L)；s=1 恒等
+    if (sat != 1.f) {
+      const float L = 0.299f * or_ + 0.587f * og + 0.114f * ob;
+      or_ = L + sat * (or_ - L);
+      og = L + sat * (og - L);
+      ob = L + sat * (ob - L);
+      if (or_ < 0.f)
+        or_ = 0.f;
+      else if (or_ > 255.f)
+        or_ = 255.f;
+      if (og < 0.f)
+        og = 0.f;
+      else if (og > 255.f)
+        og = 255.f;
+      if (ob < 0.f)
+        ob = 0.f;
+      else if (ob > 255.f)
+        ob = 255.f;
+    }
+
     // 字符串只在组帧前出现一次
-    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(g_ema_r[i] + 0.5f),
-             (unsigned)(g_ema_g[i] + 0.5f), (unsigned)(g_ema_b[i] + 0.5f));
+    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
+             (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
   }
   g_ema_inited = true;
 

@@ -159,6 +159,27 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set saturation ", 15) == 0) {
+    const char *p = line + 15;
+    char *end = nullptr;
+    float v = strtof(p, &end);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0') {
+      printf("bad set saturation: [%s]\n", p);
+    } else {
+      engine_set_saturation(v);
+      config_set_saturation(v);
+      HelperConfig after{};
+      config_copy(&after);
+      if (fabsf(after.saturation - v) > 0.0005f)
+        ipc_push_config_snapshot();
+      printf("cmd=set saturation\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set mode ", 9) == 0) {
     const char *p = line + 9;
     while (*p == ' ' || *p == '\t')

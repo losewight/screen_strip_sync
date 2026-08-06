@@ -27,6 +27,7 @@ bool try_serial_ready(HANDLE *out_h);
 void engine_set_alpha(float alpha);
 void engine_set_near_black(int v);
 void engine_set_blur(int v);
+void engine_set_saturation(float v); // 0.5..2；map 路径饱和度增益
 void engine_set_mode(char mode);
 bool engine_set_com(const char *name);
 

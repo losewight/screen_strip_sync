@@ -54,6 +54,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(blurStep: value.clamp(0, 8));
   }
 
+  void setSaturation(double value) {
+    state = state.copyWith(saturation: value.clamp(0.5, 2.0));
+  }
+
   void setMode(ColorMode mode) {
     state = state.copyWith(mode: mode);
   }

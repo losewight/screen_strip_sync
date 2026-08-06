@@ -179,6 +179,17 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
+  void sendSaturation(double saturation) {
+    if (!_client.isConnected) return;
+    try {
+      final v = saturation.clamp(0.5, 2.0);
+      _sendIpc('set saturation ${v.toStringAsFixed(2)}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {

@@ -9,6 +9,7 @@ void main() {
         'cfg alpha 0.55',
         'cfg near_black 20',
         'cfg blur 4',
+        'cfg saturation 1.60',
         'cfg mode b',
         'cfg com COM7',
         'cfg last_com COM7',
@@ -21,6 +22,7 @@ void main() {
       expect(cfg.emaAlpha, 0.55);
       expect(cfg.nearBlack, 20);
       expect(cfg.blurStep, 4);
+      expect(cfg.saturation, 1.60);
       expect(cfg.mode, ColorMode.b);
       expect(cfg.comPort, 'COM7');
       expect(cfg.lastConnectedCom, 'COM7');
@@ -36,6 +38,7 @@ void main() {
       expect(cfg.emaAlpha, 0.3);
       expect(cfg.nearBlack, 12);
       expect(cfg.blurStep, 2);
+      expect(cfg.saturation, 1.4);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
       expect(cfg.lastConnectedCom, '');
@@ -69,6 +72,14 @@ void main() {
       expect(
         AppConfig.fromCfgLines(const ['cfg blur 99']).blurStep,
         8,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg saturation 0.1']).saturation,
+        0.5,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg saturation 3.0']).saturation,
+        2.0,
       );
     });
 

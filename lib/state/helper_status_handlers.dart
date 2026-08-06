@@ -156,6 +156,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendEmaAlpha(double alpha);
   void sendNearBlack(int nearBlack);
   void sendBlur(int blurStep);
+  void sendSaturation(double saturation);
   void sendMode(ColorMode mode);
   void sendComPort(String port);
   void sendSleepSync(bool enabled);

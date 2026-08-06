@@ -109,7 +109,7 @@ flowchart LR
 
 - **配置文件写方唯一 = helper。** Flutter 只接收快照、只发命令，`lib/config/config_store.dart` 的写盘能力必须删除。
 - **帧长上限与 50ms 节流永远不是可配置项**，不进 JSON、不进 IPC、不进 UI。
-- 可下发的只有 EMA α、near_black、blur、模式、COM 口名、采样映射、休眠同步、开机自启等；任何来自 IPC 或 JSON 的数值都要在 helper 侧夹紧（clamp）后再用。
+- 可下发的只有 EMA α、near_black、blur、饱和度、模式、COM 口名、采样映射、休眠同步、开机自启等；任何来自 IPC 或 JSON 的数值都要在 helper 侧夹紧（clamp）后再用。
 - 配置写盘走 debounce（约 1s），**绝不在发帧热路径里写文件**。
 
 ---
@@ -207,6 +207,7 @@ lib/
 | `set alpha <0.05..1>` | map 路径 EMA α；helper 侧 clamp；非法忽略 |
 | `set near_black <0..64>` | map 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；默认 12 |
 | `set blur <0..8>` | map 采样邻域半宽；`0` = 不扩邻域；默认 2 |
+| `set saturation <0.5..2>` | map 饱和度增益（Rec.601 亮度守恒）；`1`=原色；默认 1.4 |
 | `set mode a\|b` | **已废弃亮度方案**，仅存盘兼容；引擎不读 |
 | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步：1 = 挂起时软关、唤醒自恢复；0 = 休眠不插手 |
@@ -246,7 +247,7 @@ lib/
 
 ### 5.3 配置文件字段（`zeeray_config.json`，exe 同目录）
 
-`emaAlpha` / `nearBlack` / `blurStep` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）/ **`lastCustomSolid`**（纯色自定义色圈，6 位 hex，可空）。
+`emaAlpha` / `nearBlack` / `blurStep` / `saturation` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）/ **`lastCustomSolid`**（纯色自定义色圈，6 位 hex，可空）。
 
 字段名保持与旧 Dart `AppConfig` 一致，**老配置文件必须能被新 helper 直接读**；缺字段回退默认，解析失败整体回退默认且不阻塞启动。
 
@@ -340,7 +341,7 @@ lib/
 
 | 路径 | 入口 | 要点 |
 |------|------|------|
-| 流光溢彩（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` |
+| 流光溢彩（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` / `saturation` |
 | 屏幕氛围（region） | `start_region` / `lastScene=region` | 整块 bbox 切 10 段；`region_algo` mean\|max + blur/smooth/dark |
 
 映射（阶段 M）只服务 map 路径；region 用独立 `regionBBox`。

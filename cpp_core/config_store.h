@@ -17,6 +17,7 @@ struct HelperConfig {
   float emaAlpha = 0.3f;
   int nearBlack = 12;
   int blurStep = 2;
+  float saturation = 1.4f; // 0.5..2；1=原色，默认略抬便于「pop」
   char mode = 'a'; // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
   char comPort[16] = "COM10";
   char lastConnectedCom[16] = "";
@@ -53,6 +54,7 @@ void config_copy(HelperConfig *out);
 void config_set_ema_alpha(float v);
 void config_set_near_black(int v);
 void config_set_blur(int v);
+void config_set_saturation(float v);
 void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_sleep_sync(bool on);

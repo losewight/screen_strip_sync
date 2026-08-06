@@ -15,6 +15,8 @@ std::thread g_worker;
 std::mutex g_engine_mu;
 // 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
 std::atomic<float> g_alpha{0.3f};
+// 为什么：RMS+EMA 易冲淡；默认 1.4 略抬饱和度，IPC/JSON 可改
+std::atomic<float> g_saturation{1.4f};
 // 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
 std::atomic<char> g_mode{'a'};
 // 屏幕氛围参数（与 map alpha/near_black/blur 正交）
@@ -57,6 +59,14 @@ void engine_set_alpha(float alpha) {
 void engine_set_near_black(int v) { dxgi_set_near_black(v); }
 
 void engine_set_blur(int v) { dxgi_set_blur(v); }
+
+void engine_set_saturation(float v) {
+  if (v < 0.5f)
+    v = 0.5f;
+  if (v > 2.f)
+    v = 2.f;
+  g_saturation.store(v);
+}
 
 void engine_set_mode(char mode) {
   // 调用前已校验；统一存小写
