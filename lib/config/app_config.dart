@@ -39,7 +39,7 @@ class AppConfig {
     this.lastCustomSolid = '',
   });
 
-  /// EMA 平滑系数；取值域约 0.05..1.0（流光溢彩 map 路径）。
+  /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
   final double emaAlpha;
 
   /// 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；0..64。

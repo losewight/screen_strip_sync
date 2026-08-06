@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # 2. 声明你的工程名称
-project(ZeerayCore)
+project(ScreenStripSyncCore)
 
 # 3. 主线（Day 15+）：独立 helper.exe = 串口属主 + IPC 命令循环
 # 废案（同进程 DLL / serial_test / dll_test）已移至 废案_同进程FFI_Day11-14/，不再编入。

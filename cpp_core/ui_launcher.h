@@ -6,10 +6,10 @@
 #include <windows.h>
 
 // 次实例 → 首实例托盘窗：打开界面（与 WM_TRAYICON 错开）
-constexpr UINT WM_ZEERAY_OPEN_UI = WM_APP + 2;
+constexpr UINT WM_SSS_OPEN_UI = WM_APP + 2;
 
 // 托盘类名：次实例 FindWindow 与 tray_icon RegisterClass 必须一致
-constexpr wchar_t kTrayWndClass[] = L"ZeerayHelperTray";
+constexpr wchar_t kTrayWndClass[] = L"ScreenStripSyncTray";
 
 // 三级判定：有客户端 → ui show；子进程/冷却存活 → 不动；否则 CreateProcess
 void ui_request_open();

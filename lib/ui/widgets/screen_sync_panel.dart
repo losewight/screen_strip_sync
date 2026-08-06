@@ -8,7 +8,7 @@ import '../../state/helper_state.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/segment_map_calibrator.dart';
 
-/// 流光溢彩：逐段 map / 顶边均分 + EMA 参数；入口命令 `start`。
+/// 屏幕跟色：逐段 map / 顶边均分 + EMA 参数；入口命令 `start`。
 class ScreenSyncPanel extends ConsumerWidget {
   const ScreenSyncPanel({super.key});
 
@@ -35,7 +35,7 @@ class ScreenSyncPanel extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SchemeCard(
-                  title: '流光溢彩引擎',
+                  title: '屏幕跟色引擎',
                   actions: [
                     FilledButton(
                       onPressed: can ? () => notifier.send('start') : null,

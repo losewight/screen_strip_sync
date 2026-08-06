@@ -16,7 +16,7 @@ class ModeTabItem {
   final String label;
 }
 
-/// 内容区顶部的模式切换条（流光溢彩 / 屏幕氛围 / 纯色 / 特效）。
+/// 内容区顶部的模式切换条（屏幕跟色 / 屏幕氛围 / 纯色 / 特效）。
 class ModeTabBar extends StatelessWidget {
   const ModeTabBar({
     super.key,

@@ -1,6 +1,6 @@
-﻿import 'package:flutter_test/flutter_test.dart';
-import 'package:zeeray_ambilight/config/app_config.dart';
-import 'package:zeeray_ambilight/config/segment_map_codec.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:screen_strip_sync/config/app_config.dart';
+import 'package:screen_strip_sync/config/segment_map_codec.dart';
 
 void main() {
   group('AppConfig.fromCfgLines', () {

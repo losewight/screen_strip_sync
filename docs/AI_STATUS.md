@@ -1,4 +1,4 @@
-﻿# Zeeray AI 状态说明（现状 / 下一步）
+﻿# Screen Strip Sync AI 状态说明（现状 / 下一步）
 
 > **面向读者**：后续接手的 AI 助手。  
 > **信息来源**：[`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md)、[`cursorrules`](../cursorrules)、当前仓库代码。  
@@ -8,7 +8,7 @@
 
 ## 1. TL;DR（给 AI 的一分钟摘要）
 
-- **项目**：Windows 平台 PC 屏幕同步氛围灯驱动（米家追光灯带 Pro / Zeeray，20 段物理 RGB）。
+- **项目**：Windows 平台 PC 屏幕同步氛围灯驱动（米家追光灯带 Pro，20 段物理 RGB）。
 - **架构 v2（双进程）**：
   - **Flutter (Dart)**：只做 UI、模式切换、JSON 配置、EMA / 调色方案参数展示与编辑。
   - **`helper.exe` (C++)**：串口唯一属主、DXGI 抓屏、stride 采样、组 ASCII 帧、发帧循环。
@@ -183,7 +183,7 @@
 ## 7. 关键文件索引
 
 ```
-zeeray_ambilight/
+screen_strip_sync/
 ├── lib/main.dart              # Flutter 活跃入口（当前=IPC 烟测台）
 ├── lib - 副本/                # 旧 UI + FFI 废案（勿当主线）
 ├── cpp_core/
@@ -217,7 +217,7 @@ flowchart LR
     Serial[Serial_Port]
   end
 
-  Device[Zeeray_LED_Strip]
+  Device[LED_Strip]
 
   UI --> Client
   JSON --> Client

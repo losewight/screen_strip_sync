@@ -82,7 +82,7 @@ static void tray_add_icon(HWND hwnd) {
   if (!g_nid.hIcon)
     g_nid.hIcon =
         LoadIconW(nullptr, MAKEINTRESOURCEW(32512)); // IDI_APPLICATION
-  wcsncpy_s(g_nid.szTip, L"Zeeray Ambilight", _TRUNCATE);
+  wcsncpy_s(g_nid.szTip, L"Screen Strip Sync", _TRUNCATE);
 
   if (g_nid_added) {
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
@@ -163,11 +163,11 @@ static void tray_show_menu(HWND hwnd) {
   if (!menu)
     return;
 
-  // 打开界面 | 流光溢彩 屏幕氛围 关灯 | 开机自启 | 退出并关灯
+  // 打开界面 | 屏幕跟色 屏幕氛围 关灯 | 开机自启 | 退出并关灯
   AppendMenuW(menu, MF_STRING, IDM_TRAY_OPEN_UI, L"打开界面");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
-  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_ENGINE, L"流光溢彩");
+  AppendMenuW(menu, MF_STRING, IDM_TRAY_START_ENGINE, L"屏幕跟色");
   AppendMenuW(menu, MF_STRING, IDM_TRAY_START_REGION, L"屏幕氛围");
   AppendMenuW(menu, MF_STRING, IDM_TRAY_SOFT_OFF, L"关灯");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -212,7 +212,7 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
   }
 
   switch (msg) {
-  case WM_ZEERAY_OPEN_UI:
+  case WM_SSS_OPEN_UI:
     // 次实例 PostMessage：与托盘双击同一条打开逻辑
     ui_request_open();
     return 0;
@@ -317,7 +317,7 @@ static void tray_thread_main() {
 
   // 为什么：HWND_MESSAGE 收不到电源广播；必须用隐藏顶层窗
   HWND hwnd =
-      CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWndClass, L"ZeerayTray", WS_POPUP,
+      CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWndClass, L"ScreenStripSyncTray", WS_POPUP,
                       0, 0, 0, 0, nullptr, nullptr, wc.hInstance, nullptr);
   if (!hwnd) {
     printf("tray CreateWindowEx failed: %lu\n", (unsigned long)GetLastError());

@@ -1,4 +1,4 @@
-// Microsoft Visual C++ generated resource script.
+﻿// Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
 #include "resource.h"
@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "zeeray_ambilight" "\0"
+            VALUE "CompanyName", "Screen Strip Sync" "\0"
+            VALUE "FileDescription", "Screen Strip Sync" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "zeeray_ambilight" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "zeeray_ambilight.exe" "\0"
-            VALUE "ProductName", "zeeray_ambilight" "\0"
+            VALUE "InternalName", "screen_strip_sync" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026" "\0"
+            VALUE "OriginalFilename", "screen_strip_sync.exe" "\0"
+            VALUE "ProductName", "Screen Strip Sync" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -1,17 +1,23 @@
-# zeeray_ambilight
+﻿# Screen Strip Sync
 
-A new Flutter project.
+Windows PC **screen-to-LED** sync for Mijia light-chasing LED strips (unofficial).
 
-## Getting Started
+Captures the display (DXGI), samples colors, and drives a USB serial LED strip from a always-on `helper.exe` tray process. The Flutter UI is optional and can be closed without stopping the lights.
 
-This project is a starting point for a Flutter application.
+## Compatibility
 
-A few resources to get you started if this is your first Flutter project:
+Unofficial driver for **米家追光灯带 Pro** (and similar CH340-based strips often sold under third-party names).  
+Not affiliated with Xiaomi, Mijia, Signify, or Philips. Those names and trademarks belong to their respective owners.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Build (dev)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```text
+cmake --build cpp_core/build --config Release
+flutter build windows --release
+```
+
+Run `helper.exe` (tray). UI binary: `screen_strip_sync.exe`.
+
+## License
+
+See repository license file when published.

@@ -8,7 +8,7 @@ import '../../config/region_bbox.dart';
 import '../../config/segment_sample.dart';
 import '../widgets/screen_mask_select.dart';
 
-/// 划定屏幕氛围取色区域：复用流光溢彩的全屏镂空蒙版拖框。
+/// 划定屏幕氛围取色区域：复用屏幕跟色的全屏镂空蒙版拖框。
 ///
 /// 返回主屏百分比 [RegionBBox]；ESC / 取消返回 null。
 class RegionBBoxPickPage extends StatefulWidget {
@@ -68,7 +68,7 @@ class _RegionBBoxPickPageState extends State<RegionBBoxPickPage> {
     if (!_wasFullScreen) {
       await windowManager.setFullScreen(true);
     }
-    // 为什么：蒙版镂空要透出桌面，窗体背景必须透明（同流光溢彩校准）
+    // 为什么：蒙版镂空要透出桌面，窗体背景必须透明（同屏幕跟色校准）
     await windowManager.setBackgroundColor(const Color(0x00000000));
   }
 

@@ -92,7 +92,7 @@ static void parse_cmdline_args() {
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 为什么：第二个实例不得开串口、不得 bind；只通知首实例开界面后立刻退出
-  g_singleton = CreateMutexW(nullptr, TRUE, L"Local\\ZeerayHelperSingleton");
+  g_singleton = CreateMutexW(nullptr, TRUE, L"Local\\ScreenStripSyncHelper");
   if (g_singleton == nullptr) {
     return 1;
   }

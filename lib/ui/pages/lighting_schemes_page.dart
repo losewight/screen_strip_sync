@@ -13,7 +13,7 @@ const lightingSchemeTabs = <ModeTabItem>[
   ModeTabItem(
     icon: Icons.desktop_windows_outlined,
     selectedIcon: Icons.desktop_windows,
-    label: '流光溢彩',
+    label: '屏幕跟色',
   ),
   ModeTabItem(
     icon: Icons.flare_outlined,

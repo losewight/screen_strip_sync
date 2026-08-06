@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
-/// 进程存活期间持有，勿 CloseHandle（与 helper 的 `ZeerayHelperSingleton` 对称）。
+/// 进程存活期间持有，勿 CloseHandle（与 helper 的 `ScreenStripSyncHelper` 对称）。
 /// 赋值即引用，防止 GC/分析器认为可丢弃。
 // ignore: unused_element
 HANDLE? _uiSingletonMutex;
@@ -15,13 +15,13 @@ final _createMutexW = DynamicLibrary.open('kernel32.dll')
       Pointer Function(Pointer<SECURITY_ATTRIBUTES>, int, Pointer<Utf16>)
     >('CreateMutexW');
 
-/// 尝试占有 UI 单实例互斥 `Local\ZeerayUiSingleton`。
+/// 尝试占有 UI 单实例互斥 `Local\ScreenStripSyncUi`。
 ///
 /// 返回 `false` 表示已有界面进程，调用方应立刻 `exit(0)`。
 bool tryAcquireUiSingleton() {
   if (!Platform.isWindows) return true;
 
-  final name = r'Local\ZeerayUiSingleton'.toNativeUtf16();
+  final name = r'Local\ScreenStripSyncUi'.toNativeUtf16();
   try {
     final handle = HANDLE(_createMutexW(nullptr, TRUE, name));
     if (handle.address == 0) return false;

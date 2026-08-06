@@ -6,7 +6,7 @@
 #include <windows.h>
 
 // 为什么：休眠记账 + 唤醒 / 冷启动按场景恢复；勿被临时黑帧冲掉
-// Engine=流光溢彩(map)；Region=屏幕氛围(整块区域)
+// Engine=屏幕跟色(map)；Region=屏幕氛围(整块区域)
 enum class DisplayIntentKind { Idle, Engine, Region, Solid, SoftOff };
 
 struct DisplayIntent {

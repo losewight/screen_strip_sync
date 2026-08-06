@@ -1,6 +1,6 @@
-{
-    "name": "zeeray_ambilight",
-    "short_name": "zeeray_ambilight",
+﻿{
+    "name": "screen_strip_sync",
+    "short_name": "screen_strip_sync",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

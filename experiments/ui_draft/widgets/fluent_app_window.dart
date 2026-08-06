@@ -8,7 +8,7 @@ import '../theme/fluent_tokens.dart';
 import 'fluent_controls.dart';
 import 'led_preview.dart';
 
-enum DraftPage { overview, ambilight, lighting, settings }
+enum DraftPage { overview, screenSync, lighting, settings }
 
 /// 对齐原版 HTML 的 `.app-content`：侧栏 + 全局 LED 预览 + 四页。
 /// 系统窗即外壳（HTML 里 `.app-window` / `.title-bar` 是浏览器模拟，桌面端不套）。
@@ -244,7 +244,7 @@ class _FluentAppWindowState extends State<FluentAppWindow> {
         onMainPower: _onMainPower,
         onSleepSync: (v) => setState(() => _sleepSync = v),
       ),
-      DraftPage.ambilight => _AmbilightPage(
+      DraftPage.screenSync => _ScreenSyncPage(
         syncOn: _syncOn,
         saturation: _saturation,
         smoothness: _smoothness,
@@ -325,7 +325,7 @@ class _NavView extends StatelessWidget {
 
   static const _items = <(DraftPage, String, String)>[
     (DraftPage.overview, '🏠', '概览与预览'),
-    (DraftPage.ambilight, '📺', '屏幕同步 (Ambilight)'),
+    (DraftPage.screenSync, '📺', '屏幕跟色'),
     (DraftPage.lighting, '🎨', '灯效实验室'),
   ];
 
@@ -508,8 +508,8 @@ class _OverviewPage extends StatelessWidget {
   }
 }
 
-class _AmbilightPage extends StatelessWidget {
-  const _AmbilightPage({
+class _ScreenSyncPage extends StatelessWidget {
+  const _ScreenSyncPage({
     required this.syncOn,
     required this.saturation,
     required this.smoothness,

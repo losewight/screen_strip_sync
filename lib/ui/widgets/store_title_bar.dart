@@ -76,7 +76,7 @@ class _StoreTitleBarState extends State<StoreTitleBar> with WindowListener {
                     ),
                     const SizedBox(width: AppSpacing.control),
                     const Text(
-                      'Zeeray Ambilight',
+                      'Screen Strip Sync',
                       style: TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontSize: 13,

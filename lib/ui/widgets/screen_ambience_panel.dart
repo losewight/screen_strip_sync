@@ -39,7 +39,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
     final can = ui.canControl;
     final canEdit = can && ref.watch(configReadyProvider);
     final box = cfg.regionBBox;
-    // 与流光溢彩平滑度滑条同粒度：0..0.95 / divisions:19。
+    // 与屏幕跟色平滑度滑条同粒度：0..0.95 / divisions:19。
     final regionSmoothUi = cfg.regionSmooth.clamp(0.0, 0.95);
 
     return Center(
@@ -122,7 +122,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                             : null,
                       ),
                       const SizedBox(height: AppSpacing.control),
-                      // 顺序 / 粒度对齐流光溢彩（图一）：平滑度 divisions:19，模糊 divisions:8。
+                      // 顺序 / 粒度对齐屏幕跟色（图一）：平滑度 divisions:19，模糊 divisions:8。
                       SchemeParamLabel(
                         '时间过渡平滑度: ${regionSmoothUi.toStringAsFixed(2)}',
                       ),
@@ -140,7 +140,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                         '画面模糊/降噪程度: ${cfg.regionBlur}（0为不模糊）',
                       ),
                       Slider(
-                        // 范围仍 0..20；档数与流光溢彩 blur 一致（divisions:8）。
+                        // 范围仍 0..20；档数与屏幕跟色 blur 一致（divisions:8）。
                         value: cfg.regionBlur.toDouble().clamp(0, 20),
                         min: 0,
                         max: 20,

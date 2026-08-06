@@ -32,7 +32,7 @@ Future<void> main() async {
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle: TitleBarStyle.hidden,
-    title: 'Zeeray Ambilight',
+    title: 'Screen Strip Sync',
   );
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -44,7 +44,7 @@ Future<void> main() async {
   // 本 App 不依赖读屏，ExcludeSemantics 关掉语义桥即可避开。
   runApp(
     const ProviderScope(
-      child: ExcludeSemantics(child: ZeerayApp()),
+      child: ExcludeSemantics(child: ScreenStripSyncApp()),
     ),
   );
   CrashLog.event('main', 'runApp done');

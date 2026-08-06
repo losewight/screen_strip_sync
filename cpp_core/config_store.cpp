@@ -41,7 +41,7 @@ bool config_path(char *out, size_t cap) {
     return false;
   // 为什么：先算最终长度再拼，避免长路径下 strcpy_s
   // 截断/失败后仍把坏路径交给调用方
-  static constexpr char kName[] = "zeeray_config.json";
+  static constexpr char kName[] = "screen_strip_sync_config.json";
   const size_t dir_len = (size_t)(slash + 1 - path); // 含末尾 '\'
   const size_t name_len = sizeof(kName) - 1;
   const size_t need = dir_len + name_len + 1; // 含 '\0'
@@ -51,6 +51,34 @@ bool config_path(char *out, size_t cap) {
     return false;
   if (strcpy_s(out, cap, path) != 0)
     return false;
+  return true;
+}
+
+static bool read_config_file(const char *path, HelperConfig *out,
+                             bool *parsed_ok) {
+  *parsed_ok = false;
+  FILE *fp = nullptr;
+  if (fopen_s(&fp, path, "rb") != 0 || !fp)
+    return false;
+  if (fseek(fp, 0, SEEK_END) != 0) {
+    fclose(fp);
+    return false;
+  }
+  long sz = ftell(fp);
+  if (sz < 0 || sz > 256 * 1024) {
+    fclose(fp);
+    return false;
+  }
+  rewind(fp);
+  std::vector<char> buf((size_t)sz + 1);
+  size_t rd = fread(buf.data(), 1, (size_t)sz, fp);
+  fclose(fp);
+  buf[rd] = '\0';
+  if (!config_parse_json(buf.data(), out)) {
+    *out = HelperConfig{};
+    return true; // 文件在，但解析失败 → 默认
+  }
+  *parsed_ok = true;
   return true;
 }
 
@@ -142,39 +170,20 @@ void config_load() {
     return;
   }
 
-  FILE *fp = nullptr;
-  if (fopen_s(&fp, path, "rb") != 0 || !fp) {
+  bool parsed = false;
+  if (!read_config_file(path, &fresh, &parsed)) {
     printf("config_load: no file, defaults\n");
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg = fresh;
     return;
   }
-  if (fseek(fp, 0, SEEK_END) != 0) {
-    fclose(fp);
-    std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg = fresh;
-    return;
-  }
-  long sz = ftell(fp);
-  if (sz < 0 || sz > 256 * 1024) {
-    fclose(fp);
-    printf("config_load: bad size, defaults\n");
-    std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg = fresh;
-    return;
-  }
-  rewind(fp);
-  std::vector<char> buf((size_t)sz + 1);
-  size_t rd = fread(buf.data(), 1, (size_t)sz, fp);
-  fclose(fp);
-  buf[rd] = '\0';
 
-  if (!config_parse_json(buf.data(), &fresh)) {
-    printf("config_load: parse fail, defaults\n");
-    fresh = HelperConfig{};
-  } else {
+  if (parsed) {
     printf("config_load: ok com=%s alpha=%.3f\n", fresh.comPort,
            (double)fresh.emaAlpha);
+  } else {
+    printf("config_load: parse fail, defaults\n");
+    fresh = HelperConfig{};
   }
 
   // 为什么：load 只改内存；规范化留给 config_apply 里的 engine_set_com

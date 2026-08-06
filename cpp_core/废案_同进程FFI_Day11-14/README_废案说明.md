@@ -6,13 +6,14 @@
 
 - 发帧线程与 Flutter 渲染在**同一进程**抢资源，窗口可见时丢帧。
 - Day 15 起架构改为：**helper.exe 独立进程** + 本机 IPC（回环 TCP）只传命令/状态。
-- 串口唯一属主 = `helper.exe`；不再经 `zeeray_core.dll` / `dart:ffi` 发帧。
+- 串口唯一属主 = `helper.exe`；不再经旧 DLL / `dart:ffi` 发帧。
+- 本目录为历史废案，文件名含旧工程前缀属归档，不编入主线。
 
 ## 本目录文件
 
 | 文件 | 原用途 |
-|------|--------|
-| `zeeray_core.cpp` | DLL 导出 open/close/set_color/start/stop |
+| ------ | -------- |
+| `zeeray_core.cpp`（归档名） | DLL 导出 open/close/set_color/start/stop |
 | `dll_test.cpp` | 原生 LoadLibrary 调 DLL 验收 |
 | `serial_test.cpp` | Day 3–10 阶段串口/线程练习入口 |
 

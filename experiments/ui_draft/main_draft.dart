@@ -15,7 +15,7 @@ class UiDraftApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Zeeray Ambilight 控制台',
+      title: 'Screen Strip Sync',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,

@@ -1,4 +1,4 @@
-﻿# Zeeray Ambilight — 项目框架与推进规则
+﻿# Screen Strip Sync — 项目框架与推进规则
 
 > 本文件是本项目的**唯一权威**（架构 + 红线 + 计划 + 协作纪律）。
 > `docs/AI_STATUS.md`、`docs/PROJECT_STATUS.md` 为详细背景参考，不再与本文件双向同步；
@@ -13,14 +13,14 @@
 
 ## 1. 项目与架构
 
-Windows 平台 PC 屏幕同步氛围灯驱动（米家追光灯带 Pro / Zeeray，20 颗物理 RGB 灯珠）。
+Windows PC screen sync LED driver for 米家追光灯带 Pro（unofficial，20 颗物理 RGB 灯珠；第三方俗称勿当产品名）。
 
 ### 1.1 架构 v3 — helper 主导双进程
 
 | 进程 | 角色 | 职责 | 禁止 |
 |------|------|------|------|
 | `helper.exe`（C++） | **主进程 / 常驻** | 单实例守卫、托盘图标与菜单、配置属主（读**写** JSON）、串口唯一属主、DXGI 抓屏、stride 采样、组 ASCII 帧、发帧循环、IPC 服务、开机自启注册表、电源自恢复、按需拉起 UI | 对外监听、并发多客户端、让 Flutter 碰 COM、**因前端退出而关灯或退进程** |
-| `zeeray_ambilight.exe`（Flutter） | **纯前端 / 可随时开关** | UI 交互、参数展示与编辑、发命令、渲染 helper 推来的配置与状态、框选校准与截屏 | **写配置文件**、开串口、传逐帧像素、常驻后台、杀 helper、在 Dart 侧做 EMA / 组帧 |
+| `screen_strip_sync.exe`（Flutter） | **纯前端 / 可随时开关** | UI 交互、参数展示与编辑、发命令、渲染 helper 推来的配置与状态、框选校准与截屏 | **写配置文件**、开串口、传逐帧像素、常驻后台、杀 helper、在 Dart 侧做 EMA / 组帧 |
 
 两进程只经本机 IPC（`127.0.0.1:9527` 回环 TCP）传**命令 / 状态 / 配置文本**；逐帧像素与发帧热路径全部留在 helper 内，**不经 `dart:ffi`**。
 
@@ -40,7 +40,7 @@ flowchart LR
   Power[power_watch]
  end
 
- subgraph Flutter [zeeray_ambilight_exe_纯前端]
+ subgraph Flutter [screen_strip_sync_exe_纯前端]
   UI[Pages_material3]
   State[Riverpod_Notifiers]
   Client[HelperClient]
@@ -54,7 +54,7 @@ flowchart LR
  IPC --> Engine
  Engine --> DXGI
  Engine --> Serial
- Serial -->|"ASCII_lt_120B"| Device[Zeeray_LED_Strip]
+ Serial -->|"ASCII_lt_120B"| Device[LED_Strip]
 ```
 
 ### 1.2 生命周期五条线（产品定义，不是实现细节）
@@ -99,7 +99,7 @@ flowchart LR
 ### 2.5 进程边界（v3 重写）
 
 - **串口唯一属主 = `helper.exe`**；Flutter 绝不直接开串口。
-- **helper 与 Flutter 各自单实例**，都用命名互斥体守卫（`Local\ZeerayHelperSingleton` / `Local\ZeerayUiSingleton`）。第二个 helper 实例不得开串口、不得 bind 端口，只负责通知首实例「打开界面」然后立刻退出。
+- **helper 与 Flutter 各自单实例**，都用命名互斥体守卫（`Local\ScreenStripSyncHelper` / `Local\ScreenStripSyncUi`）。第二个 helper 实例不得开串口、不得 bind 端口，只负责通知首实例「打开界面」然后立刻退出。
 - **helper 不得因客户端断开而关灯 / 停引擎 / 退进程。** 前端是可选件，掉线只清 socket。
 - **Flutter 兜底自拉 helper 时必须先试连 9527，且必须带 `--no-ui`。** 否则 helper 会反过来再拉一个 Flutter，形成互相拉起。
 - IPC 绑定 `127.0.0.1`、同时只服务**单个**客户端（新连接踢掉旧连接），不对外监听；只传命令 / 状态 / 配置，**绝不传逐帧像素**。
@@ -128,7 +128,7 @@ flowchart LR
 | `dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
 | `tray_icon.{h,cpp}` | 隐藏顶层窗 + `Shell_NotifyIcon` + 右键菜单 + `WM_TASKBARCREATED` 重加；**合并原 `power_watch` 的电源消息** | **H4 新增** |
 | `ui_launcher.{h,cpp}` | 解析 Flutter exe 路径、三级判定后 `CreateProcess`、记子进程句柄 | **H5 新增** |
-| `autostart.{h,cpp}` | 读写 `HKCU\...\Run`，值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移 | **H7 新增** |
+| `autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `ScreenStripSyncHelper`），值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移 | **H7 新增** |
 | `ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 状态·配置回推 / 命令分派；对外仍只暴露 `ipc_loop.h` | 阶段 H 改造 |
 | `engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop+start/stop、intent 记账与场景恢复 | 基本就绪 |
 | `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
@@ -148,7 +148,7 @@ lib/
 └── config/                 # app_config（只读模型 + cfg 行解析）、segment_sample、segment_map_codec
 ```
 
-映射校准入口在「灯光方案 → 流光溢彩」；屏幕氛围用独立「划定取色区域」。
+映射校准入口在「灯光方案 → 屏幕跟色」；屏幕氛围用独立「划定取色区域」。
 
 ---
 
@@ -174,7 +174,7 @@ lib/
 
 **路径解析规则**
 
-- helper 找 Flutter：exe 同目录 `zeeray_ambilight.exe` 优先，回退开发路径 `build\windows\x64\runner\{Debug,Release}\`。
+- helper 找 Flutter：exe 同目录 `screen_strip_sync.exe` 优先，回退开发路径 `build\windows\x64\runner\{Debug,Release}\`。
 - Flutter 兜底找 helper：exe 同目录优先，回退 `cpp_core\build\Release\helper.exe`。
 - **两侧都禁止硬编码绝对路径。**
 
@@ -195,7 +195,7 @@ lib/
 | 文本 | 含义 |
 |------|------|
 | `sync` | 请求全量配置 + 状态快照（连接建立时 helper 会主动推一次，此命令用于手动刷新） |
-| `start` | **流光溢彩（map）**：启动逐段/顶边均分追色；`lastScene=engine` |
+| `start` | **屏幕跟色（map）**：启动逐段/顶边均分追色；`lastScene=engine` |
 | `start_region` | **屏幕氛围（region）**：整块 bbox 竖直切 10 段追色；与 `start` 正交、互斥；`lastScene=region` |
 | `stop` | 停止引擎（join 线程）；map / region 共用 |
 | `solid RRGGBB` | 发一帧纯色（6 位 hex，非法值忽略） |
@@ -212,7 +212,7 @@ lib/
 | `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步：1 = 挂起时软关、唤醒自恢复；0 = 休眠不插手 |
 | `set shutdown_off 0\|1` | 关机 / 注销时是否关灯 |
-| `set autostart 0\|1` | **写注册表** `HKCU\...\Run`；helper 是唯一写方 |
+| `set autostart 0\|1` | **写注册表** `HKCU\...\Run`（值名 `ScreenStripSyncHelper`）；helper 是唯一写方 |
 | `highlight <0..9>` | 校准：仅该段白、其余黑一帧（≥50ms） |
 | `set map default` | 清空自定义采样表，恢复顶边均分 |
 | `set map x0,y0,x1,y1;...` | 10 段矩形（0..100 整数百分比，`;` 分隔）；非法整句忽略 |
@@ -237,15 +237,15 @@ lib/
 | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
 | `status com COMn` | 当前已打开的串口 |
 | `status engine 0\|1` | 追色发帧线程是否在跑 |
-| `status display engine\|region\|solid\|soft_off\|idle` | 当前显示意图（`engine`=流光溢彩，`region`=屏幕氛围） |
+| `status display engine\|region\|solid\|soft_off\|idle` | 当前显示意图（`engine`=屏幕跟色，`region`=屏幕氛围） |
 | `status serial_lost` / `serial_ok` | 串口掉线 / 自愈（阶段 C3） |
 | `ui show` | **托盘双击且已有客户端**：让 Flutter 置顶自己的窗口 |
 
-**采样映射（流光溢彩）**：与屏幕氛围 region **正交**。无有效 `segmentMap` → DXGI 顶边均分。有表时矩形内步进抽点 + 丢近黑 + RMS；`set blur` 在格子点上扩 `±n` 邻域。
+**采样映射（屏幕跟色）**：与屏幕氛围 region **正交**。无有效 `segmentMap` → DXGI 顶边均分。有表时矩形内步进抽点 + 丢近黑 + RMS；`set blur` 在格子点上扩 `±n` 邻域。
 
 **屏幕氛围（region）**：单块 `region_bbox` 竖直切 10 段；`mean`/`max` 聚合 + `region_blur` + 暗场阈值 + 惯性平滑。截图与框选只在 Flutter；IPC **不传**逐帧像素。
 
-### 5.3 配置文件字段（`zeeray_config.json`，exe 同目录）
+### 5.3 配置文件字段（`screen_strip_sync_config.json`，exe 同目录）
 
 `emaAlpha` / `nearBlack` / `blurStep` / `saturation` / `mode`（废弃） / `comPort` / `lastConnectedCom` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）/ **`lastCustomSolid`**（纯色自定义色圈，6 位 hex，可空）。
 
@@ -260,10 +260,10 @@ lib/
 ### 阶段 H — helper 主导化（当前主线）
 
 - [ ] **H1 无窗口化 + 单实例 + 参数**
-      `main` → `WinMain`，CMake 加 `/SUBSYSTEM:WINDOWS`（托盘常驻不能挂黑控制台）；`freopen_s` 把 stdout 重定向到 exe 同目录 `helper.log`（**保留现有 `printf` 不逐个改**），Debug 下额外 `AllocConsole`；命名互斥体 `Local\ZeerayHelperSingleton`；参数 `--autostart`（静默自启）/ `--no-ui`（供 Flutter 兜底自拉，含义同静默）。
+      `main` → `WinMain`，CMake 加 `/SUBSYSTEM:WINDOWS`（托盘常驻不能挂黑控制台）；`freopen_s` 把 stdout 重定向到 exe 同目录 `helper.log`（**保留现有 `printf` 不逐个改**），Debug 下额外 `AllocConsole`；命名互斥体 `Local\ScreenStripSyncHelper`；参数 `--autostart`（静默自启）/ `--no-ui`（供 Flutter 兜底自拉，含义同静默）。
       *验收*：双击 helper 无黑窗、日志进 `helper.log`；连开两次只有一个进程活着；带 `--autostart` 不拉界面。
 - [ ] **H2 配置属主搬到 helper**
-      新增 `config_store.{h,cpp}` 读写 `zeeray_config.json`（含 `segmentMap` 与新增 `lastScene`）；启动时应用到引擎（`com` / `alpha` / `near_black` / `blur` / `mode` / `map`）；删掉 `light_engine.cpp` 写死的 `"COM10"` 与 `helper_main.cpp` 的 `argv[1]` 传口；`set …` 后 debounce 写回。
+      新增 `config_store.{h,cpp}` 读写 `screen_strip_sync_config.json`（含 `segmentMap` 与新增 `lastScene`）；启动时应用到引擎（`com` / `alpha` / `near_black` / `blur` / `mode` / `map`）；删掉 `light_engine.cpp` 写死的 `"COM10"` 与 `helper_main.cpp` 的 `argv[1]` 传口；`set …` 后 debounce 写回。
       *验收*：手改 JSON 的 `comPort` 后重启 helper，开的是新口；删掉 JSON 不崩、按默认跑；`set alpha` 后重启值还在。
 - [ ] **H3 IPC 生命周期反转**
       `ipc_run` 改循环 `accept`；同时只留一个客户端，新连接踢旧；客户端断开只清 socket、**不关灯不退进程**；行长上限提到 512（注释写明与 120 字节帧长红线无关）；新增 `bye` / `sync` / `set autostart` / `set shutdown_off`；`quit` 语义收窄为关闭服务；连接建立即推 `cfg …` + `cfg end` + `status …` 全量快照。
@@ -278,8 +278,8 @@ lib/
       `PBT_APMSUSPEND` 从「`helper_shutdown` 自杀」改成「关灯 + 停引擎 + `close_com`，进程存活」；`PBT_APMRESUMEAUTOMATIC` 重开串口（重试）+ 按 `lastScene` 恢复 + 有客户端则推 `status`。`sleep_sync=0` 时休眠完全不插手。
       *验收*：睡眠→唤醒后，helper 进程号不变、灯自动恢复到睡前场景；界面开着时状态条同步更新。
 - [ ] **H7 开机自启**
-      `autostart.{h,cpp}` 读写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，值 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并纠正；`set autostart` 落到注册表 + JSON。
-      *验收*：UI 打开开关 → 注册表出现正确项 → 重启电脑后无界面但灯按上次场景亮起。
+      `autostart.{h,cpp}` 读写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `ScreenStripSyncHelper`），值 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并纠正；`set autostart` 落到注册表 + JSON。
+      *验收*：UI 打开开关 → 注册表出现 `ScreenStripSyncHelper` 正确项 → 重启电脑后无界面但灯按上次场景亮起。
 - [ ] **H8 场景持久化**
       `start` / `stop` / `solid` / `soft_off` 与参数变更后更新 `lastScene` 并 debounce 写盘；启动与唤醒都据此恢复。
       *验收*：设成纯色紫 → 完全退出 helper → 重开 → 直接是紫色。
@@ -289,8 +289,8 @@ lib/
 - [ ] **F1 `HelperClient` 反转**：先 `Socket.connect` 试连 → 失败才 `Process.start(helper, ['--no-ui'])` → 重试连接；`quit()` 改发 `bye` 且只断 socket；删除 `_killHelper` 的杀进程语义。
       *验收*：`flutter run` 能在 helper 已跑时直接连上（不新起进程）；helper 没跑时能自己拉起且只拉一个。
 - [ ] **F2 配置层反转**：`ConfigNotifier` 由 `cfg …` 快照驱动，所有 setter 只发 IPC；删除 `ConfigStore` 写盘（文件与引用一并清理）。
-      *验收*：全项目搜不到 Flutter 侧写 `zeeray_config.json` 的代码；改参数后重启 helper 值仍在。
-- [x] **F3 生命周期归零**：删除 `lib/state/helper_wake_reconnect.dart` 与 `_maybeConnectOnBoot`；`AppLifecycleHost` 关窗 = 瞬间 hide 后 `bye` → `exit(0)`；处理 `ui show`；`main.dart` 加 `Local\ZeerayUiSingleton`。
+      *验收*：全项目搜不到 Flutter 侧写 `screen_strip_sync_config.json` 的代码；改参数后重启 helper 值仍在。
+- [x] **F3 生命周期归零**：删除 `lib/state/helper_wake_reconnect.dart` 与 `_maybeConnectOnBoot`；`AppLifecycleHost` 关窗 = 瞬间 hide 后 `bye` → `exit(0)`；处理 `ui show`；`main.dart` 加 `Local\ScreenStripSyncUi`。
  *验收*：点 X 后任务管理器无 Flutter 残留、灯照常亮；托盘双击能唤回窗口；手动双击 Flutter exe 不会开出第二个窗口。
 - [ ] **F4 UI 文案与开关**：「连接 / 断开」概念改为「后台服务运行中 / 未运行」；`startOnBoot` 开关改为下发 `set autostart`；连接失败页给「启动后台服务」按钮。
       *验收*：拔掉 helper 后界面文案说人话且能一键恢复。
@@ -341,7 +341,7 @@ lib/
 
 | 路径 | 入口 | 要点 |
 |------|------|------|
-| 流光溢彩（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` / `saturation` |
+| 屏幕跟色（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` / `saturation` |
 | 屏幕氛围（region） | `start_region` / `lastScene=region` | 整块 bbox 切 10 段；`region_algo` mean\|max + blur/smooth/dark |
 
 映射（阶段 M）只服务 map 路径；region 用独立 `regionBBox`。

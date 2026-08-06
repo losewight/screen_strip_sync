@@ -1,6 +1,6 @@
-锘縤mport 'package:flutter_test/flutter_test.dart';
-import 'package:zeeray_ambilight/config/segment_map_codec.dart';
-import 'package:zeeray_ambilight/config/segment_sample.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:screen_strip_sync/config/segment_map_codec.dart';
+import 'package:screen_strip_sync/config/segment_sample.dart';
 
 List<SegmentSample> _tenTopEdge() {
   return List.generate(kSegmentCount, (i) {
@@ -67,7 +67,7 @@ void main() {
       final decoded = SegmentMapCodec.decodeIpcPayload(payload);
       expect(decoded, isNotNull);
       expect(decoded!.length, 10);
-      // 閲忓寲鍒扮櫨鍒嗘暟鍚庝粛鏈夊簭
+      // 量化到百分数后仍有序
       expect(decoded[0].x0, 0.0);
       expect(decoded[0].x1, 0.1);
     });

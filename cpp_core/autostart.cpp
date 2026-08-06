@@ -7,7 +7,7 @@
 
 static constexpr wchar_t kRunKey[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static constexpr wchar_t kValueName[] = L"ZeerayHelper";
+static constexpr wchar_t kValueName[] = L"ScreenStripSyncHelper";
 
 // 拼出期望的 Run 值：`"C:\path\helper.exe" --autostart`
 static bool build_run_value(wchar_t *out, size_t out_cap) {
@@ -32,7 +32,6 @@ static bool write_run_value(const wchar_t *value) {
     printf("autostart: RegOpenKeyEx write failed %ld\n", err);
     return false;
   }
-  // 含结尾 NUL 的字节数
   DWORD bytes = static_cast<DWORD>((wcslen(value) + 1) * sizeof(wchar_t));
   err = RegSetValueExW(key, kValueName, 0, REG_SZ,
                        reinterpret_cast<const BYTE *>(value), bytes);

@@ -2,7 +2,7 @@
 import 'dart:io';
 
 /// 米家追光灯带 Pro 常用 CH340：USB\VID_1A86&PID_7523
-const kZeerayUsbVidPid = 'VID_1A86&PID_7523';
+const kPreferredStripUsbVidPid = 'VID_1A86&PID_7523';
 
 /// 本机枚举到的一个串口（不经 IPC）。
 class ComPortInfo {
@@ -18,7 +18,7 @@ class ComPortInfo {
   /// 设备管理器友好名，如 `USB-SERIAL CH340 (COM10)`。
   final String displayName;
 
-  /// PNPDeviceID 含 [kZeerayUsbVidPid]。
+  /// PNPDeviceID 含 [kPreferredStripUsbVidPid]。
   final bool preferred;
 }
 
@@ -72,7 +72,7 @@ Future<List<ComPortInfo>> _portsFromPnp() async {
       if (m == null) continue;
       final port = m.group(1)!.toUpperCase();
       final pnpId = '${row['PNPDeviceID'] ?? ''}'.toUpperCase();
-      final preferred = pnpId.contains(kZeerayUsbVidPid);
+      final preferred = pnpId.contains(kPreferredStripUsbVidPid);
       final prev = byPort[port];
       // 同口多条时：保留 preferred，或保留已有
       if (prev == null || (!prev.preferred && preferred)) {

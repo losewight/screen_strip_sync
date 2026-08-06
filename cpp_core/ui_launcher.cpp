@@ -43,7 +43,7 @@ static bool resolve_flutter_exe(wchar_t *out, size_t out_cap) {
   *slash = L'\0'; // module = helper 所在目录
 
   // 1) exe 同目录
-  if (swprintf_s(out, out_cap, L"%s\\zeeray_ambilight.exe", module) > 0) {
+  if (swprintf_s(out, out_cap, L"%s\\screen_strip_sync.exe", module) > 0) {
     if (GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES)
       return true;
   }
@@ -56,7 +56,7 @@ static bool resolve_flutter_exe(wchar_t *out, size_t out_cap) {
     for (const wchar_t *cfg : kConfigs) {
       if (swprintf_s(
               out, out_cap,
-              L"%s\\build\\windows\\x64\\runner\\%s\\zeeray_ambilight.exe", dir,
+              L"%s\\build\\windows\\x64\\runner\\%s\\screen_strip_sync.exe", dir,
               cfg) > 0) {
         if (GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES)
           return true;
@@ -74,7 +74,7 @@ static bool resolve_flutter_exe(wchar_t *out, size_t out_cap) {
 static bool create_flutter_process() {
   wchar_t exe[MAX_PATH];
   if (!resolve_flutter_exe(exe, MAX_PATH)) {
-    printf("ui_launcher: zeeray_ambilight.exe not found\n");
+    printf("ui_launcher: screen_strip_sync.exe not found\n");
     return false;
   }
 
@@ -154,7 +154,7 @@ void ui_notify_running_instance() {
     printf("ui_launcher: first instance tray not found\n");
     return;
   }
-  if (!PostMessageW(hwnd, WM_ZEERAY_OPEN_UI, 0, 0)) {
+  if (!PostMessageW(hwnd, WM_SSS_OPEN_UI, 0, 0)) {
     printf("ui_launcher: PostMessage failed: %lu\n",
            (unsigned long)GetLastError());
     return;

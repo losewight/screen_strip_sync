@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 class CrashLog {
   CrashLog._();
 
-  static const fileName = 'zeeray_crash.log';
+  static const fileName = 'screen_strip_sync_crash.log';
 
   /// 超过此行数时，启动时裁到 [keepLines] 行（只裁一次 / 进程）。
   static const maxLines = 300;
