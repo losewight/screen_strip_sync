@@ -1,13 +1,25 @@
 ﻿# Screen Strip Sync
 
-Windows PC **screen-to-LED** sync for Mijia light-chasing LED strips (unofficial).
+Windows PC **screen-to-LED** host — an **unofficial, customized upper control system** for Mijia light-chasing ambience LED strips（米家追光氛围灯带）.
 
-Captures the display (DXGI), samples colors, and drives a USB serial LED strip from a always-on `helper.exe` tray process. The Flutter UI is optional and can be closed without stopping the lights.
+> **中文说明（推荐）**：[README.zh-CN.md](./README.zh-CN.md)
+
+Captures the display (DXGI), samples colors, and drives a USB serial LED strip from an always-on `helper.exe` tray process. The Flutter UI is optional and can be closed without stopping the lights.
 
 ## Compatibility
 
-Unofficial driver for **米家追光灯带 Pro** (and similar CH340-based strips often sold under third-party names).  
+Unofficial customized host for **米家追光氛围灯带** / **米家追光灯带 Pro** (non-official naming).  
+Validated on firmware `2.1.8_0039` only. Other models/firmware are not guaranteed.  
 Not affiliated with Xiaomi, Mijia, Signify, or Philips. Those names and trademarks belong to their respective owners.
+
+## Docs
+
+| Doc | Topic |
+| --- | --- |
+| [README.zh-CN.md](./README.zh-CN.md) | Full Chinese README (features, build, screenshots placeholders) |
+| [reference/灯带串口通信协议.md](./reference/灯带串口通信协议.md) | Device serial protocol |
+| [reference/进程间IPC协议.md](./reference/进程间IPC协议.md) | UI ↔ helper IPC |
+| [reference/项目注意事项与踩坑.md](./reference/项目注意事项与踩坑.md) | Caveats & debugging |
 
 ## Build (dev)
 
@@ -16,7 +28,9 @@ cmake --build cpp_core/build --config Release
 flutter build windows --release
 ```
 
-Run `helper.exe` (tray). UI binary: `screen_strip_sync.exe`.
+Run `helper.exe` (tray). UI binary: `screen_strip_sync.exe`. Keep them in the same folder for distribution.
+
+Optional installer: `packaging/pack.ps1` (requires Inno Setup 6).
 
 ## Reporting bugs
 
@@ -28,4 +42,4 @@ Do not paste full screen captures into the diagnostics flow—the export contain
 
 ## License
 
-See repository license file when published.
+[Apache License 2.0](./LICENSE).

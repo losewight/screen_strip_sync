@@ -44,3 +44,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local / agent / packaging artifacts (not for public git)
+.cursor/
+/dist/
+/dist_stage/
+/dist_installer/*.exe
+/dist_installer/*.zip
+/dist_installer/_zip_stage_*/
+/backup/
+experiments/screen_strip_sync_draft.py
