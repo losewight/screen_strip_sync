@@ -33,5 +33,5 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
                                     unsigned char out_rgb[10][3]);
 
 // 采样可调参；IPC 经 engine_set_* 转发。内部 clamp。
-void dxgi_set_near_black(int v); // 0..64，默认 12
+void dxgi_set_near_black(int v); // 0..64，默认 0
 void dxgi_set_blur(int v);       // 0..8，默认 2；0=不扩邻域

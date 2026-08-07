@@ -253,7 +253,7 @@ class _WallColorCompCard extends ConsumerWidget {
                     InfoHint(
                       message:
                           '墙面不是白/黑中性色时，灯带光会被墙色“染”偏；\n'
-                          '在此按墙面底色做校正。白墙或黑墙一般不必用。',
+                          '在此按墙面底色做校正。',
                     ),
                   ],
                 ),

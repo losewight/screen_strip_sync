@@ -14,15 +14,15 @@ std::thread g_worker;
 // 为什么：托盘菜单与 IPC 可能并发 start/stop，必须串行化防双 worker
 std::mutex g_engine_mu;
 // 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
-std::atomic<float> g_alpha{0.3f};
-// 为什么：RMS+EMA 易冲淡；默认 1.4 略抬饱和度，IPC/JSON 可改
-std::atomic<float> g_saturation{1.4f};
+std::atomic<float> g_alpha{1.f};
+// 为什么：与 HelperConfig 默认一致；启动后仍由 config_apply 覆盖
+std::atomic<float> g_saturation{1.2f};
 // 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
 std::atomic<char> g_mode{'a'};
 // 屏幕氛围参数（与 map alpha/near_black/blur 正交）
 std::atomic<char> g_region_algo{'m'};
-std::atomic<int> g_region_blur{0};
-std::atomic<float> g_region_smooth{0.f};
+std::atomic<int> g_region_blur{3};
+std::atomic<float> g_region_smooth{0.8f};
 std::atomic<int> g_region_dark{15};
 std::mutex g_region_bbox_mu;
 int g_region_l = 10, g_region_t = 20, g_region_w = 80, g_region_h = 60;
@@ -138,6 +138,13 @@ bool engine_set_com(const char *name) {
     return false;
   while (*name == ' ' || *name == '\t')
     ++name;
+
+  // 空串 = 未指定口（首装默认）；清 g_com_name
+  if (*name == '\0') {
+    std::lock_guard<std::mutex> lock(g_com_mu);
+    g_com_name[0] = '\0';
+    return true;
+  }
 
   // 期望 COMn / comn，n 为 1～3 位数字
   char c0 = name[0], c1 = name[1], c2 = name[2];

@@ -15,8 +15,8 @@ static IDXGIOutputDuplication *g_duplication = nullptr;
 static ID3D11Texture2D *g_staging = nullptr;
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
-static std::atomic<int> g_near_black{12}; // 0..64
-static std::atomic<int> g_blur_step{2};   // 0..8
+static std::atomic<int> g_near_black{0}; // 0..64
+static std::atomic<int> g_blur_step{0};  // 0..8
 
 // 热路径失败限流窗口（ms）；首条立即打，同 key 重复合并
 static constexpr unsigned kDxgiFailLogPeriodMs = 5000;

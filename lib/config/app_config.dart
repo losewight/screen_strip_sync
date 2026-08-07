@@ -19,20 +19,20 @@ enum ColorMode {
 /// 帧长 / 50ms 节流永不进此类。
 class AppConfig {
   const AppConfig({
-    this.emaAlpha = 0.3,
-    this.nearBlack = 12,
-    this.blurStep = 2,
-    this.saturation = 1.4,
+    this.emaAlpha = 1.0,
+    this.nearBlack = 0,
+    this.blurStep = 0,
+    this.saturation = 1.2,
     this.mode = ColorMode.a,
-    this.comPort = 'COM10',
+    this.comPort = '',
     this.lastConnectedCom = '',
     this.autoSleepSync = true,
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
     this.segmentMap,
     this.regionAlgo = RegionAlgo.mean,
-    this.regionBlur = 0,
-    this.regionSmooth = 0.0,
+    this.regionBlur = 3,
+    this.regionSmooth = 0.80,
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
     this.lastScene = 'idle',
@@ -50,12 +50,12 @@ class AppConfig {
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
   final int blurStep;
 
-  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.4 略抬「pop」。
+  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2。
   final double saturation;
 
   final ColorMode mode;
 
-  /// 串口名，如 `COM10`；下拉/手输的当前选中。
+  /// 串口名，如 `COM10`；空=未指定，等扫描推荐口。
   final String comPort;
 
   /// helper 曾成功打开的口；空表示从未连上过，不走快速连接。
@@ -157,20 +157,20 @@ class AppConfig {
   ///
   /// 缺字段保留 [AppConfig] 默认值。不以 `cfg end` 为输入（调用方在 end 处组包）。
   factory AppConfig.fromCfgLines(Iterable<String> lines) {
-    var alpha = 0.3;
-    var nearBlack = 12;
-    var blurStep = 2;
-    var saturation = 1.4;
+    var alpha = 1.0;
+    var nearBlack = 0;
+    var blurStep = 0;
+    var saturation = 1.2;
     var mode = ColorMode.a;
-    var com = 'COM10';
+    var com = '';
     var lastCom = '';
     var sleepSync = true;
     var shutdownOff = true;
     var autostart = false;
     List<SegmentSample>? map;
     var regionAlgo = RegionAlgo.mean;
-    var regionBlur = 0;
-    var regionSmooth = 0.0;
+    var regionBlur = 3;
+    var regionSmooth = 0.80;
     var regionDark = 15;
     var regionBBox = const RegionBBox();
     var scene = 'idle';

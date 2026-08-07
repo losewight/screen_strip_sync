@@ -1,6 +1,9 @@
 ﻿# 子目录归类后仍用 #include "foo.h"；与 CMake target_include_directories 对齐。
+# 无 compile_commands 时，单独打开 .h 会被当成 C → 不认 bool/constexpr，并触发 STL1003。
 CompileFlags:
   Add:
+    - -xc++
+    - -std=c++17
     - -I.
     - -Iapp
     - -Iconfig

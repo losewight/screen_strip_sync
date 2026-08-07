@@ -216,10 +216,11 @@ void config_apply() {
   else
     engine_clear_wall_color();
   if (!engine_set_com(c.comPort)) {
-    printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
-    engine_set_com("COM10");
+    // 非法口：清空，绝不回落到开发机写死的 COM10
+    printf("config_apply: bad com [%s], leave empty\n", c.comPort);
+    engine_set_com("");
     std::lock_guard<std::mutex> lock(g_mu);
-    snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "COM10");
+    g_cfg.comPort[0] = '\0';
   } else {
     char norm[16];
     engine_get_com(norm, sizeof(norm));

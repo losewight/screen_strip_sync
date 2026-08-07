@@ -35,12 +35,12 @@ void main() {
 
     test('empty lines fall back to defaults', () {
       final cfg = AppConfig.fromCfgLines(const []);
-      expect(cfg.emaAlpha, 0.3);
-      expect(cfg.nearBlack, 12);
-      expect(cfg.blurStep, 2);
-      expect(cfg.saturation, 1.4);
+      expect(cfg.emaAlpha, 1.0);
+      expect(cfg.nearBlack, 0);
+      expect(cfg.blurStep, 0);
+      expect(cfg.saturation, 1.2);
       expect(cfg.mode, ColorMode.a);
-      expect(cfg.comPort, 'COM10');
+      expect(cfg.comPort, '');
       expect(cfg.lastConnectedCom, '');
       expect(cfg.autoSleepSync, isTrue);
       expect(cfg.turnOffOnShutdown, isTrue);

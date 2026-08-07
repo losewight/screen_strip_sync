@@ -14,12 +14,13 @@ struct RegionBBox {
 
 // 与 Dart AppConfig JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
-  float emaAlpha = 0.3f;
-  int nearBlack = 12;
-  int blurStep = 2;
-  float saturation = 1.4f; // 0.5..2；1=原色，默认略抬便于「pop」
+  // 默认对齐产品 UI：跟色平滑度 0 → α=1；氛围平滑 0.80 / blur 3
+  float emaAlpha = 1.f;
+  int nearBlack = 0;
+  int blurStep = 0;
+  float saturation = 1.2f; // 0.5..2；1=原色
   char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
-  char comPort[16] = "COM10";
+  char comPort[16] = "";   // 空=未指定；勿写死 COM10
   char lastConnectedCom[16] = "";
   bool autoSleepSync = true;
   bool turnOffOnShutdown = true;
@@ -27,10 +28,10 @@ struct HelperConfig {
   bool hasMap = false;
   SegmentRect map[kSegmentCount] = {};
   // 屏幕氛围（Python region 路径）；与 map 参数正交
-  char regionAlgo = 'm';    // 'm'=mean 柔和融合；'x'=max 高亮追踪
-  int regionBlur = 0;       // 0..20
-  float regionSmooth = 0.f; // 0..0.99；高=更钝
-  int regionDark = 15;      // 0..50
+  char regionAlgo = 'm';     // 'm'=mean 柔和融合；'x'=max 高亮追踪
+  int regionBlur = 3;        // 0..20
+  float regionSmooth = 0.8f; // 0..0.99；高=更钝
+  int regionDark = 15;       // 0..50
   RegionBBox regionBBox{};
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
   // 合法：engine|region|idle|off|solid RRGGBB
