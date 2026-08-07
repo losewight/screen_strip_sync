@@ -89,6 +89,16 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(lastCustomSolid: h);
   }
 
+  void setWallCompEnabled(bool value) {
+    state = state.copyWith(wallCompEnabled: value);
+  }
+
+  void setWallColor(String hex) {
+    final h = hex.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
+    state = state.copyWith(wallColor: h);
+  }
+
   void setComPort(String value) {
     state = state.copyWith(comPort: value.trim());
   }

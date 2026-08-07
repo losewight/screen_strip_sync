@@ -116,6 +116,8 @@ void push_config_lines(SOCKET client) {
             c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
   // 空串也推，便于 UI 区分「未设」与缺字段
   send_line(client, "cfg last_custom_solid %s\n", c.lastCustomSolid);
+  send_line(client, "cfg wall_comp %d\n", c.wallCompEnabled ? 1 : 0);
+  send_line(client, "cfg wall_color %s\n", c.wallColor);
 
   if (!c.hasMap) {
     send_line(client, "cfg map default\n");

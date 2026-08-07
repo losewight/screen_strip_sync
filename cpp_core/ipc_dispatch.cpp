@@ -414,6 +414,40 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set wall_comp ", 14) == 0) {
+    const char *p = line + 14;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_wall_comp(*p == '1');
+      printf("cmd=set wall_comp %c\n", *p);
+    } else {
+      printf("bad set wall_comp: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set wall_color ", 15) == 0) {
+    const char *p = line + 15;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if (p[0] == '\0') {
+      if (!config_set_wall_color(""))
+        printf("bad set wall_color: (empty)\n");
+      else
+        printf("cmd=set wall_color (cleared)\n");
+    } else if (!is_rrggbb(p)) {
+      printf("bad set wall_color: [%s]\n", p);
+    } else if (!config_set_wall_color(p)) {
+      printf("bad set wall_color: [%s]\n", p);
+    } else {
+      HelperConfig after{};
+      config_copy(&after);
+      if (strcmp(after.wallColor, p) != 0)
+        ipc_push_config_snapshot();
+      printf("cmd=set wall_color\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set region_bbox ", 16) == 0) {
     const char *p = line + 16;
     int l = 0, t = 0, w = 0, h = 0;

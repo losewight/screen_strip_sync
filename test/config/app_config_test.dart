@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:screen_strip_sync/config/app_config.dart';
 import 'package:screen_strip_sync/config/segment_map_codec.dart';
 
@@ -46,6 +46,19 @@ void main() {
       expect(cfg.turnOffOnShutdown, isTrue);
       expect(cfg.startOnBoot, isFalse);
       expect(cfg.lastScene, 'idle');
+      expect(cfg.wallCompEnabled, isFalse);
+      expect(cfg.wallColor, '');
+      expect(cfg.hasWallColor, isFalse);
+    });
+
+    test('parses wall compensation fields', () {
+      final cfg = AppConfig.fromCfgLines(const [
+        'cfg wall_comp 1',
+        'cfg wall_color FFE6B4',
+      ]);
+      expect(cfg.wallCompEnabled, isTrue);
+      expect(cfg.wallColor, 'ffe6b4');
+      expect(cfg.hasWallColor, isTrue);
     });
 
     test('clamps out-of-range numeric fields', () {

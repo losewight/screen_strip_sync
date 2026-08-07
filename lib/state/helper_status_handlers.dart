@@ -179,4 +179,6 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendRegionDark(int dark);
   void sendRegionBBox(RegionBBox box);
   void sendLastCustomSolid(String rrggbb);
+  void sendWallComp(bool enabled);
+  void sendWallColor(String rrggbb);
 }

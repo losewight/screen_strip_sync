@@ -1,6 +1,7 @@
 ﻿#include "engine_internal.h"
 
 #include "serial_port.h"
+#include "wall_comp.h"
 
 #include <cstdio>
 #include <cstring>
@@ -102,12 +103,43 @@ bool power_off(HANDLE h) {
 }
 
 bool send_solid(HANDLE h, const char *rrggbb) {
+  if (!rrggbb || strlen(rrggbb) != 6)
+    return false;
+
+  float r = 0.f, g = 0.f, b = 0.f;
+  for (int c = 0; c < 3; ++c) {
+    unsigned v = 0;
+    for (int k = 0; k < 2; ++k) {
+      char ch = rrggbb[c * 2 + k];
+      unsigned d = 0;
+      if (ch >= '0' && ch <= '9')
+        d = (unsigned)(ch - '0');
+      else if (ch >= 'a' && ch <= 'f')
+        d = (unsigned)(ch - 'a' + 10);
+      else if (ch >= 'A' && ch <= 'F')
+        d = (unsigned)(ch - 'A' + 10);
+      else
+        return false;
+      v = (v << 4) | d;
+    }
+    if (c == 0)
+      r = (float)v;
+    else if (c == 1)
+      g = (float)v;
+    else
+      b = (float)v;
+  }
+  wall_comp_apply(&r, &g, &b);
+  char color[7];
+  snprintf(color, sizeof(color), "%02x%02x%02x", (unsigned)(r + 0.5f),
+           (unsigned)(g + 0.5f), (unsigned)(b + 0.5f));
+
   char frame[128];
   snprintf(frame, sizeof(frame),
            "set_rgb_pc %04x 00 63 %s 2 %s 2 %s 2 %s 2 %s 2 "
            "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           1, rrggbb, rrggbb, rrggbb, rrggbb, rrggbb, rrggbb, rrggbb, rrggbb,
-           rrggbb, rrggbb);
+           1, color, color, color, color, color, color, color, color, color,
+           color);
 
   DWORD len = (DWORD)strlen(frame);
   if (len >= 120) { // 红线：拒绝 >=120

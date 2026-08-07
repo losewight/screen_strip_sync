@@ -425,6 +425,32 @@ bool config_parse_json(const char *json, HelperConfig *cfg) {
         if (ok)
           snprintf(cfg->lastCustomSolid, sizeof(cfg->lastCustomSolid), "%s", s);
       }
+    } else if (strcmp(key, "wallCompEnabled") == 0) {
+      bool b = false;
+      if (!parse_bool(p, &b))
+        return false;
+      cfg->wallCompEnabled = b;
+    } else if (strcmp(key, "wallColor") == 0) {
+      char s[8];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (s[0] == '\0') {
+        cfg->wallColor[0] = '\0';
+      } else if (strlen(s) == 6) {
+        bool ok = true;
+        for (int i = 0; i < 6; ++i) {
+          char c = s[i];
+          if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                (c >= 'A' && c <= 'F'))) {
+            ok = false;
+            break;
+          }
+          if (c >= 'A' && c <= 'F')
+            s[i] = (char)(c - 'A' + 'a');
+        }
+        if (ok)
+          snprintf(cfg->wallColor, sizeof(cfg->wallColor), "%s", s);
+      }
     } else if (strcmp(key, "regionAlgo") == 0) {
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
@@ -539,6 +565,12 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(",\n");
   o.append("  \"lastCustomSolid\": ");
   append_escaped(&o, c.lastCustomSolid);
+  o.append(",\n");
+  o.append("  \"wallCompEnabled\": ");
+  o.append(c.wallCompEnabled ? "true" : "false");
+  o.append(",\n");
+  o.append("  \"wallColor\": ");
+  append_escaped(&o, c.wallColor);
   o.append(",\n");
 
   o.append("  \"regionAlgo\": ");

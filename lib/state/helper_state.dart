@@ -290,6 +290,28 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
+  void sendWallComp(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set wall_comp ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendWallColor(String rrggbb) {
+    if (!_client.isConnected) return;
+    final h = rrggbb.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
+    try {
+      _sendIpc('set wall_color $h');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendComPort(String port) {
     if (!_client.isConnected) return;
     final name = port.trim();

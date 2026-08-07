@@ -37,6 +37,8 @@ class AppConfig {
     this.regionBBox = const RegionBBox(),
     this.lastScene = 'idle',
     this.lastCustomSolid = '',
+    this.wallCompEnabled = false,
+    this.wallColor = '',
   });
 
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
@@ -92,8 +94,17 @@ class AppConfig {
   /// 纯色「自定义」色圈；6 位小写 hex，空=未设。
   final String lastCustomSolid;
 
+  /// 墙面色彩补偿开关；无 [wallColor] 时 helper 启用也 no-op。
+  final bool wallCompEnabled;
+
+  /// 墙面底色；6 位小写 hex，空=未校正。
+  final String wallColor;
+
   bool get hasSegmentMap =>
       segmentMap != null && segmentMap!.length == kSegmentCount;
+
+  bool get hasWallColor =>
+      RegExp(r'^[0-9a-f]{6}$').hasMatch(wallColor.trim().toLowerCase());
 
   AppConfig copyWith({
     double? emaAlpha,
@@ -115,6 +126,8 @@ class AppConfig {
     RegionBBox? regionBBox,
     String? lastScene,
     String? lastCustomSolid,
+    bool? wallCompEnabled,
+    String? wallColor,
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
@@ -135,6 +148,8 @@ class AppConfig {
       regionBBox: regionBBox ?? this.regionBBox,
       lastScene: lastScene ?? this.lastScene,
       lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
+      wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
+      wallColor: wallColor ?? this.wallColor,
     );
   }
 
@@ -160,6 +175,8 @@ class AppConfig {
     var regionBBox = const RegionBBox();
     var scene = 'idle';
     var lastCustomSolid = '';
+    var wallCompEnabled = false;
+    var wallColor = '';
 
     for (final raw in lines) {
       var line = raw.trim();
@@ -233,6 +250,15 @@ class AppConfig {
           } else if (h.isEmpty) {
             lastCustomSolid = '';
           }
+        case 'wall_comp':
+          if (val == '0' || val == '1') wallCompEnabled = val == '1';
+        case 'wall_color':
+          final h = val.trim().toLowerCase();
+          if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) {
+            wallColor = h;
+          } else if (h.isEmpty) {
+            wallColor = '';
+          }
         default:
           break;
       }
@@ -257,6 +283,8 @@ class AppConfig {
       regionBBox: regionBBox,
       lastScene: scene,
       lastCustomSolid: lastCustomSolid,
+      wallCompEnabled: wallCompEnabled,
+      wallColor: wallColor,
     );
   }
 }

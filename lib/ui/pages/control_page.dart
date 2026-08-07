@@ -5,6 +5,7 @@ import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/color_swatch_button.dart';
 import '../widgets/info_hint.dart';
 import '../widgets/palette_color_picker.dart';
 import '../widgets/serial_port_picker.dart';
@@ -186,33 +187,40 @@ class _ConnectBar extends StatelessWidget {
   }
 }
 
-/// 墙面色彩补偿：开关 + 校正取色；helper 补偿逻辑下一步再接。
-class _WallColorCompCard extends StatefulWidget {
+/// 墙面色彩补偿：开关 + 校正取色；由 cfg 快照驱动，IPC 下发 helper。
+class _WallColorCompCard extends ConsumerWidget {
   const _WallColorCompCard();
 
-  @override
-  State<_WallColorCompCard> createState() => _WallColorCompCardState();
-}
-
-class _WallColorCompCardState extends State<_WallColorCompCard> {
   static const _defaultPick = Color(0xFF9C27B0);
 
-  bool _enabled = false;
-  Color? _wallColor;
-
-  Future<void> _pickWallColor() async {
+  Future<void> _pickWallColor(
+    BuildContext context,
+    AppConfig cfg,
+    ConfigNotifier config,
+    HelperStateNotifier notifier,
+  ) async {
+    final initial = colorFromSolidHex(cfg.wallColor) ?? _defaultPick;
     final picked = await showPaletteColorPicker(
       context,
-      initial: _wallColor ?? _defaultPick,
+      initial: initial,
       title: '请选择你的墙面颜色',
     );
-    if (picked == null || !mounted) return;
-    setState(() => _wallColor = picked);
+    if (picked == null || !context.mounted) return;
+    final hex = colorToSolidHex(picked);
+    config.setWallColor(hex);
+    notifier.sendWallColor(hex);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final hasColor = _wallColor != null;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(configProvider);
+    final config = ref.read(configProvider.notifier);
+    final notifier = ref.read(helperStateProvider.notifier);
+    final cfgReady = ref.watch(configReadyProvider);
+    final ui = ref.watch(helperStateProvider);
+    final canEdit = ui.canControl && cfgReady;
+    final hasColor = cfg.hasWallColor;
+    final wallColor = colorFromSolidHex(cfg.wallColor);
 
     return Container(
       decoration: BoxDecoration(
@@ -263,16 +271,18 @@ class _WallColorCompCardState extends State<_WallColorCompCard> {
           ),
           const SizedBox(width: AppSpacing.card),
           OutlinedButton(
-            onPressed: _pickWallColor,
+            onPressed: canEdit
+                ? () => _pickWallColor(context, cfg, config, notifier)
+                : null,
             child: const Text('校正'),
           ),
-          if (hasColor) ...[
+          if (hasColor && wallColor != null) ...[
             const SizedBox(width: AppSpacing.control),
             Container(
               width: AppSpacing.page,
               height: AppSpacing.page,
               decoration: BoxDecoration(
-                color: _wallColor,
+                color: wallColor,
                 shape: BoxShape.circle,
                 border: Border.all(color: AppTheme.divider),
               ),
@@ -280,8 +290,13 @@ class _WallColorCompCardState extends State<_WallColorCompCard> {
           ],
           const SizedBox(width: AppSpacing.control),
           Win11Switch(
-            value: _enabled,
-            onChanged: hasColor ? (v) => setState(() => _enabled = v) : null,
+            value: cfg.wallCompEnabled,
+            onChanged: (canEdit && hasColor)
+                ? (v) {
+                    config.setWallCompEnabled(v);
+                    notifier.sendWallComp(v);
+                  }
+                : null,
           ),
         ],
       ),

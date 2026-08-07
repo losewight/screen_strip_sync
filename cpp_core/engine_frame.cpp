@@ -2,6 +2,7 @@
 
 #include "dxgi_capture.h"
 #include "serial_port.h"
+#include "wall_comp.h"
 
 #include <cstdio>
 #include <cstring>
@@ -66,6 +67,8 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
         ob = 255.f;
     }
 
+    wall_comp_apply(&or_, &og, &ob);
+
     // 字符串只在组帧前出现一次
     snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
              (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
@@ -122,8 +125,13 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
       g_ema_b[i] = smooth * g_ema_b[i] + (1.f - smooth) * b;
     }
 
-    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(g_ema_r[i] + 0.5f),
-             (unsigned)(g_ema_g[i] + 0.5f), (unsigned)(g_ema_b[i] + 0.5f));
+    float or_ = g_ema_r[i];
+    float og = g_ema_g[i];
+    float ob = g_ema_b[i];
+    wall_comp_apply(&or_, &og, &ob);
+
+    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
+             (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
   }
   g_ema_inited = true;
 

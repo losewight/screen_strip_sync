@@ -18,7 +18,7 @@ struct HelperConfig {
   int nearBlack = 12;
   int blurStep = 2;
   float saturation = 1.4f; // 0.5..2；1=原色，默认略抬便于「pop」
-  char mode = 'a'; // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
+  char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
   char comPort[16] = "COM10";
   char lastConnectedCom[16] = "";
   bool autoSleepSync = true;
@@ -37,6 +37,9 @@ struct HelperConfig {
   char lastScene[32] = "idle";
   // 纯色 UI「自定义」色圈；6 位小写 hex，空=未设（UI 用默认紫）
   char lastCustomSolid[8] = "";
+  // 墙面色彩补偿：开关 + 墙色；空 wallColor = 未校正（启用也 no-op）
+  bool wallCompEnabled = false;
+  char wallColor[8] = "";
 };
 
 bool config_path(char *out, size_t cap);
@@ -64,6 +67,9 @@ void config_set_last_scene(
     const char *scene); // engine|region|idle|off|solid RRGGBB
 // 6 位 hex；非法返回 false（调用方忽略）
 bool config_set_last_custom_solid(const char *rrggbb);
+void config_set_wall_comp(bool on);
+// 6 位 hex；非法返回 false；空串清除墙色
+bool config_set_wall_color(const char *rrggbb);
 void config_set_last_connected_com(const char *com);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）

@@ -6,6 +6,7 @@
 #include "autostart.h"
 #include "helper_lifecycle.h"
 #include "light_engine.h"
+#include "wall_comp.h"
 
 #include <atomic>
 #include <cstdio>
@@ -209,6 +210,11 @@ void config_apply() {
   engine_set_region_dark(c.regionDark);
   engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
                          c.regionBBox.h);
+  engine_set_wall_comp(c.wallCompEnabled);
+  if (c.wallColor[0] != '\0')
+    engine_set_wall_color(c.wallColor);
+  else
+    engine_clear_wall_color();
   if (!engine_set_com(c.comPort)) {
     printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
     engine_set_com("COM10");
@@ -441,6 +447,65 @@ bool config_set_last_custom_solid(const char *rrggbb) {
   }
   ensure_saver_started();
   printf("config_set_last_custom_solid: %s\n", norm);
+  return true;
+}
+
+void config_set_wall_comp(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (g_cfg.wallCompEnabled == on)
+      return;
+    g_cfg.wallCompEnabled = on;
+    mark_dirty_unlocked();
+  }
+  engine_set_wall_comp(on);
+  ensure_saver_started();
+  printf("config_set_wall_comp: %d\n", on ? 1 : 0);
+}
+
+bool config_set_wall_color(const char *rrggbb) {
+  if (!rrggbb)
+    return false;
+  while (*rrggbb == ' ' || *rrggbb == '\t')
+    ++rrggbb;
+  if (rrggbb[0] == '\0') {
+    {
+      std::lock_guard<std::mutex> lock(g_mu);
+      if (g_cfg.wallColor[0] == '\0')
+        return true;
+      g_cfg.wallColor[0] = '\0';
+      mark_dirty_unlocked();
+    }
+    engine_clear_wall_color();
+    ensure_saver_started();
+    printf("config_set_wall_color: (cleared)\n");
+    return true;
+  }
+  if (strlen(rrggbb) != 6)
+    return false;
+  char norm[8];
+  for (int i = 0; i < 6; ++i) {
+    char c = rrggbb[i];
+    bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F');
+    if (!ok)
+      return false;
+    if (c >= 'A' && c <= 'F')
+      c = (char)(c - 'A' + 'a');
+    norm[i] = c;
+  }
+  norm[6] = '\0';
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (strcmp(g_cfg.wallColor, norm) == 0)
+      return true;
+    snprintf(g_cfg.wallColor, sizeof(g_cfg.wallColor), "%s", norm);
+    mark_dirty_unlocked();
+  }
+  if (!engine_set_wall_color(norm))
+    return false;
+  ensure_saver_started();
+  printf("config_set_wall_color: %s\n", norm);
   return true;
 }
 

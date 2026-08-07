@@ -20,6 +20,7 @@ add_executable(helper WIN32
   engine_serial.cpp
   engine_frame.cpp
   engine_intent.cpp
+  wall_comp.cpp
   ipc_loop.cpp
   ipc_push.cpp
   ipc_dispatch.cpp
