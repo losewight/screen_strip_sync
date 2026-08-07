@@ -6,7 +6,7 @@
 
 #if 0 // 整文件默认不编译；需要本地试跑时改为 1 并自行接进工程
 
-#include "serial_port.h"
+#include "../engine/serial_port.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

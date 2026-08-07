@@ -118,21 +118,26 @@ flowchart LR
 
 ### 3.1 helper（`cpp_core/`）
 
-| 文件 | 职责 | 状态 |
+源码按职责分子目录；`#include "foo.h"` 仍靠 CMake `target_include_directories` 扁平查找。废案在 `废案_同进程FFI_Day11-14/`，`backup/` 不编入。
+
+| 路径 | 职责 | 状态 |
 |------|------|------|
-| `helper_main.cpp` | 入口：`WinMain` → 单实例 → 参数解析 → 日志重定向 → 读配置 → DXGI → 串口就绪 → 托盘 + 电源窗 → 恢复场景 → `ipc_run` 阻塞 → `helper_shutdown` | 阶段 H 改造 |
-| `helper_lifecycle.{h,cpp}` | 退出序列（`helper_shutdown` 多路径防重入）、休眠软关 / 唤醒恢复 | 阶段 H 扩 |
-| `config_store.{h,cpp}` | 配置属主：load/apply/setter/debounce 写盘 | H2 |
-| `config_json.{h,cpp}` + `config_clamp.h` | JSON 解析/格式化与数值夹紧（从 store 拆出） | |
-| `dxgi_capture.cpp` + `dxgi_mapped.h` | Desktop Duplication、共享 map/unmap、map 路径采样 | 就绪 |
-| `dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
-| `tray_icon.{h,cpp}` | 隐藏顶层窗 + `Shell_NotifyIcon` + 右键菜单 + `WM_TASKBARCREATED` 重加；**合并原 `power_watch` 的电源消息** | **H4 新增** |
-| `ui_launcher.{h,cpp}` | 解析 Flutter exe 路径、三级判定后 `CreateProcess`、记子进程句柄 | **H5 新增** |
-| `autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `Screen Strip Sync`），值为 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并清旧键 `ScreenStripSyncHelper` | **H7 新增** |
-| `ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 状态·配置回推 / 命令分派；对外仍只暴露 `ipc_loop.h` | 阶段 H 改造 |
-| `engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop+start/stop、intent 记账与场景恢复 | 基本就绪 |
-| `serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
-| `power_watch.cpp` | 隐藏窗拦截休眠 / 会话结束 | H4 并入 `tray_icon.cpp` 后删除 |
+| `app/helper_main.cpp` | 入口：`WinMain` → 单实例 → 参数解析 → 日志重定向 → 读配置 → DXGI → 串口就绪 → 托盘 + 电源窗 → 恢复场景 → `ipc_run` 阻塞 → `helper_shutdown` | 阶段 H 改造 |
+| `app/helper_lifecycle.{h,cpp}` | 退出序列（`helper_shutdown` 多路径防重入）、休眠软关 / 唤醒恢复 | 阶段 H 扩 |
+| `app/helper_log.{h,cpp}` | GUI 子系统下 stdout → `helper.log`（`/FI` 宏） | |
+| `config/config_store.{h,cpp}` | 配置属主：load/apply/setter/debounce 写盘 | H2 |
+| `config/config_json.{h,cpp}` + `config_clamp.h` | JSON 解析/格式化与数值夹紧 | |
+| `config/autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `Screen Strip Sync`）；路径漂移纠正、清旧键 | H7 |
+| `capture/dxgi_capture.cpp` + `dxgi_mapped.h` | Desktop Duplication、共享 map/unmap、map 路径采样 | 就绪 |
+| `capture/dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
+| `shell/tray_icon.{h,cpp}` | 隐藏顶层窗 + 托盘 + 电源消息（原 `power_watch` 已并入） | H4 |
+| `shell/ui_launcher.{h,cpp}` | 三级判定后 `CreateProcess` 拉 Flutter | H5 |
+| `shell/helper.rc` + `resource.h` | 托盘图标与版本资源 | |
+| `ipc/ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 回推 / 分派；对外 `ipc_loop.h` | 阶段 H 改造 |
+| `engine/`：`engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop、intent | 基本就绪 |
+| `engine/serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
+| `engine/wall_comp.{h,cpp}` | 墙面反射补偿（Ref 反除 + 峰值归一）；map/region/solid 挂接 | |
+| `engine/segment_map.h` | 段矩形映射类型 | |
 
 ### 3.2 Flutter（`lib/`）
 

@@ -163,7 +163,7 @@ static void tray_show_menu(HWND hwnd) {
   if (!menu)
     return;
 
-  // 打开界面 | 屏幕跟色 屏幕氛围 关灯 | 开机自启 | 退出并关灯
+  // 打开界面 | 流光溢彩 屏幕氛围 关灯 | 开机自启 | 退出并关灯
   AppendMenuW(menu, MF_STRING, IDM_TRAY_OPEN_UI, L"打开界面");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
@@ -171,7 +171,7 @@ static void tray_show_menu(HWND hwnd) {
   const bool has_serial = serial_or_invalid() != INVALID_HANDLE_VALUE;
   const UINT light_flags =
       MF_STRING | (has_serial ? 0u : (MF_GRAYED | MF_DISABLED));
-  AppendMenuW(menu, light_flags, IDM_TRAY_START_ENGINE, L"屏幕跟色");
+  AppendMenuW(menu, light_flags, IDM_TRAY_START_ENGINE, L"流光溢彩");
   AppendMenuW(menu, light_flags, IDM_TRAY_START_REGION, L"屏幕氛围");
   AppendMenuW(menu, light_flags, IDM_TRAY_SOFT_OFF, L"关灯");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);

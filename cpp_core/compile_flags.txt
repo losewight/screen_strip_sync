@@ -1,0 +1,15 @@
+﻿-I.
+-Iapp
+-Iconfig
+-Iengine
+-Icapture
+-Iipc
+-Ishell
+-DWIN32
+-D_WIN32
+-DWIN32_LEAN_AND_MEAN
+-DUNICODE
+-D_UNICODE
+-DNOMINMAX
+-fms-compatibility
+-fms-extensions
