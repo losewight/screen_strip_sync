@@ -1,0 +1,29 @@
+#!/bin/sh
+# Strip Cursor agent trailers before the editor / commit finalizes.
+
+MSG_FILE="$1"
+[ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
+
+tmp="${MSG_FILE}.strip-cursoragent.$$"
+# Drop Co-authored-by: Cursor <cursoragent@cursor.com> and any cursoragent line.
+if ! grep -viE \
+  -e '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor[[:space:]]*<cursoragent@cursor\.com>[[:space:]]*$' \
+  -e 'cursoragent@cursor\.com' \
+  -e '(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)' \
+  "$MSG_FILE" >"$tmp"
+then
+  : >"$tmp"
+fi
+
+# Collapse runs of 3+ blank lines to a single blank line.
+awk '
+  BEGIN { blank = 0 }
+  /^[[:space:]]*$/ {
+    blank++
+    if (blank <= 1) print ""
+    next
+  }
+  { blank = 0; print }
+' "$tmp" >"${tmp}.2" && mv "${tmp}.2" "$MSG_FILE"
+rm -f "$tmp" "${tmp}.2"
+exit 0

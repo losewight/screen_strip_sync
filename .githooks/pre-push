@@ -1,0 +1,37 @@
+#!/bin/sh
+# Block push if any outgoing commit message still has Cursor agent identity.
+
+zero="0000000000000000000000000000000000000000"
+pattern='cursoragent@cursor\.com|Co-authored-by:[[:space:]]*Cursor|(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)'
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+  [ -z "$local_sha" ] && continue
+  if [ "$local_sha" = "$zero" ]; then
+    continue
+  fi
+  if [ "$remote_sha" = "$zero" ] || [ -z "$remote_sha" ]; then
+    range="$local_sha"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+
+  bad_commits="$(
+    git rev-list "$range" 2>/dev/null | while read -r c; do
+      if git log -1 --format='%B' "$c" | grep -qiE -e "$pattern"; then
+        echo "$c"
+      fi
+    done
+  )"
+  if [ -n "$bad_commits" ]; then
+    echo "error: push blocked — commit message(s) contain Cursor agent identity:" >&2
+    echo "$bad_commits" | while read -r c; do
+      [ -n "$c" ] || continue
+      echo "  $(git log -1 --format='%h %s' "$c")" >&2
+    done
+    echo "Rewrite those commits before pushing." >&2
+    exit 1
+  fi
+done
+
+exit 0

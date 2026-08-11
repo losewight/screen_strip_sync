@@ -1,0 +1,17 @@
+#!/bin/sh
+# Reject commits whose message still mentions Cursor agent identity.
+MSG_FILE="$1"
+[ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
+
+if grep -qiE \
+  -e 'cursoragent@cursor\.com' \
+  -e 'Co-authored-by:[[:space:]]*Cursor' \
+  -e '(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)' \
+  "$MSG_FILE"
+then
+  echo "error: commit message must not contain Cursor agent identity" >&2
+  echo "       (cursoragent / Co-authored-by: Cursor <cursoragent@cursor.com>)" >&2
+  echo "       Remove those lines and commit again." >&2
+  exit 1
+fi
+exit 0
