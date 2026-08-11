@@ -15,7 +15,7 @@ std::thread g_worker;
 std::mutex g_engine_mu;
 // 为什么：IPC 写、发帧线程读；热路径不加锁，只 load
 std::atomic<float> g_alpha{1.f};
-// 为什么：与 HelperConfig 默认一致；启动后仍由 config_apply 覆盖
+// 为什么：默认 1.2（UI 120%）；IPC/JSON 可改
 std::atomic<float> g_saturation{1.2f};
 // 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
 std::atomic<char> g_mode{'a'};
@@ -138,13 +138,6 @@ bool engine_set_com(const char *name) {
     return false;
   while (*name == ' ' || *name == '\t')
     ++name;
-
-  // 空串 = 未指定口（首装默认）；清 g_com_name
-  if (*name == '\0') {
-    std::lock_guard<std::mutex> lock(g_com_mu);
-    g_com_name[0] = '\0';
-    return true;
-  }
 
   // 期望 COMn / comn，n 为 1～3 位数字
   char c0 = name[0], c1 = name[1], c2 = name[2];

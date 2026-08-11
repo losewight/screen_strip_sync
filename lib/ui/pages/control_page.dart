@@ -36,8 +36,10 @@ class ControlPage extends ConsumerWidget {
         ui.phase != HelperPhase.connecting &&
         (ui.phase == HelperPhase.disconnected ||
             ui.phase == HelperPhase.failed ||
-            ui.phase == HelperPhase.noDevice ||
-            portChanged);
+            ui.phase == HelperPhase.needConnect ||
+            ui.phase == HelperPhase.openFailed ||
+            portChanged ||
+            (!ui.hasDevice && cfgReady));
 
     // 重连串口：仅「IPC 已通且所选口就是当前打开口」
     final canReconnectSerial =
@@ -45,7 +47,7 @@ class ControlPage extends ConsumerWidget {
         ui.currentCom.isNotEmpty &&
         cfg.comPort.isNotEmpty &&
         cfg.comPort.toUpperCase() == ui.currentCom.toUpperCase() &&
-        (ui.canControl || ui.phase == HelperPhase.noDevice);
+        (ui.canControl || ui.phase == HelperPhase.openFailed);
 
     // 换口失败后选回上次成功口 →「重新连接」；选其它口 →「换口连接」
     final String connectLabel;
@@ -253,7 +255,7 @@ class _WallColorCompCard extends ConsumerWidget {
                     InfoHint(
                       message:
                           '墙面不是白/黑中性色时，灯带光会被墙色“染”偏；\n'
-                          '在此按墙面底色做校正。',
+                          '在此按墙面底色做校正。白墙或黑墙一般不必用。',
                     ),
                   ],
                 ),

@@ -13,6 +13,7 @@ void main() {
         'cfg mode b',
         'cfg com COM7',
         'cfg last_com COM7',
+        'cfg serial_configured 1',
         'cfg sleep_sync 0',
         'cfg shutdown_off 0',
         'cfg autostart 1',
@@ -26,6 +27,7 @@ void main() {
       expect(cfg.mode, ColorMode.b);
       expect(cfg.comPort, 'COM7');
       expect(cfg.lastConnectedCom, 'COM7');
+      expect(cfg.serialConfigured, isTrue);
       expect(cfg.autoSleepSync, isFalse);
       expect(cfg.turnOffOnShutdown, isFalse);
       expect(cfg.startOnBoot, isTrue);
@@ -40,15 +42,34 @@ void main() {
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.2);
       expect(cfg.mode, ColorMode.a);
-      expect(cfg.comPort, '');
+      expect(cfg.comPort, 'COM10');
       expect(cfg.lastConnectedCom, '');
+      expect(cfg.serialConfigured, isFalse);
       expect(cfg.autoSleepSync, isTrue);
       expect(cfg.turnOffOnShutdown, isTrue);
       expect(cfg.startOnBoot, isFalse);
+      expect(cfg.regionBlur, 3);
+      expect(cfg.regionSmooth, 0.8);
+      expect(cfg.regionDark, 15);
       expect(cfg.lastScene, 'idle');
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
       expect(cfg.hasWallColor, isFalse);
+    });
+
+    test('parses serial_configured 0 and 1', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg serial_configured 0',
+        ]).serialConfigured,
+        isFalse,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg serial_configured 1',
+        ]).serialConfigured,
+        isTrue,
+      );
     });
 
     test('parses wall compensation fields', () {

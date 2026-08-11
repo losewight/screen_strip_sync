@@ -29,7 +29,9 @@ class StripProgressBar extends StatefulWidget {
 }
 
 _StripProgressMode _progressMode(HelperPhase phase) => switch (phase) {
-  HelperPhase.disconnected => _StripProgressMode.hidden,
+  HelperPhase.disconnected ||
+  HelperPhase.needConnect ||
+  HelperPhase.openFailed => _StripProgressMode.hidden,
   HelperPhase.connecting => _StripProgressMode.marquee,
   _ => _StripProgressMode.fill,
 };

@@ -177,41 +177,49 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   HANDLE h = INVALID_HANDLE_VALUE;
   helper_set_serial(&h);
 
-  const int max_tries = 10;
-  bool ready = false;
-  for (int i = 1; i <= max_tries; ++i) {
-    if (try_serial_ready(&h)) {
-      ready = true;
-      printf("serial ready (try %d/%d)\n", i, max_tries);
-      break;
-    }
-    printf("serial not ready (try %d/%d)\n", i, max_tries);
-    Sleep(500);
-  }
-  if (!ready) {
-    // 为什么：无灯带也不能退进程；托盘常驻，用户可稍后换口/重连
-    printf("serial give up after %d tries; stay alive without COM\n",
-           max_tries);
+  const bool serial_configured = config_get().serialConfigured;
+  if (!serial_configured) {
+    // 为什么：首启门闩未置位时不试 COM；等 UI set com + reconnect 成功后再开
+    printf("serialConfigured=0; skip auto open, wait UI connect\n");
   } else {
-    char com[16];
-    engine_get_com(com, sizeof(com));
-    config_set_last_connected_com(com);
-
-    // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
-    DisplayIntent boot{};
-    if (parse_last_scene(config_get().lastScene, &boot)) {
-      apply_display_intent(h, boot);
+    const int max_tries = 10;
+    bool ready = false;
+    for (int i = 1; i <= max_tries; ++i) {
+      if (try_serial_ready(&h)) {
+        ready = true;
+        printf("serial ready (try %d/%d)\n", i, max_tries);
+        break;
+      }
+      printf("serial not ready (try %d/%d)\n", i, max_tries);
+      Sleep(500);
+    }
+    if (!ready) {
+      // 为什么：无灯带也不能退进程；托盘常驻，用户可稍后换口/重连
+      printf("serial give up after %d tries; stay alive without COM\n",
+             max_tries);
     } else {
-      printf("boot scene: bad lastScene [%s], stay idle\n",
-             config_get().lastScene);
+      char com[16];
+      engine_get_com(com, sizeof(com));
+      config_set_last_connected_com(com);
+      config_set_serial_configured(true);
+
+      // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
+      DisplayIntent boot{};
+      if (parse_last_scene(config_get().lastScene, &boot)) {
+        apply_display_intent(h, boot);
+      } else {
+        printf("boot scene: bad lastScene [%s], stay idle\n",
+               config_get().lastScene);
+      }
     }
   }
 
   // 为什么：托盘窗兼收电源广播；ipc_run 占主线程，托盘在独立消息循环
   tray_start();
 
-  // 阻塞；listen 就绪后按需拉 Flutter（--autostart/--no-ui 不拉）
-  if (!ipc_run(9527, &h, !g_silent_start)) {
+  // 未配备时强制拉 UI（覆盖 --autostart/--no-ui）；已配备仍尊重静默
+  const bool launch_ui = !g_silent_start || !serial_configured;
+  if (!ipc_run(9527, &h, launch_ui)) {
     printf("ipc_run failed\n");
   }
 

@@ -41,10 +41,15 @@ class HelperPhaseStyle {
       icon: Icons.lightbulb_outline,
       label: '已熄灯',
     ),
-    HelperPhase.noDevice => const HelperPhaseStyle(
+    HelperPhase.needConnect => const HelperPhaseStyle(
+      accent: Color(0xFF8A93A6),
+      icon: Icons.link_off_outlined,
+      label: '未连接',
+    ),
+    HelperPhase.openFailed => const HelperPhaseStyle(
       accent: Color(0xFFFFA05C),
       icon: Icons.usb_off_outlined,
-      label: '无设备',
+      label: '打开失败',
     ),
     HelperPhase.failed => const HelperPhaseStyle(
       accent: Color(0xFFFF6B6B),

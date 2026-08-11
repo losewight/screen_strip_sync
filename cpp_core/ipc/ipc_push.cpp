@@ -104,6 +104,7 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg mode %c\n", c.mode);
   send_line(client, "cfg com %s\n", c.comPort);
   send_line(client, "cfg last_com %s\n", c.lastConnectedCom);
+  send_line(client, "cfg serial_configured %d\n", c.serialConfigured ? 1 : 0);
   send_line(client, "cfg sleep_sync %d\n", c.autoSleepSync ? 1 : 0);
   send_line(client, "cfg shutdown_off %d\n", c.turnOffOnShutdown ? 1 : 0);
   send_line(client, "cfg autostart %d\n", c.startOnBoot ? 1 : 0);

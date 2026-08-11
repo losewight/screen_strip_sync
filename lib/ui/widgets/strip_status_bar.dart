@@ -43,8 +43,12 @@ class StripStatusBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.text),
           Expanded(
             child: Text(
-              // 无设备：左侧说明串口不是灯带；右侧胶囊仍用相位短标签「无设备」
-              phase == HelperPhase.noDevice ? '非灯带串口' : '灯带$label',
+              // needConnect / openFailed：顶栏用完整短语，不用「灯带$label」
+              switch (phase) {
+                HelperPhase.needConnect => '灯带未连接',
+                HelperPhase.openFailed => '无法打开串口',
+                _ => '灯带$label',
+              },
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

@@ -14,24 +14,25 @@ struct RegionBBox {
 
 // 与 Dart AppConfig JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
-  // 默认对齐产品 UI：跟色平滑度 0 → α=1；氛围平滑 0.80 / blur 3
-  float emaAlpha = 1.f;
+  float emaAlpha = 1.f; // UI 平滑度 = 1−α；默认 0 → α=1（跟得最快）
   int nearBlack = 0;
   int blurStep = 0;
-  float saturation = 1.2f; // 0.5..2；1=原色
+  float saturation = 1.2f; // 0.5..2；1=原色，默认 120%
   char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
-  char comPort[16] = "";   // 空=未指定；勿写死 COM10
+  char comPort[16] = "COM10";
   char lastConnectedCom[16] = "";
+  // 首启门闩：false=须 UI 点连接才开口；true=启动可自动 try_serial
+  bool serialConfigured = false;
   bool autoSleepSync = true;
   bool turnOffOnShutdown = true;
   bool startOnBoot = false;
   bool hasMap = false;
   SegmentRect map[kSegmentCount] = {};
   // 屏幕氛围（Python region 路径）；与 map 参数正交
-  char regionAlgo = 'm';     // 'm'=mean 柔和融合；'x'=max 高亮追踪
-  int regionBlur = 3;        // 0..20
+  char regionAlgo = 'm';    // 'm'=mean 柔和融合；'x'=max 高亮追踪
+  int regionBlur = 3;       // 0..20
   float regionSmooth = 0.8f; // 0..0.99；高=更钝
-  int regionDark = 15;       // 0..50
+  int regionDark = 15;      // 0..50
   RegionBBox regionBBox{};
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
   // 合法：engine|region|idle|off|solid RRGGBB
@@ -72,6 +73,7 @@ void config_set_wall_comp(bool on);
 // 6 位 hex；非法返回 false；空串清除墙色
 bool config_set_wall_color(const char *rrggbb);
 void config_set_last_connected_com(const char *com);
+void config_set_serial_configured(bool on);
 void config_clear_map();
 // 从引擎快照同步 map（set map 成功后调用）
 void config_sync_map_from_engine();

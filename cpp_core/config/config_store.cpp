@@ -56,8 +56,10 @@ bool config_path(char *out, size_t cap) {
 }
 
 static bool read_config_file(const char *path, HelperConfig *out,
-                             bool *parsed_ok) {
+                             bool *parsed_ok, bool *saw_serial_configured) {
   *parsed_ok = false;
+  if (saw_serial_configured)
+    *saw_serial_configured = false;
   FILE *fp = nullptr;
   if (fopen_s(&fp, path, "rb") != 0 || !fp)
     return false;
@@ -75,8 +77,10 @@ static bool read_config_file(const char *path, HelperConfig *out,
   size_t rd = fread(buf.data(), 1, (size_t)sz, fp);
   fclose(fp);
   buf[rd] = '\0';
-  if (!config_parse_json(buf.data(), out)) {
+  if (!config_parse_json(buf.data(), out, saw_serial_configured)) {
     *out = HelperConfig{};
+    if (saw_serial_configured)
+      *saw_serial_configured = false;
     return true; // 文件在，但解析失败 → 默认
   }
   *parsed_ok = true;
@@ -172,15 +176,25 @@ void config_load() {
   }
 
   bool parsed = false;
-  if (!read_config_file(path, &fresh, &parsed)) {
+  bool saw_serial = false;
+  if (!read_config_file(path, &fresh, &parsed, &saw_serial)) {
     printf("config_load: no file, defaults\n");
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg = fresh;
     return;
   }
 
+  bool inferred = false;
   if (parsed) {
-    printf("config_load: ok com=%s alpha=%.3f\n", fresh.comPort,
+    // 为什么：旧 JSON 无 serialConfigured 时，有 lastConnectedCom 视为已配备
+    if (!saw_serial) {
+      fresh.serialConfigured = fresh.lastConnectedCom[0] != '\0';
+      inferred = true;
+      printf("config_load: serialConfigured inferred=%d from lastCom\n",
+             fresh.serialConfigured ? 1 : 0);
+    }
+    printf("config_load: ok com=%s serialConfigured=%d alpha=%.3f\n",
+           fresh.comPort, fresh.serialConfigured ? 1 : 0,
            (double)fresh.emaAlpha);
   } else {
     printf("config_load: parse fail, defaults\n");
@@ -188,8 +202,14 @@ void config_load() {
   }
 
   // 为什么：load 只改内存；规范化留给 config_apply 里的 engine_set_com
-  std::lock_guard<std::mutex> lock(g_mu);
-  g_cfg = fresh;
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg = fresh;
+    if (inferred)
+      mark_dirty_unlocked();
+  }
+  if (inferred)
+    ensure_saver_started();
 }
 
 void config_apply() {
@@ -216,11 +236,10 @@ void config_apply() {
   else
     engine_clear_wall_color();
   if (!engine_set_com(c.comPort)) {
-    // 非法口：清空，绝不回落到开发机写死的 COM10
-    printf("config_apply: bad com [%s], leave empty\n", c.comPort);
-    engine_set_com("");
+    printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
+    engine_set_com("COM10");
     std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg.comPort[0] = '\0';
+    snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "COM10");
   } else {
     char norm[16];
     engine_get_com(norm, sizeof(norm));
@@ -558,6 +577,18 @@ void config_set_last_connected_com(const char *com) {
     mark_dirty_unlocked();
   }
   ensure_saver_started();
+}
+
+void config_set_serial_configured(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (g_cfg.serialConfigured == on)
+      return;
+    g_cfg.serialConfigured = on;
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  printf("config_set_serial_configured: %d\n", on ? 1 : 0);
 }
 
 void config_clear_map() {

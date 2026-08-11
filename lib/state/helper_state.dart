@@ -36,10 +36,10 @@ class HelperStateNotifier extends _HelperStateBase
       _statusSub?.cancel();
       _disconnectSub?.cancel();
     });
-    // 为什么：界面起来就试连；startOnBoot 只走 set autostart，不挡连接
+    // 为什么：界面起来只连 IPC + 扫口；开口等用户点「连接」（首启门闩）
     Future.microtask(() async {
       unawaited(scanPorts(background: true));
-      await connect();
+      await ensureHelperConnected();
     });
     final cfg = ref.read(configProvider);
     return HelperUiState(
@@ -79,6 +79,27 @@ class HelperStateNotifier extends _HelperStateBase
     sendComPort(name);
   }
 
+  /// 只连 helper IPC（不开口）。界面启动 / 扫口前用。
+  Future<void> ensureHelperConnected() async {
+    if (state.phase == HelperPhase.connecting) return;
+    if (_client.isConnected) return;
+
+    _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
+    try {
+      await _client.connect();
+      _patch(message: '已连接后台，等待配置…');
+      unawaited(_ensureConfigSnapshot());
+    } catch (e) {
+      _patch(
+        message: '$e',
+        phase: HelperPhase.failed,
+        hasDevice: false,
+        currentCom: '',
+      );
+    }
+  }
+
+  /// 点「连接」：确保 IPC → `set com` + `reconnect`（写盘与门闩在 helper）。
   Future<void> connect() async {
     if (state.phase == HelperPhase.connecting) return;
 
@@ -96,26 +117,35 @@ class HelperStateNotifier extends _HelperStateBase
       return;
     }
 
-    // 已连通且口未变：忽略重复点「连接」；换口 / 失败后重连要往下走
+    // 已开口且口未变：忽略重复点「连接」
     if (_client.isConnected && state.canControl && !portChanged) return;
 
-    if (_client.isConnected) {
-      _cancelPendingSolid();
-      await _client.quit();
-      _patch(
-        message: portChanged ? '换口，重新连接…' : '重新连接…',
-        phase: HelperPhase.disconnected,
-        hasDevice: false,
-        currentCom: '',
-        // lastGoodCom 保留：新口失败后仍知道「上次成功是哪口」
-      );
+    if (!_client.isConnected) {
+      _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
+      try {
+        await _client.connect();
+        unawaited(_ensureConfigSnapshot());
+      } catch (e) {
+        _patch(
+          message: '$e',
+          phase: HelperPhase.failed,
+          hasDevice: false,
+          currentCom: '',
+        );
+        return;
+      }
     }
 
-    _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
+    final port = wanted.isNotEmpty ? wanted : targetCom;
+    _patch(
+      message: portChanged ? '换口，打开串口…' : '正在打开串口…',
+      phase: HelperPhase.connecting,
+      hasDevice: false,
+      currentCom: '',
+    );
     try {
-      await _client.connect(comPort: targetCom);
-      _patch(message: '已连接 IPC，等待配置…');
-      unawaited(_ensureConfigSnapshot());
+      sendComPort(port);
+      _sendIpc('reconnect');
     } catch (e) {
       _patch(
         message: '$e',
@@ -127,20 +157,32 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   /// 首包超时才发 `sync`；正常 accept 已推全量，不主动刷。
+  /// 未配备时快照到达后再扫一次，避免 cfg 默认 COM10 盖掉推荐口。
   Future<void> _ensureConfigSnapshot() async {
     const step = Duration(milliseconds: 100);
-    for (var i = 0; i < 20; i++) {
-      if (!_client.isConnected) return;
-      if (ref.read(configProvider.notifier).hasSnapshot) return;
-      await Future<void>.delayed(step);
+    Future<bool> waitSnapshot() async {
+      for (var i = 0; i < 20; i++) {
+        if (!_client.isConnected) return false;
+        if (ref.read(configProvider.notifier).hasSnapshot) return true;
+        await Future<void>.delayed(step);
+      }
+      return ref.read(configProvider.notifier).hasSnapshot;
     }
-    if (!_client.isConnected) return;
-    if (ref.read(configProvider.notifier).hasSnapshot) return;
-    try {
-      _sendIpc('sync');
-      _patch(message: '后台配置超时，已请求同步…');
-    } catch (e) {
-      _patch(message: '$e');
+
+    if (!await waitSnapshot()) {
+      if (!_client.isConnected) return;
+      try {
+        _sendIpc('sync');
+        _patch(message: '后台配置超时，已请求同步…');
+      } catch (e) {
+        _patch(message: '$e');
+        return;
+      }
+      if (!await waitSnapshot()) return;
+    }
+
+    if (!ref.read(configProvider).serialConfigured) {
+      await scanPorts(background: true);
     }
   }
 
@@ -375,9 +417,8 @@ class HelperStateNotifier extends _HelperStateBase
         );
       }
 
-      // 仅首装：无上次成功口时才用 CH340 推荐口填 comPort
-      final last = ref.read(configProvider).lastConnectedCom.trim();
-      if (last.isNotEmpty) return;
+      // 仅未配备：用 CH340 推荐口填 comPort（不冲已配备用户的选中）
+      if (ref.read(configProvider).serialConfigured) return;
 
       final preferred = scanned.where((p) => p.preferred).toList();
       if (preferred.isEmpty) return;
@@ -399,6 +440,7 @@ class HelperStateNotifier extends _HelperStateBase
     try {
       // 先把当前 UI 口推给 helper，再重开
       sendComPort(ref.read(configProvider).comPort);
+      _patch(message: '正在重连串口…', phase: HelperPhase.connecting);
       _sendIpc('reconnect');
     } catch (e) {
       _patch(message: '$e');

@@ -11,8 +11,11 @@ enum HelperPhase {
   /// 真下电（`set_power 0`）只在退进程 `quit` → helper_shutdown。
   poweredOff,
 
-  /// IPC 通，但串口未打开（扫描无口 / 开口失败）。
-  noDevice,
+  /// IPC 已通，串口尚未打开（含首启未配备，等用户点「连接」）。
+  needConnect,
+
+  /// 已配备但开口 / 握手失败。
+  openFailed,
   failed,
 }
 

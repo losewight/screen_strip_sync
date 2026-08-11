@@ -24,15 +24,16 @@ class AppConfig {
     this.blurStep = 0,
     this.saturation = 1.2,
     this.mode = ColorMode.a,
-    this.comPort = '',
+    this.comPort = 'COM10',
     this.lastConnectedCom = '',
+    this.serialConfigured = false,
     this.autoSleepSync = true,
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
     this.segmentMap,
     this.regionAlgo = RegionAlgo.mean,
     this.regionBlur = 3,
-    this.regionSmooth = 0.80,
+    this.regionSmooth = 0.8,
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
     this.lastScene = 'idle',
@@ -50,16 +51,19 @@ class AppConfig {
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
   final int blurStep;
 
-  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2。
+  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2（120%）。
   final double saturation;
 
   final ColorMode mode;
 
-  /// 串口名，如 `COM10`；空=未指定，等扫描推荐口。
+  /// 串口名，如 `COM10`；下拉/手输的当前选中。
   final String comPort;
 
   /// helper 曾成功打开的口；空表示从未连上过，不走快速连接。
   final String lastConnectedCom;
+
+  /// 首启门闩：false=须点「连接」才开口；true=helper 启动可自动开口。
+  final bool serialConfigured;
 
   /// 系统休眠时软关；唤醒后由 helper 按 lastScene 恢复。
   final bool autoSleepSync;
@@ -114,6 +118,7 @@ class AppConfig {
     ColorMode? mode,
     String? comPort,
     String? lastConnectedCom,
+    bool? serialConfigured,
     bool? autoSleepSync,
     bool? turnOffOnShutdown,
     bool? startOnBoot,
@@ -137,6 +142,7 @@ class AppConfig {
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
       lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
+      serialConfigured: serialConfigured ?? this.serialConfigured,
       autoSleepSync: autoSleepSync ?? this.autoSleepSync,
       turnOffOnShutdown: turnOffOnShutdown ?? this.turnOffOnShutdown,
       startOnBoot: startOnBoot ?? this.startOnBoot,
@@ -162,15 +168,16 @@ class AppConfig {
     var blurStep = 0;
     var saturation = 1.2;
     var mode = ColorMode.a;
-    var com = '';
+    var com = 'COM10';
     var lastCom = '';
+    var serialConfigured = false;
     var sleepSync = true;
     var shutdownOff = true;
     var autostart = false;
     List<SegmentSample>? map;
     var regionAlgo = RegionAlgo.mean;
     var regionBlur = 3;
-    var regionSmooth = 0.80;
+    var regionSmooth = 0.8;
     var regionDark = 15;
     var regionBBox = const RegionBBox();
     var scene = 'idle';
@@ -212,6 +219,8 @@ class AppConfig {
           if (val.isNotEmpty) com = val;
         case 'last_com':
           lastCom = val;
+        case 'serial_configured':
+          if (val == '0' || val == '1') serialConfigured = val == '1';
         case 'sleep_sync':
           if (val == '0' || val == '1') sleepSync = val == '1';
         case 'shutdown_off':
@@ -272,6 +281,7 @@ class AppConfig {
       mode: mode,
       comPort: com,
       lastConnectedCom: lastCom,
+      serialConfigured: serialConfigured,
       autoSleepSync: sleepSync,
       turnOffOnShutdown: shutdownOff,
       startOnBoot: autostart,

@@ -17,8 +17,10 @@ mixin _HelperStatusHandlers on _HelperStateBase {
 
   /// helper 休眠恢复后的显示意图：对齐徽标，避免灯已亮而 UI 仍停在熄灯。
   void _onStatusDisplay(HelperDisplayKind kind) {
-    // 为什么：无 COM 快照仍会推 display idle；勿盖掉 reconnect_fail → noDevice
-    if (!state.hasDevice || state.phase == HelperPhase.noDevice) {
+    // 为什么：无 COM 仍会推 display idle；勿盖掉 needConnect / openFailed
+    if (!state.hasDevice ||
+        state.phase == HelperPhase.needConnect ||
+        state.phase == HelperPhase.openFailed) {
       if (kind == HelperDisplayKind.idle) {
         _engineWanted = false;
         _patch(engineRunning: false);
@@ -102,10 +104,11 @@ mixin _HelperStatusHandlers on _HelperStateBase {
       );
       return;
     }
-    // engine 0：停追色。poweredOff / noDevice / failed 等相位不动
+    // engine 0：停追色。poweredOff / needConnect / openFailed / failed 等相位不动
     final keepPhase =
         state.phase == HelperPhase.poweredOff ||
-        state.phase == HelperPhase.noDevice ||
+        state.phase == HelperPhase.needConnect ||
+        state.phase == HelperPhase.openFailed ||
         state.phase == HelperPhase.failed ||
         state.phase == HelperPhase.disconnected ||
         state.phase == HelperPhase.connecting;
@@ -143,13 +146,24 @@ mixin _HelperStatusHandlers on _HelperStateBase {
           engineRunning: false,
         );
       case HelperStatusWord.reconnectFail:
-        _patch(
-          message: '无法打开 ${ref.read(configProvider).comPort}，请检查灯带连接',
-          hasDevice: false,
-          phase: HelperPhase.noDevice,
-          currentCom: '',
-          engineRunning: false,
-        );
+        final cfg = ref.read(configProvider);
+        if (!cfg.serialConfigured) {
+          _patch(
+            message: '灯带未连接，请选择串口后点「连接」',
+            hasDevice: false,
+            phase: HelperPhase.needConnect,
+            currentCom: '',
+            engineRunning: false,
+          );
+        } else {
+          _patch(
+            message: '无法打开 ${cfg.comPort}，请检查灯带连接',
+            hasDevice: false,
+            phase: HelperPhase.openFailed,
+            currentCom: '',
+            engineRunning: false,
+          );
+        }
       case HelperStatusWord.unknown:
         break;
     }

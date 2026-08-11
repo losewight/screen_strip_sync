@@ -1,5 +1,6 @@
 ﻿#include "helper_lifecycle.h"
 
+#include "config_store.h"
 #include "dxgi_capture.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
@@ -96,6 +97,14 @@ void helper_resume_from_sleep() {
     }
 
     // 1) 先重开串口（纯色不依赖 DXGI；桌面复制唤醒后常短暂 ACCESS_DENIED）
+    if (!config_get().serialConfigured) {
+      printf("resume: serialConfigured=0; skip serial reopen\n");
+      g_awaiting_resume.store(false);
+      ipc_push_runtime_status();
+      g_resuming.store(false);
+      return;
+    }
+
     HANDLE neu = INVALID_HANDLE_VALUE;
     bool serial_ok = false;
     for (int i = 1; i <= 10; ++i) {

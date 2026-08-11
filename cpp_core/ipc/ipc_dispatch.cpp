@@ -519,11 +519,13 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       *serial = neu;
       helper_note_resources_ready();
       printf("cmd=reconnect ok\n");
-      send_status(client, "reconnect_ok");
-      push_runtime_status(client, true);
       char com[16];
       engine_get_com(com, sizeof(com));
       config_set_last_connected_com(com);
+      config_set_serial_configured(true);
+      send_status(client, "reconnect_ok");
+      push_runtime_status(client, true);
+      ipc_push_config_snapshot();
     } else {
       printf("cmd=reconnect failed\n");
       send_status(client, "reconnect_fail");

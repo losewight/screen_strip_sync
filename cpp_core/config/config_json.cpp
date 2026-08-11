@@ -321,7 +321,10 @@ static bool parse_segment_map(const char *&p, HelperConfig *cfg) {
   return true;
 }
 
-bool config_parse_json(const char *json, HelperConfig *cfg) {
+bool config_parse_json(const char *json, HelperConfig *cfg,
+                       bool *saw_serial_configured) {
+  if (saw_serial_configured)
+    *saw_serial_configured = false;
   const char *p = json;
   // UTF-8 BOM
   if ((unsigned char)p[0] == 0xEF && (unsigned char)p[1] == 0xBB &&
@@ -384,6 +387,13 @@ bool config_parse_json(const char *json, HelperConfig *cfg) {
       if (!parse_string(p, s, sizeof(s)))
         return false;
       snprintf(cfg->lastConnectedCom, sizeof(cfg->lastConnectedCom), "%s", s);
+    } else if (strcmp(key, "serialConfigured") == 0) {
+      bool b = false;
+      if (!parse_bool(p, &b))
+        return false;
+      cfg->serialConfigured = b;
+      if (saw_serial_configured)
+        *saw_serial_configured = true;
     } else if (strcmp(key, "autoSleepSync") == 0) {
       bool b = true;
       if (!parse_bool(p, &b))
@@ -548,6 +558,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(",\n");
   o.append("  \"lastConnectedCom\": ");
   append_escaped(&o, c.lastConnectedCom);
+  o.append(",\n");
+  o.append("  \"serialConfigured\": ");
+  o.append(c.serialConfigured ? "true" : "false");
   o.append(",\n");
 
   o.append("  \"autoSleepSync\": ");
