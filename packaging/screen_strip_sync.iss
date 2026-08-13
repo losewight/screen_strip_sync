@@ -1,10 +1,10 @@
 ﻿; Screen Strip Sync — Inno Setup (Windows x64)
 ; 入口 = helper.exe；Flutter 同目录；卸载清开机自启 Run 项。
-; 安装到 %LocalAppData%\Programs（可写），因配置/日志写在 helper.exe 旁。
+; 配置 / 日志在 %LocalAppData%\Screen Strip Sync\，安装目录可写保护路径。
 ; Flutter 仅支持 x64，本安装包 ArchitecturesAllowed=x64compatible。
 
 #define MyAppName "Screen Strip Sync"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Screen Strip Sync"
 #define MyAppExeName "helper.exe"
 #define MyAppArch "x64"
@@ -16,11 +16,12 @@ AppId={{A8F3C2E1-9B4D-4F6A-8E21-7C5D0B91A3F2}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\{#MyAppName}
+DefaultDirName={autopf64}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-; 为什么：exe 旁写 JSON / helper.log，不能装到 Program Files
-PrivilegesRequired=lowest
+; 为什么：Program Files 等受保护路径需提权；运行期数据已迁到 %LocalAppData%
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog commandline
 ; 仅 64 位 Windows（含 ARM64 上的 x64 仿真）
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -35,7 +36,7 @@ UninstallDisplayName={#MyAppName}
 CloseApplications=yes
 CloseApplicationsFilter=helper.exe,screen_strip_sync.exe
 SetupLogging=yes
-AppMutex=Local\ScreenStripSyncHelper
+AppMutex=Global\ScreenStripSyncHelper
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"

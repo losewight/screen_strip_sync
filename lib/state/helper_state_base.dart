@@ -7,6 +7,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
 
   StreamSubscription<HelperStatusEvent>? _statusSub;
   StreamSubscription<void>? _disconnectSub;
+  bool _ensureHelperInFlight = false;
   bool _engineWanted = false;
   String? _pendingSolid;
   Timer? _solidTimer;

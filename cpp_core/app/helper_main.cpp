@@ -1,5 +1,6 @@
 ﻿// helper 入口：无黑窗壳 + 单实例 + 参数；串口属主启动编排交给 ipc_loop。
 // 关灯 / 休眠软关 / 唤醒恢复见 helper_lifecycle.cpp。
+#include "app_paths.h"
 #include "autostart.h"
 #include "config_store.h"
 #include "dxgi_capture.h"
@@ -18,7 +19,7 @@
 #include <shellapi.h>
 
 // 与 helper.rc ProductVersion 对齐；开源诊断横幅用
-static constexpr char kHelperVersion[] = "1.0.0";
+static constexpr char kHelperVersion[] = "1.0.1";
 // 超过则 rename 为 helper.log.1 再新建（控体积，开源 Issue 可附）
 static constexpr long long kHelperLogMaxBytes = 2LL * 1024 * 1024;
 
@@ -64,19 +65,25 @@ static void rotate_helper_log_if_needed(const char *path) {
   MoveFileA(path, bak);
 }
 
-// exe 同目录 helper.log；保留全项目 printf，不逐个改
+static HANDLE create_singleton_mutex() {
+  // 为什么：NULL DACL 允许跨完整性级别（普通桌面快捷方式 ↔
+  // 提权托盘）打开同一互斥体
+  static SECURITY_DESCRIPTOR sd{};
+  InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+  SetSecurityDescriptorDacl(&sd, TRUE, nullptr, FALSE);
+  SECURITY_ATTRIBUTES sa{};
+  sa.nLength = sizeof(sa);
+  sa.lpSecurityDescriptor = &sd;
+  sa.bInheritHandle = FALSE;
+  return CreateMutexW(&sa, TRUE, L"Global\\ScreenStripSyncHelper");
+}
+
+// exe 旁 helper.log 已废弃；可写数据在 %LocalAppData%\\Screen Strip Sync
 static void redirect_stdio_to_log() {
   char path[MAX_PATH];
-  DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
-  if (n == 0 || n >= MAX_PATH) {
+  if (!helper_log_path(path, sizeof(path))) {
     return;
   }
-  char *slash = strrchr(path, '\\');
-  if (!slash) {
-    return;
-  }
-  // 为什么：截掉文件名，拼 helper.log（与配置同目录规则一致）
-  strcpy_s(slash + 1, MAX_PATH - (slash + 1 - path), "helper.log");
   rotate_helper_log_if_needed(path);
   strcpy_s(g_helper_log_path, path);
 
@@ -137,7 +144,7 @@ static void parse_cmdline_args() {
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 为什么：第二个实例不得开串口、不得 bind；只通知首实例开界面后立刻退出
-  g_singleton = CreateMutexW(nullptr, TRUE, L"Local\\ScreenStripSyncHelper");
+  g_singleton = create_singleton_mutex();
   if (g_singleton == nullptr) {
     return 1;
   }
@@ -149,6 +156,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   }
 
   redirect_stdio_to_log();
+  data_dir_migrate_from_exe_dir();
 
 #ifdef _DEBUG
   // 为什么：Debug 下额外开控制台方便挂调试器；printf 仍走 helper.log
@@ -203,7 +211,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       config_set_last_connected_com(com);
       config_set_serial_configured(true);
 
-      // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐 intent
+      // 为什么：按 JSON lastScene 恢复上次灯效（H8）；idle 也走 apply 对齐
+      // intent
       DisplayIntent boot{};
       if (parse_last_scene(config_get().lastScene, &boot)) {
         apply_display_intent(h, boot);

@@ -1,24 +1,45 @@
 ﻿#include "ui_launcher.h"
 
+#include "app_paths.h"
 #include "ipc_loop.h"
 
 #include <atomic>
 #include <cstdio>
 #include <cstring>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 static constexpr ULONGLONG kCooldownMs = 1500;
+static constexpr unsigned short kIpcPort = 9527;
 
 static HANDLE g_child = nullptr;
 static ULONGLONG g_last_create_ms = 0;
 static std::atomic_bool g_shutting{false};
+
+static void second_instance_log(const char *msg) {
+  char path[MAX_PATH];
+  if (!helper_log_path(path, sizeof(path)))
+    return;
+  wchar_t wide[MAX_PATH];
+  if (!data_dir_wide(wide, MAX_PATH))
+    return;
+  FILE *fp = nullptr;
+  if (fopen_s(&fp, path, "a") != 0 || !fp)
+    return;
+  fprintf(fp, "[second_instance] %s\n", msg);
+  fclose(fp);
+}
 
 static bool child_still_running() {
   if (!g_child)
     return false;
   DWORD wait = WaitForSingleObject(g_child, 0);
   if (wait == WAIT_TIMEOUT)
-    return true; // 仍在跑
-  // 已退出：清句柄，允许再次 CreateProcess
+    return true;
   CloseHandle(g_child);
   g_child = nullptr;
   return false;
@@ -30,7 +51,6 @@ static bool in_cooldown() {
   return (GetTickCount64() - g_last_create_ms) < kCooldownMs;
 }
 
-// 对称 Flutter resolveHelperExecutable：同目录优先，再向上找开发路径
 static bool resolve_flutter_exe(wchar_t *out, size_t out_cap) {
   wchar_t module[MAX_PATH];
   DWORD n = GetModuleFileNameW(nullptr, module, MAX_PATH);
@@ -40,15 +60,13 @@ static bool resolve_flutter_exe(wchar_t *out, size_t out_cap) {
   wchar_t *slash = wcsrchr(module, L'\\');
   if (!slash)
     return false;
-  *slash = L'\0'; // module = helper 所在目录
+  *slash = L'\0';
 
-  // 1) exe 同目录
   if (swprintf_s(out, out_cap, L"%s\\screen_strip_sync.exe", module) > 0) {
     if (GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES)
       return true;
   }
 
-  // 2) 向上最多 10 层：build/windows/x64/runner/{Release,Debug}/
   wchar_t dir[MAX_PATH];
   wcsncpy_s(dir, module, _TRUNCATE);
   for (int i = 0; i < 10; ++i) {
@@ -78,14 +96,12 @@ static bool create_flutter_process() {
     return false;
   }
 
-  // 工作目录 = exe 所在目录（Flutter 资源相对路径需要）
   wchar_t work_dir[MAX_PATH];
   wcsncpy_s(work_dir, exe, _TRUNCATE);
   wchar_t *slash = wcsrchr(work_dir, L'\\');
   if (slash)
     *slash = L'\0';
 
-  // CreateProcessW 要求可写命令行缓冲
   wchar_t cmd[MAX_PATH + 4];
   swprintf_s(cmd, L"\"%s\"", exe);
 
@@ -93,7 +109,6 @@ static bool create_flutter_process() {
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
 
-  // 为什么：不设 CREATE_NO_WINDOW——Flutter 是 GUI 子系统
   BOOL ok = CreateProcessW(exe, cmd, nullptr, nullptr, FALSE, 0, nullptr,
                            work_dir, &si, &pi);
   if (!ok) {
@@ -113,11 +128,39 @@ static bool create_flutter_process() {
   return true;
 }
 
+// 为什么：PostMessage 跨提权会被 UIPI 拦；loopback TCP 不受限
+static bool notify_via_tcp() {
+  WSADATA wsa{};
+  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    return false;
+
+  SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (s == INVALID_SOCKET) {
+    WSACleanup();
+    return false;
+  }
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(kIpcPort);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+  bool ok = false;
+  if (connect(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
+    static const char kLine[] = "open_ui\n";
+    const int sent = send(s, kLine, (int)(sizeof(kLine) - 1), 0);
+    ok = sent == (int)(sizeof(kLine) - 1);
+  }
+
+  closesocket(s);
+  WSACleanup();
+  return ok;
+}
+
 void ui_request_open() {
   if (g_shutting.load())
     return;
 
-  // 1) 已有 IPC 客户端 → 推 ui show 置顶
   if (ipc_has_client()) {
     if (ipc_push_ui_show())
       printf("ui_launcher: client alive -> ui show\n");
@@ -126,7 +169,6 @@ void ui_request_open() {
     return;
   }
 
-  // 2) 子进程仍在 / 冷却窗 → 不动（防连点叠进程）
   if (child_still_running()) {
     printf("ui_launcher: child still running, skip\n");
     return;
@@ -136,7 +178,6 @@ void ui_request_open() {
     return;
   }
 
-  // 3) CreateProcess
   create_flutter_process();
 }
 
@@ -149,16 +190,23 @@ void ui_maybe_launch_on_start(bool silent) {
 }
 
 void ui_notify_running_instance() {
+  if (notify_via_tcp()) {
+    second_instance_log("notify=tcp_ok");
+    return;
+  }
+
   HWND hwnd = FindWindowW(kTrayWndClass, nullptr);
   if (!hwnd) {
-    printf("ui_launcher: first instance tray not found\n");
+    second_instance_log("notify=tcp_fail tray_not_found");
     return;
   }
   if (!PostMessageW(hwnd, WM_SSS_OPEN_UI, 0, 0)) {
+    second_instance_log("notify=postmessage_fail");
     printf("ui_launcher: PostMessage failed: %lu\n",
            (unsigned long)GetLastError());
     return;
   }
+  second_instance_log("notify=postmessage_ok");
   printf("ui_launcher: notified running instance\n");
 }
 

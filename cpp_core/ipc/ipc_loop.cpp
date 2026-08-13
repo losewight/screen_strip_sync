@@ -8,6 +8,45 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstring>
+
+// 次实例连上后首包若是 open_ui，则只唤界面、不踢现有 Flutter 客户端
+static bool try_handle_open_ui_probe(SOCKET neu) {
+  fd_set rfds;
+  FD_ZERO(&rfds);
+  FD_SET(neu, &rfds);
+  timeval tv{};
+  tv.tv_sec = 0;
+  tv.tv_usec = 300000;
+  const int sel = select((int)neu + 1, &rfds, nullptr, nullptr, &tv);
+  if (sel <= 0)
+    return false;
+
+  char buf[32] = {};
+  const int n = recv(neu, buf, (int)sizeof(buf) - 1, 0);
+  if (n <= 0) {
+    closesocket(neu);
+    return true;
+  }
+  buf[n] = '\0';
+  char *nl = strchr(buf, '\n');
+  if (nl)
+    *nl = '\0';
+  char *cr = strchr(buf, '\r');
+  if (cr)
+    *cr = '\0';
+
+  if (strcmp(buf, "open_ui") == 0) {
+    printf("ipc: open_ui probe\n");
+    ui_request_open();
+    closesocket(neu);
+    return true;
+  }
+
+  printf("ipc: probe unexpected [%s], drop\n", buf);
+  closesocket(neu);
+  return true;
+}
 
 SOCKET g_listen_sock = INVALID_SOCKET;
 SOCKET g_client_sock = INVALID_SOCKET;
@@ -154,6 +193,9 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
           printf("accept failed: %d\n", WSAGetLastError());
         continue;
       }
+      if (try_handle_open_ui_probe(neu))
+        continue;
+
       if (g_client_sock != INVALID_SOCKET) {
         printf("kick old client\n");
         drop_client();

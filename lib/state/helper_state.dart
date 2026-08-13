@@ -80,14 +80,13 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   /// 只连 helper IPC（不开口）。界面启动 / 扫口前用。
+  /// 为什么：connecting 相位只表示开串口；连后台不改顶栏，等 helper 推 status。
   Future<void> ensureHelperConnected() async {
-    if (state.phase == HelperPhase.connecting) return;
-    if (_client.isConnected) return;
+    if (_ensureHelperInFlight || _client.isConnected) return;
 
-    _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
+    _ensureHelperInFlight = true;
     try {
       await _client.connect();
-      _patch(message: '已连接后台，等待配置…');
       unawaited(_ensureConfigSnapshot());
     } catch (e) {
       _patch(
@@ -96,6 +95,8 @@ class HelperStateNotifier extends _HelperStateBase
         hasDevice: false,
         currentCom: '',
       );
+    } finally {
+      _ensureHelperInFlight = false;
     }
   }
 
@@ -121,19 +122,8 @@ class HelperStateNotifier extends _HelperStateBase
     if (_client.isConnected && state.canControl && !portChanged) return;
 
     if (!_client.isConnected) {
-      _patch(message: '连接后台服务…', phase: HelperPhase.connecting);
-      try {
-        await _client.connect();
-        unawaited(_ensureConfigSnapshot());
-      } catch (e) {
-        _patch(
-          message: '$e',
-          phase: HelperPhase.failed,
-          hasDevice: false,
-          currentCom: '',
-        );
-        return;
-      }
+      await ensureHelperConnected();
+      if (!_client.isConnected) return;
     }
 
     final port = wanted.isNotEmpty ? wanted : targetCom;

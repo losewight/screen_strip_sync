@@ -55,10 +55,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _openLogDir() async {
     final messenger = ScaffoldMessenger.of(context);
-    final dir = DiagExporter.resolveHelperDirectory();
+    final dir = DiagExporter.resolveDataDirectory();
     if (dir == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('找不到 helper.exe 目录，无法打开日志文件夹')),
+        const SnackBar(content: Text('无法解析数据目录，打不开日志文件夹')),
       );
       return;
     }

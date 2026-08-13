@@ -2,29 +2,30 @@
 
 import 'package:flutter/foundation.dart';
 
-/// 偶发无声退出诊断：append 到 exe 同目录 [fileName]。
+import 'app_paths.dart';
+
+/// 偶发无声退出诊断：append 到数据目录 [fileName]。
 class CrashLog {
   CrashLog._();
 
   static const fileName = 'screen_strip_sync_crash.log';
 
-  /// 超过此行数时，启动时裁到 [keepLines] 行（只裁一次 / 进程）。
   static const maxLines = 300;
   static const keepLines = 150;
 
   static bool _trimChecked = false;
 
-  /// 日志绝对路径（exe 同目录，与 [helper_client] 一致）。
-  static String get filePath =>
-      '${File(Platform.resolvedExecutable).parent.path}'
-      '${Platform.pathSeparator}$fileName';
+  static String get filePath {
+    final inData = AppPaths.crashLogFile?.path;
+    if (inData != null) return inData;
+    return '${File(Platform.resolvedExecutable).parent.path}'
+        '${Platform.pathSeparator}$fileName';
+  }
 
-  /// Dart / Flutter 未捕获异常。
   static void error(String source, Object error, StackTrace? stack) {
     _append('ERROR', source, '$error\n${stack ?? StackTrace.current}');
   }
 
-  /// 生命周期等标记（区分关窗退出 vs 真崩溃）。
   static void event(String source, String message) {
     _append('EVENT', source, message);
   }
@@ -38,9 +39,7 @@ class CrashLog {
       final f = File(filePath);
       _trimIfNeeded(f);
       f.writeAsStringSync(line, mode: FileMode.append, flush: true);
-    } catch (_) {
-      // 写盘失败不能再抛
-    }
+    } catch (_) {}
   }
 
   static void _trimIfNeeded(File f) {
@@ -57,8 +56,6 @@ class CrashLog {
           '[${DateTime.now().toIso8601String()}][EVENT][crash_log] '
           'trimmed ${lines.length} -> ${kept.length} lines\n';
       f.writeAsStringSync('$header${kept.join('\n')}\n', flush: true);
-    } catch (_) {
-      // 裁切失败则继续 append，不挡启动
-    }
+    } catch (_) {}
   }
 }

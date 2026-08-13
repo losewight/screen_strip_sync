@@ -1,5 +1,6 @@
 ﻿#include "config_store.h"
 
+#include "app_paths.h"
 #include "config_clamp.h"
 #include "config_json.h"
 
@@ -30,30 +31,7 @@ static std::thread g_saver;
 // path
 // ---------------------------------------------------------------------------
 
-bool config_path(char *out, size_t cap) {
-  if (!out || cap < 8)
-    return false;
-  char path[MAX_PATH];
-  DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
-  if (n == 0 || n >= MAX_PATH)
-    return false;
-  char *slash = strrchr(path, '\\');
-  if (!slash)
-    return false;
-  // 为什么：先算最终长度再拼，避免长路径下 strcpy_s
-  // 截断/失败后仍把坏路径交给调用方
-  static constexpr char kName[] = "screen_strip_sync_config.json";
-  const size_t dir_len = (size_t)(slash + 1 - path); // 含末尾 '\'
-  const size_t name_len = sizeof(kName) - 1;
-  const size_t need = dir_len + name_len + 1; // 含 '\0'
-  if (need > MAX_PATH || need > cap)
-    return false;
-  if (strcpy_s(slash + 1, MAX_PATH - dir_len, kName) != 0)
-    return false;
-  if (strcpy_s(out, cap, path) != 0)
-    return false;
-  return true;
-}
+bool config_path(char *out, size_t cap) { return config_file_path(out, cap); }
 
 static bool read_config_file(const char *path, HelperConfig *out,
                              bool *parsed_ok, bool *saw_serial_configured) {

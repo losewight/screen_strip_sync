@@ -3,13 +3,14 @@
 import '../config/app_config.dart';
 import '../ipc/helper_client.dart';
 import '../state/helper_ui_state.dart';
+import 'app_paths.dart';
 import 'crash_log.dart';
 
 /// 与 [pubspec.yaml] `version:` 对齐；无 package_info 时硬编码。
-const kAppVersion = '1.0.0+1';
+const kAppVersion = '1.0.1+2';
 
 /// helper.rc ProductVersion；与 C++ 启动横幅一致。
-const kHelperVersion = '1.0.0';
+const kHelperVersion = '1.0.1';
 
 const _helperLogName = 'helper.log';
 const _configName = 'screen_strip_sync_config.json';
@@ -26,12 +27,12 @@ abstract final class DiagExporter {
   }) async {
     if (helperConnected && sendIpc != null) {
       sendIpc('diag_mark');
-      // 为何：给无缓冲写盘一点时间，尾部能含 === diag export ===
       await Future<void>.delayed(const Duration(milliseconds: 80));
     }
 
     final helperPath = _tryResolveHelper();
-    final helperDir = helperPath?.parent;
+    final dataDir = resolveDataDirectory();
+    final installDir = helperPath?.parent;
     final flutterDir = File(Platform.resolvedExecutable).parent;
 
     final buf = StringBuffer();
@@ -48,6 +49,7 @@ abstract final class DiagExporter {
     buf.writeln(
       'helperExe: ${helperPath?.path ?? "(not found)"}',
     );
+    buf.writeln('dataDir: ${dataDir?.path ?? "(unknown)"}');
     buf.writeln('helperConnected: $helperConnected');
     buf.writeln();
 
@@ -78,8 +80,10 @@ abstract final class DiagExporter {
 
     buf.writeln('## config');
     final configFile = _firstExisting([
-      if (helperDir != null)
-        File('${helperDir.path}${Platform.pathSeparator}$_configName'),
+      if (dataDir != null)
+        File('${dataDir.path}${Platform.pathSeparator}$_configName'),
+      if (installDir != null)
+        File('${installDir.path}${Platform.pathSeparator}$_configName'),
       File('${flutterDir.path}${Platform.pathSeparator}$_configName'),
     ]);
     if (configFile != null) {
@@ -88,14 +92,16 @@ abstract final class DiagExporter {
       buf.writeln(configFile.readAsStringSync());
       buf.writeln('```');
     } else {
-      buf.writeln('(file not found beside helper or Flutter exe)');
+      buf.writeln('(config file not found)');
     }
     buf.writeln();
 
     buf.writeln('## helper.log (tail)');
     final helperLog = _firstExisting([
-      if (helperDir != null)
-        File('${helperDir.path}${Platform.pathSeparator}$_helperLogName'),
+      if (dataDir != null)
+        File('${dataDir.path}${Platform.pathSeparator}$_helperLogName'),
+      if (installDir != null)
+        File('${installDir.path}${Platform.pathSeparator}$_helperLogName'),
       File('${flutterDir.path}${Platform.pathSeparator}$_helperLogName'),
     ]);
     if (helperLog != null) {
@@ -109,14 +115,17 @@ abstract final class DiagExporter {
     buf.writeln();
 
     buf.writeln('## crash.log');
-    final crashCandidates = <File>[
+    final crashLog = _firstExisting([
       File(CrashLog.filePath),
-      if (helperDir != null)
+      if (dataDir != null)
         File(
-          '${helperDir.path}${Platform.pathSeparator}${CrashLog.fileName}',
+          '${dataDir.path}${Platform.pathSeparator}${CrashLog.fileName}',
         ),
-    ];
-    final crashLog = _firstExisting(crashCandidates);
+      if (installDir != null)
+        File(
+          '${installDir.path}${Platform.pathSeparator}${CrashLog.fileName}',
+        ),
+    ]);
     if (crashLog != null) {
       buf.writeln('path: ${crashLog.path}');
       buf.writeln('```');
@@ -132,14 +141,12 @@ abstract final class DiagExporter {
 
     return DiagExportResult(
       path: out.path,
-      helperDir: helperDir?.path,
+      dataDir: dataDir?.path,
     );
   }
 
-  /// helper.exe 所在目录（日志 / 配置主目录）；找不到返回 null。
-  static Directory? resolveHelperDirectory() {
-    return _tryResolveHelper()?.parent;
-  }
+  /// 日志 / 配置所在数据目录（%LocalAppData%\\Screen Strip Sync）。
+  static Directory? resolveDataDirectory() => AppPaths.dataDirectory;
 
   /// 在资源管理器中选中 [path]。
   static Future<void> revealInExplorer(String path) async {
@@ -203,7 +210,6 @@ abstract final class DiagExporter {
       raf.setPositionSync(start);
       final bytes = raf.readSync(len - start);
       var text = String.fromCharCodes(bytes);
-      // 从中间切开时丢掉半行，从第一个换行后开始
       if (start > 0) {
         final nl = text.indexOf('\n');
         if (nl >= 0 && nl + 1 < text.length) {
@@ -218,8 +224,8 @@ abstract final class DiagExporter {
 }
 
 class DiagExportResult {
-  const DiagExportResult({required this.path, this.helperDir});
+  const DiagExportResult({required this.path, this.dataDir});
 
   final String path;
-  final String? helperDir;
+  final String? dataDir;
 }
