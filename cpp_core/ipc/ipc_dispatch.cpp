@@ -9,7 +9,6 @@
 #include "ipc_loop.h"
 #include "light_engine.h"
 #include "serial_port.h"
-#include "ui_launcher.h"
 
 #include <cmath>
 #include <cstdio>
@@ -53,11 +52,6 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     printf("cmd=sync\n");
     push_config_snapshot(client);
     return DispatchResult::Continue;
-  }
-  if (strcmp(line, "open_ui") == 0) {
-    printf("cmd=open_ui\n");
-    ui_request_open();
-    return DispatchResult::DropClient;
   }
   // 为什么：开源诊断导出前打标记，便于对齐 helper.log 尾部与导出时刻
   if (strcmp(line, "diag_mark") == 0) {

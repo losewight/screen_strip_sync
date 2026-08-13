@@ -10,7 +10,8 @@
 #include <cstdio>
 #include <cstring>
 
-// 次实例连上后首包若是 open_ui，则只唤界面、不踢现有 Flutter 客户端
+// 次实例连上后首包若是 open_ui，则只唤界面、不踢现有 Flutter 客户端。
+// 为什么：此命令不得进 dispatch_line——已建立连接若走到 DropClient 会误踢 UI。
 static bool try_handle_open_ui_probe(SOCKET neu) {
   fd_set rfds;
   FD_ZERO(&rfds);

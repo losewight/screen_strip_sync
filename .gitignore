@@ -52,6 +52,7 @@ app.*.map.json
 /dist_stage/
 /dist_installer/*.exe
 /dist_installer/*.zip
+/dist_installer/build_out/
 /dist_installer/_zip_stage_*/
 /backup/
 experiments/screen_strip_sync_draft.py

@@ -42,8 +42,7 @@ if (-not (Test-Path (Join-Path $Staging "screen_strip_sync.exe"))) {
   throw "Staging missing screen_strip_sync.exe"
 }
 
-# 旁路部署 MSVC CRT：目标机常无 VCRUNTIME140.dll；本安装 PrivilegesRequired=lowest
-# 不能静默装系统级 vc_redist，故把 DLL 拷到 {app}。
+# 旁路部署 MSVC CRT：目标机常无 VCRUNTIME140.dll；不静默装系统级 vc_redist，拷到 {app}。
 function Resolve-MsvcCrtDir {
   $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
   if (Test-Path $vswhere) {
@@ -157,8 +156,6 @@ Release 产物（本目录）
 - ScreenStripSync-$Version-windows-x64-Setup.exe  … Inno 安装包（有 ISCC 时）
 - ScreenStripSync-$Version-windows-x64.zip         … 绿色版（解压后运行 helper.exe）
 - SHA256SUMS.txt
-
-也可直接运行: dist_stage\helper.exe
 
 关于 32 位（x86）：
 当前 Flutter stable（桌面 Windows）只提供 x64 引擎与工具链，本项目依赖 DXGI Desktop
