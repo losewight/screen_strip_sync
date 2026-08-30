@@ -38,12 +38,14 @@ bool open_com(const char *port_name, HANDLE *out_handle) {
     return false;
   }
 
-  // 设置串口数据读取超时时间
   COMMTIMEOUTS timeouts{};
+  // 读：非阻塞轮询（MAXDWORD + 0/0）；握手/关灯用 read_response_ok 自己 Sleep
   timeouts.ReadIntervalTimeout = MAXDWORD;
   timeouts.ReadTotalTimeoutConstant = 0;
   timeouts.ReadTotalTimeoutMultiplier = 0;
-  /// 设置串口数据写入超时时间
+  // 为什么：无写超时则设备卡住时 WriteFile 永不返回，握着 g_serial_mtx，join 退不出
+  timeouts.WriteTotalTimeoutMultiplier = 0;
+  timeouts.WriteTotalTimeoutConstant = 200;
   if (!SetCommTimeouts(h, &timeouts)) {
     CloseHandle(h);
     return false;
@@ -60,21 +62,30 @@ bool open_com(const char *port_name, HANDLE *out_handle) {
   return true;
 } // open_com
 
-// 发送一帧数据
+// 发送一帧数据。节流在锁内：外层再 Sleep 会变成 ≥100ms，且关灯/高亮会 0ms 连写。
 bool send_one_frame(HANDLE handle, const char *data, DWORD frame_len) {
-  if (frame_len >= 120) {
+  if (data == nullptr || frame_len >= 120)
     return false;
-  }
-  std::lock_guard<std::mutex> lock(g_serial_mtx); // 加锁,作用域结束时自动解锁
+  if (frame_len < 2 || data[frame_len - 2] != '\r' ||
+      data[frame_len - 1] != '\n')
+    return false;
+  std::lock_guard<std::mutex> lock(g_serial_mtx);
   DWORD written = 0;
   BOOL ok = WriteFile(handle, data, frame_len, &written, nullptr);
   if (!ok || written != frame_len) {
-    // 为什么：拔出后句柄还在，但写会失败；先记下来，后面才谈重连
+    // 为什么：短写会把半帧留在设备缓冲；不清 + 不补 CRLF，下一帧会拼死机
     printf("WriteFile failed: GetLastError=%lu written=%lu/%lu\n",
            (unsigned long)GetLastError(), (unsigned long)written,
            (unsigned long)frame_len);
+    PurgeComm(handle, PURGE_TXCLEAR | PURGE_RXCLEAR);
+    if (written > 0) {
+      DWORD crlf = 0;
+      WriteFile(handle, "\r\n", 2, &crlf, nullptr);
+    }
+    return false;
   }
-  return ok && (written == frame_len);
+  Sleep(50);
+  return true;
 }
 
 bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
@@ -102,8 +113,9 @@ bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
   return false;
 }
 
-// 关闭串口
+// 关闭串口。与 WriteFile 同锁，避免 close 与短写补 CRLF 交错。
 void close_com(HANDLE handle) {
+  std::lock_guard<std::mutex> lock(g_serial_mtx);
   if (handle != INVALID_HANDLE_VALUE) {
     CloseHandle(handle);
   }

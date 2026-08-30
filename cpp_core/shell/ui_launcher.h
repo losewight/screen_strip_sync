@@ -13,6 +13,8 @@ constexpr wchar_t kTrayWndClass[] = L"ScreenStripSyncTray";
 
 // 三级判定：有客户端 → ui show；子进程/冷却存活 → 不动；否则 CreateProcess
 void ui_request_open();
+// IPC 线程用：PostMessage 到托盘窗做三级判定，避免与托盘双击双拉
+void ui_post_request_open();
 
 // 正常启动拉一次 UI；--autostart / --no-ui 时 silent=true 跳过
 void ui_maybe_launch_on_start(bool silent);

@@ -21,7 +21,7 @@ bool power_on(HANDLE h);
 bool handshake(HANDLE h);
 bool power_off(HANDLE h);
 bool send_solid(HANDLE h, const char *rrggbb);
-// 校准向导：仅 seg 段白，其余黑；走 send_one_frame + ≥50ms
+// 校准向导：仅 seg 段白，其余黑；节流在 send_one_frame 内
 bool send_highlight(HANDLE h, int seg);
 bool try_serial_ready(HANDLE *out_h);
 void engine_set_alpha(float alpha);

@@ -52,8 +52,7 @@ void config_load();
 // 把内存配置打进引擎 / sleep_sync（开串口前调用）
 void config_apply();
 
-const HelperConfig &config_get();
-// 持锁拷贝，供 IPC 组 cfg 快照
+// 持锁拷贝；禁止对外无锁读内部引用
 void config_copy(HelperConfig *out);
 
 void config_set_ema_alpha(float v);

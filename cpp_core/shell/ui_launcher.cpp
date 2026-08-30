@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -19,6 +20,7 @@ static constexpr unsigned short kIpcPort = 9527;
 static HANDLE g_child = nullptr;
 static ULONGLONG g_last_create_ms = 0;
 static std::atomic_bool g_shutting{false};
+static std::mutex g_open_mu;
 
 static void second_instance_log(const char *msg) {
   char path[MAX_PATH];
@@ -158,6 +160,7 @@ static bool notify_via_tcp() {
 }
 
 void ui_request_open() {
+  std::lock_guard<std::mutex> lock(g_open_mu);
   if (g_shutting.load())
     return;
 
@@ -181,12 +184,20 @@ void ui_request_open() {
   create_flutter_process();
 }
 
+void ui_post_request_open() {
+  HWND hwnd = FindWindowW(kTrayWndClass, nullptr);
+  if (hwnd && PostMessageW(hwnd, WM_SSS_OPEN_UI, 0, 0))
+    return;
+  // 托盘窗还没起来时退回加锁路径（启动瞬间）
+  ui_request_open();
+}
+
 void ui_maybe_launch_on_start(bool silent) {
   if (silent) {
     printf("ui_launcher: silent start, skip UI\n");
     return;
   }
-  ui_request_open();
+  ui_post_request_open();
 }
 
 void ui_notify_running_instance() {

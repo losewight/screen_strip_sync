@@ -23,12 +23,14 @@ class HelperStateNotifier extends _HelperStateBase
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);
     _disconnectSub ??= _client.disconnectStream.listen((_) {
       _cancelPendingSolid();
+      _lastDisplay = HelperDisplayKind.idle;
       _patch(
         message: 'helper 已断开',
         phase: HelperPhase.disconnected,
         hasDevice: false,
         currentCom: '',
         engineRunning: false,
+        snapshotTimedOut: true,
       );
     });
     ref.onDispose(() {
@@ -75,6 +77,8 @@ class HelperStateNotifier extends _HelperStateBase
     if (name.isEmpty) return;
     ref.read(configProvider.notifier).setComPort(name);
     _patch(message: '已选择 $name');
+    // 为什么：cfg end 前默认 serialConfigured=false，不能当成真·未配备去 set com
+    if (!ref.read(configProvider.notifier).hasSnapshot) return;
     // 已连接时只改本地配置；真正切口点「换口连接」（同口恢复才用「重连串口」）
     sendComPort(name);
   }
@@ -94,15 +98,24 @@ class HelperStateNotifier extends _HelperStateBase
         phase: HelperPhase.failed,
         hasDevice: false,
         currentCom: '',
+        snapshotTimedOut: true,
       );
     } finally {
       _ensureHelperInFlight = false;
     }
   }
 
-  /// 点「连接」：确保 IPC → `set com` + `reconnect`（写盘与门闩在 helper）。
+  /// 点「连接」：默认只确保 IPC；仅换口 / 未配备开口 / 开口失败才 `set com` + `reconnect`。
+  ///
+  /// 为什么：helper 已常驻且灯在跑时，无条件 reconnect 会打断 lastScene。
   Future<void> connect() async {
     if (state.phase == HelperPhase.connecting) return;
+
+    final cfgReady = ref.read(configProvider.notifier).hasSnapshot;
+    if (!cfgReady) {
+      await ensureHelperConnected();
+      return;
+    }
 
     final cfg = ref.read(configProvider);
     final wanted = cfg.comPort.trim();
@@ -113,17 +126,25 @@ class HelperStateNotifier extends _HelperStateBase
         anchor.isNotEmpty &&
         wanted.toUpperCase() != anchor.toUpperCase();
 
-    if (targetCom.isEmpty) {
-      _patch(message: '请先选择串口', phase: HelperPhase.failed);
-      return;
-    }
+    final shouldOpenSerial =
+        portChanged ||
+        state.phase == HelperPhase.needConnect ||
+        state.phase == HelperPhase.openFailed ||
+        (!cfg.serialConfigured && !state.hasDevice);
 
-    // 已开口且口未变：忽略重复点「连接」
-    if (_client.isConnected && state.canControl && !portChanged) return;
+    if (_client.isConnected && !shouldOpenSerial) return;
 
     if (!_client.isConnected) {
       await ensureHelperConnected();
       if (!_client.isConnected) return;
+      if (!shouldOpenSerial) return;
+    }
+
+    if (!shouldOpenSerial) return;
+
+    if (targetCom.isEmpty && wanted.isEmpty) {
+      _patch(message: '请先选择串口', phase: HelperPhase.failed);
+      return;
     }
 
     final port = wanted.isNotEmpty ? wanted : targetCom;
@@ -150,30 +171,56 @@ class HelperStateNotifier extends _HelperStateBase
   /// 未配备时快照到达后再扫一次，避免 cfg 默认 COM10 盖掉推荐口。
   Future<void> _ensureConfigSnapshot() async {
     const step = Duration(milliseconds: 100);
+    const waitTries = 20; // 与壳层约 2s 超时对齐
     Future<bool> waitSnapshot() async {
-      for (var i = 0; i < 20; i++) {
-        if (!_client.isConnected) return false;
+      for (var i = 0; i < waitTries; i++) {
         if (ref.read(configProvider.notifier).hasSnapshot) return true;
+        if (!_client.isConnected) return false;
         await Future<void>.delayed(step);
       }
       return ref.read(configProvider.notifier).hasSnapshot;
     }
 
-    if (!await waitSnapshot()) {
+    if (await waitSnapshot()) {
+      _patch(snapshotTimedOut: false);
+    } else {
+      _patch(snapshotTimedOut: true);
       if (!_client.isConnected) return;
       try {
         _sendIpc('sync');
-        _patch(message: '后台配置超时，已请求同步…');
       } catch (e) {
         _patch(message: '$e');
         return;
       }
       if (!await waitSnapshot()) return;
+      _patch(snapshotTimedOut: false);
     }
 
     if (!ref.read(configProvider).serialConfigured) {
       await scanPorts(background: true);
     }
+  }
+
+  /// 壳层「后台服务未响应」的重试：再连 IPC / 再要一份 cfg 快照。
+  Future<void> retrySnapshot() async {
+    _patch(
+      snapshotTimedOut: false,
+      message: '正在连接后台服务…',
+      phase: state.phase == HelperPhase.failed
+          ? HelperPhase.disconnected
+          : null,
+    );
+    if (!_client.isConnected) {
+      await ensureHelperConnected();
+      return;
+    }
+    try {
+      _sendIpc('sync');
+    } catch (e) {
+      _patch(message: '$e', snapshotTimedOut: true);
+      return;
+    }
+    await _ensureConfigSnapshot();
   }
 
   /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过。
@@ -242,6 +289,7 @@ class HelperStateNotifier extends _HelperStateBase
     try {
       _cancelPendingSolid();
       _engineWanted = true;
+      _lastDisplay = HelperDisplayKind.region;
       _sendIpc('start_region');
       _patch(
         message: '屏幕氛围运行中',
@@ -407,7 +455,8 @@ class HelperStateNotifier extends _HelperStateBase
         );
       }
 
-      // 仅未配备：用 CH340 推荐口填 comPort（不冲已配备用户的选中）
+      // 为什么：cfg end 前默认 serialConfigured=false，不能当成真·未配备去 set com
+      if (!ref.read(configProvider.notifier).hasSnapshot) return;
       if (ref.read(configProvider).serialConfigured) return;
 
       final preferred = scanned.where((p) => p.preferred).toList();
@@ -424,8 +473,8 @@ class HelperStateNotifier extends _HelperStateBase
 
   Future<void> reconnectSerial() async {
     if (!_client.isConnected) {
-      await connect();
-      return;
+      await ensureHelperConnected();
+      if (!_client.isConnected) return;
     }
     try {
       // 先把当前 UI 口推给 helper，再重开
@@ -445,6 +494,7 @@ class HelperStateNotifier extends _HelperStateBase
       _cancelPendingSolid();
       _lastSentSolid = null;
       _engineWanted = false;
+      _lastDisplay = HelperDisplayKind.softOff;
       _sendIpc('soft_off');
       _patch(
         message: '已熄灯',
@@ -463,6 +513,7 @@ class HelperStateNotifier extends _HelperStateBase
       if (cmd == 'start') {
         _cancelPendingSolid();
         _engineWanted = true;
+        _lastDisplay = HelperDisplayKind.engine;
         _patch(
           message: '引擎运行中',
           phase: HelperPhase.running,
@@ -470,6 +521,7 @@ class HelperStateNotifier extends _HelperStateBase
         );
       } else if (cmd == 'stop') {
         _engineWanted = false;
+        _lastDisplay = HelperDisplayKind.idle;
         _patch(
           message: '引擎已停止',
           phase: HelperPhase.ready,
@@ -480,6 +532,7 @@ class HelperStateNotifier extends _HelperStateBase
         _cancelPendingSolid();
         _lastSentSolid = null;
         _engineWanted = false;
+        _lastDisplay = HelperDisplayKind.softOff;
         _patch(
           message: '已下电',
           phase: HelperPhase.poweredOff,
@@ -495,33 +548,79 @@ class HelperStateNotifier extends _HelperStateBase
 
   /// 校准开始前快照：取消时用 [restoreAfterCalibrationCancel] 还原。
   /// soft_off 会清空 [_lastSentSolid]，须在 soft_off 之前调用。
-  ({bool wantEngine, String? solid}) captureSceneForCalibration() {
-    final solid =
-        !_engineWanted && _lastSentSolid != null && _lastSentSolid!.isNotEmpty
-        ? _lastSentSolid
-        : null;
-    return (
-      wantEngine: _engineWanted || state.engineRunning,
-      solid: solid,
-    );
+  CalibrationSceneSnapshot captureSceneForCalibration() {
+    final kind = _calibrationKindNow();
+    String? solid;
+    if (kind == CalibrationSceneKind.solid) {
+      solid = _lastSentSolid;
+      if (solid == null || solid.isEmpty) {
+        solid = _solidHexFromConfig();
+      }
+    }
+    return CalibrationSceneSnapshot(kind: kind, solidHex: solid);
   }
 
-  /// 校准取消：恢复进入校准前的追色 / 纯色 / 熄灯。
-  void restoreAfterCalibrationCancel({
-    required bool wantEngine,
-    String? solid,
-  }) {
+  CalibrationSceneKind _calibrationKindNow() {
+    switch (_lastDisplay) {
+      case HelperDisplayKind.engine:
+        return CalibrationSceneKind.engine;
+      case HelperDisplayKind.region:
+        return CalibrationSceneKind.region;
+      case HelperDisplayKind.solid:
+        return CalibrationSceneKind.solid;
+      case HelperDisplayKind.softOff:
+        return CalibrationSceneKind.off;
+      case HelperDisplayKind.idle:
+        break;
+    }
+    final scene = ref.read(configProvider).lastScene.trim();
+    if (scene == 'engine') return CalibrationSceneKind.engine;
+    if (scene == 'region') return CalibrationSceneKind.region;
+    if (scene == 'off') return CalibrationSceneKind.off;
+    if (scene.startsWith('solid ')) return CalibrationSceneKind.solid;
+    if (_engineWanted || state.engineRunning) {
+      return CalibrationSceneKind.engine;
+    }
+    if (_lastSentSolid != null && _lastSentSolid!.isNotEmpty) {
+      return CalibrationSceneKind.solid;
+    }
+    return CalibrationSceneKind.off;
+  }
+
+  String? _solidHexFromConfig() {
+    final cfg = ref.read(configProvider);
+    const prefix = 'solid ';
+    final scene = cfg.lastScene.trim();
+    if (scene.startsWith(prefix)) {
+      final h = scene.substring(prefix.length).trim().toLowerCase();
+      if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return h;
+    }
+    final custom = cfg.lastCustomSolid.trim().toLowerCase();
+    if (RegExp(r'^[0-9a-f]{6}$').hasMatch(custom)) return custom;
+    return null;
+  }
+
+  /// 校准取消：按进入前的 engine / region / solid / off 分别还原。
+  void restoreAfterCalibrationCancel(CalibrationSceneSnapshot snap) {
     if (!_client.isConnected) return;
-    if (wantEngine) {
-      send('start');
-    } else if (solid != null && solid.isNotEmpty) {
-      sendSolid(solid);
-    } else {
-      // ready 或 poweredOff：软关清掉 highlight 残段
-      softOff();
+    switch (snap.kind) {
+      case CalibrationSceneKind.engine:
+        send('start');
+      case CalibrationSceneKind.region:
+        startRegion();
+      case CalibrationSceneKind.solid:
+        final hex = snap.solidHex;
+        if (hex != null && hex.isNotEmpty) {
+          sendSolid(hex);
+        } else {
+          softOff();
+        }
+      case CalibrationSceneKind.off:
+        softOff();
     }
   }
 
+  /// 前端关窗：发 `bye` 只断 Socket，**不是**关 helper（IPC `quit` 才退后台）。
   Future<void> quit() async {
     _cancelPendingSolid();
     await _client.quit();

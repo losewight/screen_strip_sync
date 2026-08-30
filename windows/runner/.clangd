@@ -1,0 +1,12 @@
+﻿# Visual Studio 生成器不产出 compile_commands.json，clangd 只能用回退命令
+# （工作目录 = 被检查文件所在目录，即本目录），因此这里补齐 CMake 真实用到的
+# 标准与搜索路径；<flutter/*.h> 由 Flutter 工具链生成在 flutter/ephemeral 下。
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -I..
+    - -I../flutter/ephemeral
+    - -I../flutter/ephemeral/cpp_client_wrapper/include
+    - -DUNICODE
+    - -D_UNICODE
+    - -DNOMINMAX

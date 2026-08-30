@@ -254,7 +254,7 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
     return 0;
 
   case WM_POWERBROADCAST:
-    // H6：休眠统一拆资源；sleep_sync 只决定醒来是否恢复
+    // sleep_sync=0 时 helper_on_suspend / resume 立刻 return
     if (wParam == PBT_APMSUSPEND || wParam == PBT_APMQUERYSUSPEND) {
       printf("power: suspend (wParam=0x%Ix) -> on_suspend\n", wParam);
       helper_on_suspend();
@@ -269,14 +269,17 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
     break;
 
   case WM_QUERYENDSESSION:
-    printf("power: query end session -> helper_shutdown\n");
-    helper_shutdown();
+    // 为什么：这里 shutdown 的话用户取消关机进程已经死了；只答应可以关
+    printf("power: query end session -> allow\n");
     return TRUE;
 
   case WM_ENDSESSION:
     if (wParam) {
-      printf("power: end session -> helper_shutdown\n");
-      helper_shutdown();
+      HelperConfig c{};
+      config_copy(&c);
+      printf("power: end session lights=%d -> helper_shutdown\n",
+             c.turnOffOnShutdown ? 1 : 0);
+      helper_shutdown(c.turnOffOnShutdown);
     }
     return 0;
 

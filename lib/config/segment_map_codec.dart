@@ -4,7 +4,9 @@
 const int kSegmentCount = 10;
 
 /// IPC 行最大长度（与 helper `ipc_loop` 一致）；超长整句丢弃。
-const int kIpcMaxLineChars = 200;
+///
+/// 这是本机 TCP 文本行上限，**与串口帧长 120 字节红线无关**，两者不得互相「对齐」。
+const int kIpcMaxLineChars = 512;
 
 /// 段映射 ↔ IPC / 显示坐标换算。
 ///

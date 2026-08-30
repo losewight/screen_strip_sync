@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+锘縤mport 'package:flutter_test/flutter_test.dart';
 import 'package:screen_strip_sync/config/segment_map_codec.dart';
 import 'package:screen_strip_sync/config/segment_sample.dart';
 
@@ -34,6 +34,10 @@ void main() {
   });
 
   group('SegmentMapCodec', () {
+    test('IPC max line is 512, independent of serial 120', () {
+      expect(kIpcMaxLineChars, 512);
+    });
+
     test('JSON round-trip of 10 segments', () {
       final map = _tenTopEdge();
       final json = map.map((s) => s.toJson()).toList();
@@ -67,7 +71,7 @@ void main() {
       final decoded = SegmentMapCodec.decodeIpcPayload(payload);
       expect(decoded, isNotNull);
       expect(decoded!.length, 10);
-      // 量化到百分数后仍有序
+      // 脕驴禄炉碌陆掳脵路脰脢媒潞贸脠脭脫脨脨貌
       expect(decoded[0].x0, 0.0);
       expect(decoded[0].x1, 0.1);
     });

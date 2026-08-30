@@ -9,10 +9,9 @@ import '../config/app_config.dart';
 import 'helper_status.dart';
 
 const _ipcPort = 9527;
-const _stillRunning = -1;
 
 /// 解析 helper.exe：exe 同目录优先；开发时从 exe 向上找仓库内
-/// `cpp_core/build/Release/helper.exe`（不依赖进程 CWD）。
+/// `cpp_core/build/{Release,Debug}/helper.exe`（与 helper 找 Flutter 对称）。
 File resolveHelperExecutable() {
   final exeDir = File(Platform.resolvedExecutable).parent;
   final beside = File('${exeDir.path}${Platform.pathSeparator}helper.exe');
@@ -20,27 +19,29 @@ File resolveHelperExecutable() {
 
   var dir = exeDir;
   for (var i = 0; i < 10; i++) {
-    final dev = File(
-      '${dir.path}${Platform.pathSeparator}cpp_core'
-      '${Platform.pathSeparator}build'
-      '${Platform.pathSeparator}Release'
-      '${Platform.pathSeparator}helper.exe',
-    );
-    if (dev.existsSync()) return dev;
+    for (final config in const ['Release', 'Debug']) {
+      final dev = File(
+        '${dir.path}${Platform.pathSeparator}cpp_core'
+        '${Platform.pathSeparator}build'
+        '${Platform.pathSeparator}$config'
+        '${Platform.pathSeparator}helper.exe',
+      );
+      if (dev.existsSync()) return dev;
+    }
     final parent = dir.parent;
     if (parent.path == dir.path) break;
     dir = parent;
   }
 
   throw StateError(
-    '找不到 helper.exe（已查 exe 同目录与向上遍历的 cpp_core/build/Release/）',
+    '找不到 helper.exe（已查 exe 同目录与向上遍历的 cpp_core/build/{Release,Debug}/）',
   );
 }
 
 /// 拉起 helper、维护 Socket、按行收发 IPC 文本。
 class HelperClient {
-  Process? _proc;
   Socket? _sock;
+  Future<void>? _inFlightConnect;
   final StringBuffer _rxBuf = StringBuffer();
   StreamSubscription<List<int>>? _socketSub;
 
@@ -68,6 +69,24 @@ class HelperClient {
   /// [comPort] 保留参数兼容；开口只走 JSON / IPC（H2 后 argv 不再传 COM）。
   Future<void> connect({String? comPort}) async {
     if (isConnected) return;
+    final inFlight = _inFlightConnect;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _connectInternal();
+    _inFlightConnect = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlightConnect, future)) {
+        _inFlightConnect = null;
+      }
+    }
+  }
+
+  Future<void> _connectInternal() async {
+    if (isConnected) return;
 
     await _teardownSocket();
 
@@ -85,53 +104,25 @@ class HelperClient {
       debugPrint('helper: connected to existing instance');
       return;
     } catch (_) {
-      // 未在听 → 自拉或等已有子进程就绪
+      // 未在听 → 自拉后重试 9527
     }
 
-    // 为什么：前端绝不杀 helper。若上次自拉的进程还在，只重试连，不再 spawn。
-    var needSpawn = true;
-    if (_proc != null) {
-      final exitCode = await _proc!.exitCode.timeout(
-        Duration.zero,
-        onTimeout: () => _stillRunning,
-      );
-      if (exitCode == _stillRunning) {
-        needSpawn = false;
-        debugPrint('helper: child still running, retry connect only');
-      } else {
-        _proc = null;
-      }
-    }
-
-    if (needSpawn) {
-      final helperFile = resolveHelperExecutable();
-      debugPrint('helper: ${helperFile.path} --no-ui');
-      // 为什么：必须 --no-ui，否则 helper 再 CreateProcess 一个 Flutter，互相拉起
-      _proc = await Process.start(
-        helperFile.path,
-        const ['--no-ui'],
-        workingDirectory: helperFile.parent.path,
-      );
-    }
+    final helperFile = resolveHelperExecutable();
+    debugPrint('helper: ${helperFile.path} --no-ui');
+    // 为什么：必须 --no-ui，否则 helper 再 CreateProcess 一个 Flutter，互相拉起。
+    // detached：helper 常驻，不随 Flutter 退出；不保存 Process，不当子进程管生命周期。
+    await Process.start(
+      helperFile.path,
+      const ['--no-ui'],
+      workingDirectory: helperFile.parent.path,
+      mode: ProcessStartMode.detached,
+    );
 
     const maxTries = 10;
     Socket? sock;
     Object? lastErr;
 
     for (var i = 1; i <= maxTries; i++) {
-      final proc = _proc;
-      if (proc != null) {
-        final exitCode = await proc.exitCode.timeout(
-          Duration.zero,
-          onTimeout: () => _stillRunning,
-        );
-        if (exitCode != _stillRunning) {
-          debugPrint('helper exited early: code=$exitCode');
-          _proc = null;
-          throw StateError(failMsg);
-        }
-      }
-
       try {
         sock = await Socket.connect(
           InternetAddress.loopbackIPv4,
@@ -149,8 +140,6 @@ class HelperClient {
 
     if (sock == null) {
       debugPrint('Socket.connect failed: $lastErr');
-      // 松手句柄，不 kill：常驻实例由托盘 / quit IPC 管生命周期
-      _proc = null;
       throw StateError(failMsg);
     }
 
@@ -225,12 +214,15 @@ class HelperClient {
     sock.write('$cmd\n');
   }
 
-  /// 前端退出 / 断连：发 `bye`，只关 Socket；helper 灯效与进程保持。
+  /// 前端退出 / 断连：发 `bye`，flush 后再关 Socket；helper 灯效与进程保持。
+  ///
+  /// **不是**关闭后台服务（那是 IPC `quit`，只由托盘「退出」触发）。
   Future<void> quit() async {
     final sock = _sock;
     if (sock != null) {
       try {
         sock.write('bye\n');
+        await sock.flush().timeout(const Duration(milliseconds: 200));
       } catch (_) {}
       await _teardownSocket();
     }

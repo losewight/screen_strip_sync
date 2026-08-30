@@ -1,5 +1,7 @@
 ﻿# Screen Strip Sync AI 状态说明（现状 / 下一步）
 
+> **过期（v2 文档，勿按本文实现）**：架构已翻转为 v3（`helper.exe` 常驻主进程；Flutter 是可随时开关的纯前端，**不写 JSON、关窗不杀 helper**）。以仓库根目录 `.cursorrules` 为准。
+
 > **面向读者**：后续接手的 AI 助手。  
 > **信息来源**：[`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md)、[`cursorrules`](../cursorrules)、当前仓库代码。  
 > **最后对齐**：2026-07-27

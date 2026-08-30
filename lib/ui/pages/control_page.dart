@@ -33,13 +33,14 @@ class ControlPage extends ConsumerWidget {
         cfg.comPort.toUpperCase() != anchor.toUpperCase();
 
     final canConnect =
+        cfgReady &&
         ui.phase != HelperPhase.connecting &&
         (ui.phase == HelperPhase.disconnected ||
             ui.phase == HelperPhase.failed ||
             ui.phase == HelperPhase.needConnect ||
             ui.phase == HelperPhase.openFailed ||
             portChanged ||
-            (!ui.hasDevice && cfgReady));
+            !ui.hasDevice);
 
     // 重连串口：仅「IPC 已通且所选口就是当前打开口」
     final canReconnectSerial =

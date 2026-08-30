@@ -1,5 +1,6 @@
 ﻿#include "engine_internal.h"
 
+#include "config_clamp.h"
 #include "dxgi_capture.h"
 
 #include <atomic>
@@ -102,30 +103,17 @@ void engine_set_region_dark(int v) {
 }
 
 void engine_set_region_bbox(int l, int t, int w, int h) {
-  if (l < 0)
-    l = 0;
-  if (t < 0)
-    t = 0;
-  if (w < 1)
-    w = 1;
-  if (h < 1)
-    h = 1;
-  if (l > 100)
-    l = 100;
-  if (t > 100)
-    t = 100;
-  if (w > 100)
-    w = 100;
-  if (h > 100)
-    h = 100;
+  l = clamp_pct(l);
+  t = clamp_pct(t);
+  w = clamp_pct(w);
+  h = clamp_pct(h);
   if (l + w > 100)
     w = 100 - l;
   if (t + h > 100)
     h = 100 - t;
-  if (w < 1)
-    w = 1;
-  if (h < 1)
-    h = 1;
+  // 为什么：l=100 时 w 会收成 0；再强制 w=1 会越出 100%，与 valid_region_bbox 不一致
+  if (!valid_region_bbox(l, t, w, h))
+    return;
   std::lock_guard<std::mutex> lock(g_region_bbox_mu);
   g_region_l = l;
   g_region_t = t;

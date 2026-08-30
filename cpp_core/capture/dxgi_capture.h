@@ -22,7 +22,7 @@ void dxgi_shutdown();
 bool dxgi_is_ready();
 DxgiErr dxgi_grab_one_frame(UINT timeout_ms);
 // out_rgb[i]={R,G,B}。rects 非空：按矩形步进抽点+丢近黑+RMS；
-// nullptr：现有顶边均分（未校准）。
+// nullptr：顶边均分 + 丢近黑 + blur；count==0 输出黑。
 DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
                              const SegmentRect *rects);
 

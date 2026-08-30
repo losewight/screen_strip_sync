@@ -45,14 +45,9 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
     return e;
 
   if (frame.bpp <= 0 || frame.desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
-    // region 只支持常见 BGRA；其它 format 填黑避免乱色
-    for (int i = 0; i < 10; ++i) {
-      out_rgb[i][0] = 0;
-      out_rgb[i][1] = 0;
-      out_rgb[i][2] = 0;
-    }
+    // 为什么：当 Ok+全黑会让引擎当真帧去做 EMA，锁屏/HDR 会把灯慢慢拖黑；与 map 一样 skip
     dxgi_unmap_desktop();
-    return DxgiErr::Ok;
+    return DxgiErr::AcquireFailed;
   }
 
   const unsigned char *p = frame.pixels;

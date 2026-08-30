@@ -293,6 +293,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       // 已回推 reconnect_fail
     } else {
       printf("cmd=highlight %ld\n", v);
+      // 为什么：worker 仍跑时高亮会与 RGB 帧 0ms 连写，校准段会被下一帧冲掉
+      engine_stop();
       send_highlight(*serial, (int)v);
     }
     return DispatchResult::Continue;
@@ -523,13 +525,22 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       engine_get_com(com, sizeof(com));
       config_set_last_connected_com(com);
       config_set_serial_configured(true);
+      DisplayIntent intent = engine_get_display_intent();
+      if (intent.kind == DisplayIntentKind::Idle) {
+        HelperConfig c{};
+        config_copy(&c);
+        parse_last_scene(c.lastScene, &intent);
+      }
+      apply_display_intent(*serial, intent);
       send_status(client, "reconnect_ok");
       push_runtime_status(client, true);
       ipc_push_config_snapshot();
     } else {
       printf("cmd=reconnect failed\n");
+      engine_set_intent_idle();
       send_status(client, "reconnect_fail");
       send_engine_status(client);
+      send_display_status(client);
     }
     return DispatchResult::Continue;
   }

@@ -10,9 +10,49 @@
 #include <cstdio>
 #include <cstring>
 
+SOCKET g_listen_sock = INVALID_SOCKET;
+SOCKET g_client_sock = INVALID_SOCKET;
+std::atomic_bool g_ipc_quit{false};
+
+// accept 探测已读但尚未交给 read_line 的字节；仅单客户端，故一份即可
+static char g_pending[520];
+static int g_pending_n = 0;
+
+static void pending_clear() { g_pending_n = 0; }
+
+static bool pending_push(const char *p, int n) {
+  if (n <= 0)
+    return true;
+  if (g_pending_n + n > (int)sizeof(g_pending))
+    return false;
+  memcpy(g_pending + g_pending_n, p, (size_t)n);
+  g_pending_n += n;
+  return true;
+}
+
+static int pending_take_byte(char *ch) {
+  if (g_pending_n <= 0)
+    return 0;
+  *ch = g_pending[0];
+  memmove(g_pending, g_pending + 1, (size_t)(--g_pending_n));
+  return 1;
+}
+
+static bool pending_has_line() {
+  for (int i = 0; i < g_pending_n; ++i) {
+    if (g_pending[i] == '\n')
+      return true;
+  }
+  return false;
+}
+
 // 次实例连上后首包若是 open_ui，则只唤界面、不踢现有 Flutter 客户端。
 // 为什么：此命令不得进 dispatch_line——已建立连接若走到 DropClient 会误踢 UI。
-static bool try_handle_open_ui_probe(SOCKET neu) {
+// 返回 true = 已关掉 neu；false = 把 neu 当正式客户端（已读字节写入 leftover）。
+static bool try_handle_open_ui_probe(SOCKET neu, char *leftover, int leftover_cap,
+                                     int *leftover_n) {
+  if (leftover_n)
+    *leftover_n = 0;
   fd_set rfds;
   FD_ZERO(&rfds);
   FD_SET(neu, &rfds);
@@ -23,35 +63,42 @@ static bool try_handle_open_ui_probe(SOCKET neu) {
   if (sel <= 0)
     return false;
 
-  char buf[32] = {};
+  char buf[520] = {};
   const int n = recv(neu, buf, (int)sizeof(buf) - 1, 0);
   if (n <= 0) {
     closesocket(neu);
     return true;
   }
-  buf[n] = '\0';
-  char *nl = strchr(buf, '\n');
-  if (nl)
-    *nl = '\0';
-  char *cr = strchr(buf, '\r');
-  if (cr)
-    *cr = '\0';
 
-  if (strcmp(buf, "open_ui") == 0) {
+  int line_len = n;
+  for (int i = 0; i < n; ++i) {
+    if (buf[i] == '\n') {
+      line_len = i;
+      break;
+    }
+  }
+  while (line_len > 0 && (buf[line_len - 1] == '\r' || buf[line_len - 1] == ' '))
+    --line_len;
+
+  if (line_len == 7 && strncmp(buf, "open_ui", 7) == 0) {
     printf("ipc: open_ui probe\n");
-    ui_request_open();
+    ui_post_request_open();
     closesocket(neu);
     return true;
   }
 
-  printf("ipc: probe unexpected [%s], drop\n", buf);
-  closesocket(neu);
-  return true;
+  // 为什么：超时外的首包可能是 Flutter 的 sync；关掉会误踢正连上的 UI
+  printf("ipc: probe leftover %d bytes, keep as client\n", n);
+  if (leftover && leftover_n && n < leftover_cap) {
+    memcpy(leftover, buf, (size_t)n);
+    *leftover_n = n;
+  } else {
+    printf("ipc: probe leftover too long, drop\n");
+    closesocket(neu);
+    return true;
+  }
+  return false;
 }
-
-SOCKET g_listen_sock = INVALID_SOCKET;
-SOCKET g_client_sock = INVALID_SOCKET;
-std::atomic_bool g_ipc_quit{false};
 
 // ---------------------------------------------------------------------------
 // 读一行（到 \n；超长丢弃到行尾）
@@ -66,7 +113,9 @@ ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
 
   while (n < max_payload) {
     char ch = 0;
-    int r = recv(client, &ch, 1, 0);
+    int r = pending_take_byte(&ch);
+    if (r == 0)
+      r = recv(client, &ch, 1, 0);
     if (r <= 0) {
       printf("peer closed or recv err\n");
       return ReadLineResult::PeerGone;
@@ -83,7 +132,9 @@ ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
   printf("line too long, rejected\n");
   for (;;) {
     char ch = 0;
-    int r = recv(client, &ch, 1, 0);
+    int r = pending_take_byte(&ch);
+    if (r == 0)
+      r = recv(client, &ch, 1, 0);
     if (r <= 0)
       return ReadLineResult::PeerGone;
     if (ch == '\n')
@@ -93,6 +144,7 @@ ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
 }
 
 void drop_client() {
+  pending_clear();
   SOCKET cs = g_client_sock;
   g_client_sock = INVALID_SOCKET;
   if (cs != INVALID_SOCKET) {
@@ -194,16 +246,41 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
           printf("accept failed: %d\n", WSAGetLastError());
         continue;
       }
-      if (try_handle_open_ui_probe(neu))
+      char leftover[520];
+      int leftover_n = 0;
+      if (try_handle_open_ui_probe(neu, leftover, (int)sizeof(leftover),
+                                   &leftover_n))
         continue;
 
       if (g_client_sock != INVALID_SOCKET) {
         printf("kick old client\n");
         drop_client();
       }
+      pending_clear();
+      pending_push(leftover, leftover_n);
       g_client_sock = neu;
       printf("client connected\n");
       push_config_snapshot(neu);
+      // 探测阶段已读的 sync 等必须立刻消化；否则 select 看不到已出队字节
+      while (pending_has_line() && !g_ipc_quit.load()) {
+        char line[520];
+        ReadLineResult rr = read_line(neu, line, (int)sizeof(line));
+        if (rr == ReadLineResult::PeerGone) {
+          drop_client();
+          break;
+        }
+        if (rr == ReadLineResult::TooLong)
+          continue;
+        DispatchResult dr = dispatch_line(line, serial, neu);
+        if (dr == DispatchResult::DropClient) {
+          drop_client();
+          break;
+        }
+        if (dr == DispatchResult::ShutdownService) {
+          g_ipc_quit.store(true);
+          break;
+        }
+      }
       continue;
     }
 

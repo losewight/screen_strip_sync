@@ -17,6 +17,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
 
   /// helper 休眠恢复后的显示意图：对齐徽标，避免灯已亮而 UI 仍停在熄灯。
   void _onStatusDisplay(HelperDisplayKind kind) {
+    _lastDisplay = kind;
     // 为什么：无 COM 仍会推 display idle；勿盖掉 needConnect / openFailed
     if (!state.hasDevice ||
         state.phase == HelperPhase.needConnect ||
@@ -124,12 +125,12 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void _onStatusPhase(HelperStatusWord word) {
     switch (word) {
       case HelperStatusWord.ready:
-        // 为什么：配置真源是 helper 已推的 cfg 快照；此处不再回推本地值
+        // 为什么：ready = 串口就绪，不是引擎已停。引擎以随后的
+        // `status engine` / `status display` 为准，切勿在此强制 engineRunning: false。
         _patch(
-          message: '串口就绪',
-          phase: HelperPhase.ready,
+          message: state.engineRunning ? state.message : '串口就绪',
+          phase: state.engineRunning ? HelperPhase.running : HelperPhase.ready,
           hasDevice: true,
-          engineRunning: false,
         );
       case HelperStatusWord.reconnecting:
         _patch(

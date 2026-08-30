@@ -16,12 +16,10 @@ import '../widgets/screen_mask_select.dart';
 class SegmentMapCalibratePage extends ConsumerStatefulWidget {
   const SegmentMapCalibratePage({
     super.key,
-    required this.preWantEngine,
-    this.preSolid,
+    required this.preScene,
   });
 
-  final bool preWantEngine;
-  final String? preSolid;
+  final CalibrationSceneSnapshot preScene;
 
   @override
   ConsumerState<SegmentMapCalibratePage> createState() =>
@@ -93,10 +91,7 @@ class _SegmentMapCalibratePageState
     _exiting = true;
     await _leaveMaskWindow();
     if (!mounted) return;
-    _helper.restoreAfterCalibrationCancel(
-      wantEngine: widget.preWantEngine,
-      solid: widget.preSolid,
-    );
+    _helper.restoreAfterCalibrationCancel(widget.preScene);
     if (mounted) Navigator.of(context).pop();
   }
 

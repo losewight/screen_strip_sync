@@ -1,5 +1,18 @@
 ﻿import '../ipc/windows_com_ports.dart';
 
+/// 校准开始前的灯效场景；取消时按此还原（完成校准仍走 `start`）。
+enum CalibrationSceneKind { engine, region, solid, off }
+
+/// 进入校准前的快照。须在 `soft_off` 之前采集。
+class CalibrationSceneSnapshot {
+  const CalibrationSceneSnapshot({required this.kind, this.solidHex});
+
+  final CalibrationSceneKind kind;
+
+  /// [CalibrationSceneKind.solid] 时的 6 位 hex；其它场景可空。
+  final String? solidHex;
+}
+
 /// 连接 / 引擎相位（按钮禁用态与徽标用）。
 enum HelperPhase {
   disconnected,
@@ -30,6 +43,7 @@ class HelperUiState {
     this.hasDevice = false,
     this.isScanningPorts = false,
     this.engineRunning = false,
+    this.snapshotTimedOut = false,
   });
 
   final HelperPhase phase;
@@ -50,6 +64,9 @@ class HelperUiState {
 
   /// helper 追色发帧线程是否在跑（来自 `status engine`）。
   final bool engineRunning;
+
+  /// 已连上 IPC 但约 2s 内未收到 `cfg end`（壳层显示「后台服务未响应」）。
+  final bool snapshotTimedOut;
 
   /// 换口判断锚点：优先当前打开口，否则用上次成功口。
   String get anchorCom => currentCom.isNotEmpty ? currentCom : lastGoodCom;

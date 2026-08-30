@@ -28,6 +28,7 @@ class SolidSchemePanel extends ConsumerStatefulWidget {
 
 class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
   late Color _activeColor;
+  bool _userPickedColor = false;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
   }
 
   void _sendSolid(HelperStateNotifier notifier, Color color) {
+    _userPickedColor = true;
     setState(() => _activeColor = color);
     notifier.sendSolid(colorToSolidHex(color));
   }
@@ -61,6 +63,7 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
     Color picked,
   ) {
     final hex = colorToSolidHex(picked);
+    _userPickedColor = true;
     setState(() => _activeColor = picked);
     config.setLastCustomSolid(hex);
     notifier.sendLastCustomSolid(hex);
@@ -94,8 +97,16 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
     final notifier = ref.read(helperStateProvider.notifier);
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
-    final can = ui.canControl;
+    final cfgReady = ref.watch(configReadyProvider);
+    final can = ui.canControl && cfgReady;
     final customColor = _customFromCfg(cfg);
+
+    ref.listen<AppConfig>(configProvider, (prev, next) {
+      if (_userPickedColor) return;
+      final seeded = _seedActive(next);
+      if (seeded == _activeColor) return;
+      setState(() => _activeColor = seeded);
+    });
 
     return Center(
       child: SingleChildScrollView(

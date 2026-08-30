@@ -13,6 +13,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // 为什么：第二实例在建窗前退出，避免闪一下再被 Dart 互斥杀掉。
+  // 只 Open 不 Create：同进程 Dart 仍会 CreateMutex `Local\ScreenStripSyncUi`；
+  // 若此处也 Create，正主 Dart 会看到 ERROR_ALREADY_EXISTS 把自己当成第二实例退出。
+  HANDLE existing_ui =
+      ::OpenMutexW(SYNCHRONIZE, FALSE, L"Local\\ScreenStripSyncUi");
+  if (existing_ui != nullptr) {
+    ::CloseHandle(existing_ui);
+    return EXIT_SUCCESS;
+  }
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

@@ -9,6 +9,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
   StreamSubscription<void>? _disconnectSub;
   bool _ensureHelperInFlight = false;
   bool _engineWanted = false;
+  HelperDisplayKind _lastDisplay = HelperDisplayKind.idle;
   String? _pendingSolid;
   Timer? _solidTimer;
   String? _lastSentSolid;
@@ -24,6 +25,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     bool? hasDevice,
     bool? isScanningPorts,
     bool? engineRunning,
+    bool? snapshotTimedOut,
   }) {
     state = HelperUiState(
       phase: phase ?? state.phase,
@@ -34,6 +36,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
       hasDevice: hasDevice ?? state.hasDevice,
       isScanningPorts: isScanningPorts ?? state.isScanningPorts,
       engineRunning: engineRunning ?? state.engineRunning,
+      snapshotTimedOut: snapshotTimedOut ?? state.snapshotTimedOut,
     );
   }
 

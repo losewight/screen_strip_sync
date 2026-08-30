@@ -78,12 +78,20 @@ Release 成品在仓库的 **`dist_installer/`** 目录（发布到 GitHub Relea
 
 ## 环境要求
 
-- **Windows 10 及以上**（x64）。主要在 Windows 10 / 11 上测试与使用；不针对 Windows 7 / 8 等更旧系统（界面基于 Flutter Windows，官方也要求较新的 Windows）
+- **操作系统：Windows 10 / 11 x64**
+- **Flutter SDK：3.12.2 及以上**
+- **Dart SDK：随 Flutter 一起安装**
+- **CMake：3.10 及以上**
+- **Visual Studio 2022：**
+  - Desktop development with C++
+  - Windows 10 / 11 SDK
+- **可选：Inno Setup 6**（用于打包安装程序）
 - 已连接的灯带
-- 从源码编译时还需要：
-  - [Flutter](https://flutter.dev/)（Windows desktop）
-  - CMake + MSVC（编译 `cpp_core`）
-  - 可选：[Inno Setup 6](https://jrsoftware.org/isinfo.php)（打安装包）
+
+从源码编译时还需要：
+- [Flutter](https://flutter.dev/)（Windows desktop）
+- CMake + MSVC（编译 `cpp_core`）
+- 可选：[Inno Setup 6](https://jrsoftware.org/isinfo.php)（打安装包）
 
 ---
 

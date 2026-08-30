@@ -272,8 +272,6 @@ void config_apply() {
   printf("config_apply done\n");
 }
 
-const HelperConfig &config_get() { return g_cfg; }
-
 void config_copy(HelperConfig *out) {
   if (!out)
     return;

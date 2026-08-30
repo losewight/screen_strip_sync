@@ -48,6 +48,7 @@ app.*.map.json
 # Local / agent / packaging artifacts (not for public git)
 .cursor/
 .cursorrules
+.github/copilot-instructions.md
 /dist/
 /dist_stage/
 /dist_installer/*.exe

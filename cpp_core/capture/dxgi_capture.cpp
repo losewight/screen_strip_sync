@@ -2,6 +2,7 @@
 
 #include "dxgi_mapped.h"
 #include "helper_log.h"
+#include "light_engine.h"
 
 #include <atomic>
 #include <cmath>
@@ -268,8 +269,10 @@ DxgiErr dxgi_map_desktop(UINT timeout_ms, DxgiMappedFrame *out) {
   IDXGIResource *resource = nullptr;
   HRESULT hr = E_FAIL;
 
-  // 为什么：DuplicateOutput 后首帧常 LastPresentTime=0 且像素全黑，需丢掉再采。
-  for (int try_i = 0; try_i < 30; ++try_i) {
+  // 为什么：30×timeout 不可打断会拖住 engine_stop；丢掉 1～2 帧全黑首帧足够
+  for (int try_i = 0; try_i < 2; ++try_i) {
+    if (!engine_is_running())
+      return DxgiErr::AcquireTimeout;
     info = {};
     resource = nullptr;
     hr = g_duplication->AcquireNextFrame(timeout_ms, &info, &resource);
@@ -455,6 +458,7 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
     } else {
       const UINT y = desc.Height > 2 ? 2u : 0;
       const int blurStep = g_blur_step.load();
+      const int nearBlack = g_near_black.load();
       for (int i = 0; i < 10; ++i) {
         const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
         unsigned sum_r = 0, sum_g = 0, sum_b = 0;
@@ -464,14 +468,23 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
           if (sx < 0 || sx >= (int)desc.Width)
             continue;
           const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
-          sum_b += px[0];
-          sum_g += px[1];
-          sum_r += px[2];
+          const unsigned r = px[2], g = px[1], b = px[0];
+          if ((r + g + b) / 3u < (unsigned)nearBlack)
+            continue;
+          sum_r += r;
+          sum_g += g;
+          sum_b += b;
           ++count;
         }
-        out_rgb[i][0] = (unsigned char)(sum_r / count);
-        out_rgb[i][1] = (unsigned char)(sum_g / count);
-        out_rgb[i][2] = (unsigned char)(sum_b / count);
+        if (count == 0) {
+          out_rgb[i][0] = 0;
+          out_rgb[i][1] = 0;
+          out_rgb[i][2] = 0;
+        } else {
+          out_rgb[i][0] = (unsigned char)(sum_r / count);
+          out_rgb[i][1] = (unsigned char)(sum_g / count);
+          out_rgb[i][2] = (unsigned char)(sum_b / count);
+        }
       }
     }
   } else if (desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {

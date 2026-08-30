@@ -40,15 +40,19 @@ bool power_on(HANDLE h) {
 }
 
 bool handshake(HANDLE h) {
-  if (!send_one_frame(h, "set_pc_available 1\r\n", 20))
+  static const char kAvail[] = "set_pc_available 1\r\n";
+  static const char kDim[] = "set_usb_dim_time 45\r\n";
+  static const char kLink[] = "set_pc_linkage 1\r\n";
+  // 为什么：字面量改长度时魔法 20/21/18 会 silently 截断或越读
+  if (!send_one_frame(h, kAvail, (DWORD)strlen(kAvail)))
     return false;
   if (!read_response_ok(h, 500))
     return false;
-  if (!send_one_frame(h, "set_usb_dim_time 45\r\n", 21))
+  if (!send_one_frame(h, kDim, (DWORD)strlen(kDim)))
     return false;
   if (!read_response_ok(h, 500))
     return false;
-  if (!send_one_frame(h, "set_pc_linkage 1\r\n", 18))
+  if (!send_one_frame(h, kLink, (DWORD)strlen(kLink)))
     return false;
   return read_response_ok(h, 500);
 }
@@ -148,7 +152,6 @@ bool send_solid(HANDLE h, const char *rrggbb) {
   }
   if (!send_one_frame(h, frame, len))
     return false;
-  Sleep(50); // 红线：帧间隔 ≥50ms
   return true;
 }
 
@@ -174,6 +177,5 @@ bool send_highlight(HANDLE h, int seg) {
   }
   if (!send_one_frame(h, frame, len))
     return false;
-  Sleep(50);
   return true;
 }

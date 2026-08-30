@@ -1,6 +1,7 @@
 ﻿#include "engine_internal.h"
 
 #include "dxgi_capture.h"
+#include "helper_lifecycle.h"
 #include "serial_port.h"
 #include "wall_comp.h"
 
@@ -155,11 +156,19 @@ static DxgiErr produce_colors(int frame_index, char *out_frame,
   return produce_colors_map(frame_index, out_frame, out_cap);
 }
 
-static bool consumer_to_serial(HANDLE h, const char *frame, DWORD frame_len) {
-  if (!send_one_frame(h, frame, frame_len))
-    return false;
-  Sleep(50);
-  return true;
+// 为什么：整段 Sleep(2000) 会让 engine_stop 的 join 卡死；50ms 切片才能看见 g_running
+static void sleep_while_running(DWORD ms) {
+  const DWORD slice = 50;
+  const DWORD start = GetTickCount();
+  while (g_running.load()) {
+    const DWORD elapsed = GetTickCount() - start;
+    if (elapsed >= ms)
+      break;
+    DWORD left = ms - elapsed;
+    if (left > slice)
+      left = slice;
+    Sleep(left);
+  }
 }
 
 void frame_loop(HANDLE h) {
@@ -186,17 +195,21 @@ void frame_loop(HANDLE h) {
       DWORD sleep_ms = 200u * (DWORD)recover_fails;
       if (sleep_ms > 2000)
         sleep_ms = 2000;
-      Sleep(sleep_ms);
+      sleep_while_running(sleep_ms);
       continue;
     }
     if (e != DxgiErr::Ok) {
-      Sleep(10);
+      sleep_while_running(10);
       continue;
     }
-    if (!consumer_to_serial(h, frame_buf, (DWORD)strlen(frame_buf)))
+    // 为什么：produce 可能很慢；写出前再看一次，避免停机后又发一帧把灯点亮
+    if (!g_running.load())
+      break;
+    if (!send_one_frame(h, frame_buf, (DWORD)strlen(frame_buf)))
       break;
     i++;
   }
+  g_running.store(false);
 }
 
 bool engine_ensure_dxgi() {
@@ -225,15 +238,17 @@ bool engine_recover_dxgi() {
 
 static void engine_start_path(HANDLE h, SyncPath path) {
   std::lock_guard<std::mutex> lock(g_engine_mu);
-  // 同路径已在跑：幂等；跨路径：先停再起
-  if (g_running.load() && g_sync_path.load() == path)
+  // 同路径已在跑：幂等（不新建线程）。关进程中即使同路径也要 join 掉。
+  if (g_running.load() && g_sync_path.load() == path &&
+      !helper_is_shutting_down())
     return;
-  if (g_running.load()) {
-    g_running.store(false);
-    if (g_worker.joinable())
-      g_worker.join();
-    g_ema_inited = false;
-  }
+  g_running.store(false);
+  // 为什么：g_running 已是 false 但 joinable 的残留 worker 仍可能占串口；不能用旗标当 join 条件
+  if (g_worker.joinable())
+    g_worker.join();
+  g_ema_inited = false;
+  if (helper_is_shutting_down())
+    return;
   if (!dxgi_is_ready()) {
     DxgiErr e = dxgi_init();
     if (e != DxgiErr::Ok) {

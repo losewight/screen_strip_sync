@@ -1,5 +1,7 @@
 ﻿# Screen Strip Sync 项目现状
 
+> **过期（v2 文档，勿按本文实现）**：架构已翻转为 v3（`helper.exe` 常驻主进程；Flutter 是可随时开关的纯前端，**不写 JSON、关窗不杀 helper**）。以仓库根目录 `.cursorrules` 为准。
+
 面向：后端基本就绪 → **先做前端** → 再整合 IPC → 再收产品债。
 
 ---

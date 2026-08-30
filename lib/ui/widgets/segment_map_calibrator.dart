@@ -39,21 +39,15 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
     });
 
     var softOffDone = false;
-    var wantEngine = false;
-    String? solid;
+    var scene = const CalibrationSceneSnapshot(kind: CalibrationSceneKind.off);
 
     try {
-      final scene = _helper.captureSceneForCalibration();
-      wantEngine = scene.wantEngine;
-      solid = scene.solid;
+      scene = _helper.captureSceneForCalibration();
       _helper.softOff();
       softOffDone = true;
 
       if (!mounted) {
-        _helper.restoreAfterCalibrationCancel(
-          wantEngine: wantEngine,
-          solid: solid,
-        );
+        _helper.restoreAfterCalibrationCancel(scene);
         return;
       }
 
@@ -63,18 +57,12 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
         PageRouteBuilder(
           opaque: true,
           barrierColor: Colors.transparent,
-          pageBuilder: (_, _, _) => SegmentMapCalibratePage(
-            preWantEngine: wantEngine,
-            preSolid: solid,
-          ),
+          pageBuilder: (_, _, _) => SegmentMapCalibratePage(preScene: scene),
         ),
       );
     } catch (e) {
       if (softOffDone) {
-        _helper.restoreAfterCalibrationCancel(
-          wantEngine: wantEngine,
-          solid: solid,
-        );
+        _helper.restoreAfterCalibrationCancel(scene);
       }
       if (mounted) setState(() => _error = '$e');
     } finally {

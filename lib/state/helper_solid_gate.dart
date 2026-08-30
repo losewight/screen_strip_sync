@@ -35,6 +35,7 @@ mixin _HelperSolidGate on _HelperStateBase {
         _engineWanted = false;
         _sendIpc('stop');
       }
+      _lastDisplay = HelperDisplayKind.solid;
       _patch(
         message: '纯色运行中',
         phase: HelperPhase.running,
