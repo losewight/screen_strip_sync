@@ -1,4 +1,5 @@
 {
+  "chat.sessionSync.enabled": true,
   "dart.enableSdkFormatter": true,
   "[dart]": {
     "editor.defaultFormatter": "Dart-Code.dart-code",

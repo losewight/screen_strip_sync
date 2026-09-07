@@ -16,7 +16,10 @@
 #endif
 #include <windows.h>
 
+#include <powrprof.h>
 #include <shellapi.h>
+
+#pragma comment(lib, "PowrProf.lib")
 
 static constexpr UINT WM_TRAYICON = WM_APP + 1;
 static constexpr UINT kTrayId = 1;
@@ -30,6 +33,7 @@ static std::atomic_bool g_started{false};
 static std::atomic_bool g_stop_requested{false};
 static HWND g_hwnd = nullptr;
 static HPOWERNOTIFY g_suspend_notify = nullptr;
+static HPOWERNOTIFY g_monitor_notify = nullptr;
 static UINT g_taskbar_created = 0;
 static NOTIFYICONDATAW g_nid{};
 static bool g_nid_added = false;
@@ -171,9 +175,21 @@ static void tray_show_menu(HWND hwnd) {
   const bool has_serial = serial_or_invalid() != INVALID_HANDLE_VALUE;
   const UINT light_flags =
       MF_STRING | (has_serial ? 0u : (MF_GRAYED | MF_DISABLED));
-  AppendMenuW(menu, light_flags, IDM_TRAY_START_ENGINE, L"流光溢彩");
-  AppendMenuW(menu, light_flags, IDM_TRAY_START_REGION, L"屏幕氛围");
-  AppendMenuW(menu, light_flags, IDM_TRAY_SOFT_OFF, L"关灯");
+  // 对勾读运行时 intent（与 UI display 状态同源），非 lastScene：
+  // 后者是冷启动恢复用的持久化场景，suspend/断连期间与实际灯态不同步
+  const DisplayIntent intent = engine_get_display_intent();
+  AppendMenuW(menu,
+              light_flags |
+                  (intent.kind == DisplayIntentKind::Engine ? MF_CHECKED : 0),
+              IDM_TRAY_START_ENGINE, L"流光溢彩");
+  AppendMenuW(menu,
+              light_flags |
+                  (intent.kind == DisplayIntentKind::Region ? MF_CHECKED : 0),
+              IDM_TRAY_START_REGION, L"屏幕氛围");
+  AppendMenuW(menu,
+              light_flags |
+                  (intent.kind == DisplayIntentKind::SoftOff ? MF_CHECKED : 0),
+              IDM_TRAY_SOFT_OFF, L"关灯");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
   HelperConfig c{};
@@ -334,6 +350,14 @@ static void tray_thread_main() {
            (unsigned long)GetLastError());
   } else {
     printf("tray suspend notify ok\n");
+  }
+  g_monitor_notify = RegisterPowerSettingNotification(
+      hwnd, &GUID_MONITOR_POWER_ON, DEVICE_NOTIFY_WINDOW_HANDLE);
+  if (!g_monitor_notify) {
+    printf("RegisterPowerSettingNotification failed: %lu\n",
+           (unsigned long)GetLastError());
+  } else {
+    printf("tray monitor notify ok\n");
   }
 
   tray_enable_dark_menus();

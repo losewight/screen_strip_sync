@@ -3,10 +3,14 @@
   "configurations": [
     {
       "name": "helper (Release)",
-      "type": "cmake",
+      "type": "cppvsdbg",
       "request": "launch",
-      "cmakeDebugType": "run",
-      "target": "helper"
+      "program": "${workspaceFolder}/cpp_core/build/Release/helper.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/cpp_core/build/Release",
+      "environment": [],
+      "externalConsole": false
     }
   ]
 }
