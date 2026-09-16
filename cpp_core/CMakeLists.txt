@@ -50,3 +50,14 @@ target_compile_options(helper PRIVATE
   "/FI${CMAKE_CURRENT_SOURCE_DIR}/app/helper_log.h"
   /utf-8
 )
+
+# experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
+add_executable(interval_limit_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/frame_interval_limit/interval_limit_test.cpp
+  engine/serial_port.cpp
+)
+target_include_directories(interval_limit_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_link_libraries(interval_limit_test PRIVATE kernel32 winmm)
+target_compile_options(interval_limit_test PRIVATE /utf-8)

@@ -12,7 +12,7 @@ struct RegionBBox {
   int h = 60;
 };
 
-// 与 Dart AppConfig JSON 字段对齐；helper 为唯一写方
+// 与 Dart AppConfig  JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
   float emaAlpha = 1.f; // UI 平滑度 = 1−α；默认 0 → α=1（跟得最快）
   int nearBlack = 0;
@@ -29,10 +29,10 @@ struct HelperConfig {
   bool hasMap = false;
   SegmentRect map[kSegmentCount] = {};
   // 屏幕氛围（Python region 路径）；与 map 参数正交
-  char regionAlgo = 'm';    // 'm'=mean 柔和融合；'x'=max 高亮追踪
-  int regionBlur = 3;       // 0..20
+  char regionAlgo = 'm';     // 'm'=mean 柔和融合；'x'=max 高亮追踪
+  int regionBlur = 3;        // 0..20
   float regionSmooth = 0.8f; // 0..0.99；高=更钝
-  int regionDark = 15;      // 0..50
+  int regionDark = 15;       // 0..50
   RegionBBox regionBBox{};
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
   // 合法：engine|region|idle|off|solid RRGGBB

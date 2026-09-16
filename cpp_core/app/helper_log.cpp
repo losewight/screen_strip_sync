@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <time.h>
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 FILE *g_helper_log = nullptr;

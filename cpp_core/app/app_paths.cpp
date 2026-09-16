@@ -61,8 +61,11 @@ static bool join_data_file(const char *name, char *out, size_t cap) {
   char dir[MAX_PATH];
   if (!data_dir_utf8(dir, sizeof(dir)))
     return false;
-  if (snprintf(out, cap, "%s\\%s", dir, name) <= 0)
+
+  int res = snprintf(out, cap, "%s\\%s", dir, name);
+  if (res < 0 || (size_t)res >= cap)
     return false;
+
   return true;
 }
 

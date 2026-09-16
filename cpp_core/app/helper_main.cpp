@@ -169,13 +169,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   printf("helper WinMain start\n");
 
   config_load();
-  config_apply();
+  config_apply(); // 为什么：开串口前必须把内存配置打进引擎
   HelperConfig boot_cfg{};
   config_copy(&boot_cfg);
   // 为什么：JSON 真源纠注册表路径漂移；off 时清孤儿键
   autostart_reconcile(boot_cfg.startOnBoot);
 
-  // 为什么：DXGI 失败仍要托盘+IPC（纯色/关灯可用）；追色时 engine_ensure_dxgi 再试
+  // 为什么：DXGI 失败仍要托盘+IPC（纯色/关灯可用）；追色时 engine_ensure_dxgi
+  // 再试
   DxgiErr dxgi = dxgi_init();
   if (dxgi != DxgiErr::Ok) {
     printf("dxgi_init failed: %d (stay alive; capture later)\n", (int)dxgi);

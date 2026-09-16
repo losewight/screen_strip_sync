@@ -56,4 +56,7 @@ app.*.map.json
 /dist_installer/build_out/
 /dist_installer/_zip_stage_*/
 /backup/
-experiments/screen_strip_sync_draft.py
+/experiments/
+
+# Personal code-reading notes (local only, not for public git)
+/reading/

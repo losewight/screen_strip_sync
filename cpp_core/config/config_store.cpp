@@ -285,7 +285,7 @@ void config_set_ema_alpha(float v) {
     g_cfg.emaAlpha = clamp_alpha(v);
     mark_dirty_unlocked();
   }
-  // 为什么：建线程在锁外，避免 CreateThread 拉长 g_mu 持有时间
+  // 为什么：开串口前必须把内存配置打进引擎；否则串口已开，UI set alpha 也不推
   ensure_saver_started();
 }
 
