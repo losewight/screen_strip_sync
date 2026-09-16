@@ -56,9 +56,7 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   // 为什么：开源诊断导出前打标记，便于对齐 helper.log 尾部与导出时刻
   if (strcmp(line, "diag_mark") == 0) {
     printf("=== diag export ===\n");
-    if (g_helper_log != nullptr) {
-      fflush(g_helper_log);
-    }
+    helper_log_flush();
     return DispatchResult::Continue;
   }
   if (strcmp(line, "off") == 0) {

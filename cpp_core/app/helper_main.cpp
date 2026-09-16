@@ -13,15 +13,11 @@
 
 #include <cstdio>
 #include <cstring>
-#include <share.h>
-#include <sys/stat.h>
 
 #include <shellapi.h>
 
 // 与 helper.rc ProductVersion 对齐；开源诊断横幅用
 static constexpr char kHelperVersion[] = "1.0.2";
-// 超过则 rename 为 helper.log.1 再新建（控体积，开源 Issue 可附）
-static constexpr long long kHelperLogMaxBytes = 2LL * 1024 * 1024;
 
 // 供 H5 读取：--autostart / --no-ui 时不拉 Flutter
 static bool g_silent_start = false;
@@ -40,29 +36,6 @@ static BOOL WINAPI on_ctrl(DWORD type) {
   default:
     return FALSE;
   }
-}
-
-// 为何：大日志不便附 Issue；启动时若超限则滚成 .1（覆盖旧备份）
-static void rotate_helper_log_if_needed(const char *path) {
-  struct _stat64 st{};
-  if (_stat64(path, &st) != 0 || st.st_size < kHelperLogMaxBytes) {
-    return;
-  }
-
-  char bak[MAX_PATH];
-  if (strcpy_s(bak, path) != 0) {
-    return;
-  }
-  char *slash = strrchr(bak, '\\');
-  if (!slash) {
-    return;
-  }
-  if (strcpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - bak),
-               "helper.log.1") != 0) {
-    return;
-  }
-  DeleteFileA(bak);
-  MoveFileA(path, bak);
 }
 
 static HANDLE create_singleton_mutex() {
@@ -84,21 +57,10 @@ static void redirect_stdio_to_log() {
   if (!helper_log_path(path, sizeof(path))) {
     return;
   }
-  rotate_helper_log_if_needed(path);
   strcpy_s(g_helper_log_path, path);
-
-  // 为什么：_SH_DENYNO 允许验收时边跑边读；无缓冲避免日志晚到
-  g_helper_log = _fsopen(path, "a", _SH_DENYNO);
-  if (!g_helper_log) {
+  helper_log_open(path);
+  if (g_helper_log == nullptr)
     g_helper_log_path[0] = '\0';
-    return;
-  }
-  setvbuf(g_helper_log, nullptr, _IONBF, 0);
-
-  // 顺带挂 stdout/stderr，便于将来 fprintf(stdout)；主通道仍是 g_helper_log
-  FILE *fp = nullptr;
-  freopen_s(&fp, path, "a", stdout);
-  freopen_s(&fp, path, "a", stderr);
 }
 
 static void print_startup_banner() {
@@ -240,9 +202,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     CloseHandle(g_singleton);
     g_singleton = nullptr;
   }
-  if (g_helper_log) {
-    fclose(g_helper_log);
-    g_helper_log = nullptr;
-  }
+  helper_log_close();
   return 0;
 }
