@@ -292,7 +292,10 @@ DxgiErr dxgi_map_desktop(UINT timeout_ms, DxgiMappedFrame *out) {
   }
 
   if (FAILED(hr) || !resource) {
-    printf("AcquireNextFrame: no valid present after retries\n");
+    // 桌面静止时属常态；frame_loop 只 Sleep(10) 就重试，无节流会刷爆 helper.log
+    static const char kKeyNoPresent[] = "dxgi.acquire.nopresent";
+    helper_log_rate(kKeyNoPresent, kDxgiFailLogPeriodMs,
+                    "AcquireNextFrame: no valid present after retries\n");
     return DxgiErr::AcquireTimeout;
   }
 
