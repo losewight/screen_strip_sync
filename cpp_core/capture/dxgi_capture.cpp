@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 
@@ -14,6 +15,18 @@ static ID3D11Device *g_device = nullptr;
 static ID3D11DeviceContext *g_context = nullptr;
 static IDXGIOutputDuplication *g_duplication = nullptr;
 static ID3D11Texture2D *g_staging = nullptr;
+
+// 当前 duplicate 的那块屏。日志 / 后续 IPC 上报 / 校准蒙版对齐共用。
+// DeviceName 转成 UTF-8 窄字符：helper.log 是字节流，项目开了 /utf-8，
+// 不能 printf("%ls")（宽窄混写会乱码）。
+struct CaptureOutputInfo {
+  char device_name[64]{};
+  RECT desktop{};
+  bool is_primary = false;
+  UINT index = 0;
+  UINT total = 0;
+};
+static CaptureOutputInfo g_output_info{};
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
 static std::atomic<int> g_near_black{0}; // 0..64
@@ -94,6 +107,133 @@ static unsigned half_to_u8(unsigned short h) {
   return (unsigned)(f * 255.f + 0.5f);
 }
 
+static void wide_to_utf8(const WCHAR *wide, char *out, int cap) {
+  if (!out || cap <= 0)
+    return;
+  out[0] = '\0';
+  if (!wide)
+    return;
+  const int n = WideCharToMultiByte(CP_UTF8, 0, wide, -1, out, cap, nullptr,
+                                    nullptr);
+  if (n <= 0)
+    out[0] = '\0';
+}
+
+static bool wanted_is_auto(const char *wanted) {
+  return wanted == nullptr || wanted[0] == '\0' ||
+         std::strcmp(wanted, "auto") == 0;
+}
+
+static void fill_output_info(const DXGI_OUTPUT_DESC &desc, UINT index,
+                             UINT total, CaptureOutputInfo *info) {
+  if (!info)
+    return;
+  *info = CaptureOutputInfo{};
+  wide_to_utf8(desc.DeviceName, info->device_name,
+               (int)sizeof(info->device_name));
+  info->desktop = desc.DesktopCoordinates;
+  // 为什么：Windows 定义主屏左上角即虚拟桌面原点 (0,0)，与上报的
+  // DesktopCoordinates 同源，不必再调 GetMonitorInfo。
+  info->is_primary =
+      desc.DesktopCoordinates.left == 0 && desc.DesktopCoordinates.top == 0;
+  info->index = index;
+  info->total = total;
+}
+
+// 唯一选屏点。匹配顺序（wanted 为空或 "auto" 时跳过第一步）：
+//   1) DXGI_OUTPUT_DESC.DeviceName 精确匹配配置值
+//   2) 主屏 —— DesktopCoordinates 左上角为 (0,0)
+//   3) 序号 0（兜底，不保证是主屏）
+// 为什么走 DeviceName 而不是 index：index 由驱动与接口连接顺序决定，
+// 拔插显示器会漂；DeviceName 稳定。
+// 调用方拿到 *out 后负责 Release。
+static DxgiErr select_capture_output(IDXGIAdapter *adapter, const char *wanted,
+                                     IDXGIOutput1 **out) {
+  if (!out)
+    return DxgiErr::NoOutput;
+  *out = nullptr;
+  if (!adapter)
+    return DxgiErr::NoOutput;
+
+  const bool want_named = !wanted_is_auto(wanted);
+  int match_i = -1;
+  int primary_i = -1;
+  UINT total = 0;
+
+  for (UINT i = 0;; ++i) {
+    IDXGIOutput *output = nullptr;
+    const HRESULT hr = adapter->EnumOutputs(i, &output);
+    if (hr == DXGI_ERROR_NOT_FOUND)
+      break;
+    if (FAILED(hr) || !output) {
+      printf("EnumOutputs(%u) failed: 0x%08lx\n", i, (unsigned long)hr);
+      break;
+    }
+    DXGI_OUTPUT_DESC desc{};
+    if (SUCCEEDED(output->GetDesc(&desc))) {
+      char name[64]{};
+      wide_to_utf8(desc.DeviceName, name, (int)sizeof(name));
+      if (want_named && match_i < 0 && std::strcmp(name, wanted) == 0)
+        match_i = (int)i;
+      if (primary_i < 0 && desc.DesktopCoordinates.left == 0 &&
+          desc.DesktopCoordinates.top == 0)
+        primary_i = (int)i;
+    }
+    output->Release();
+    ++total;
+  }
+
+  if (total == 0)
+    return DxgiErr::NoOutput;
+
+  if (want_named && match_i < 0)
+    printf("capture output '%s' not found, fallback primary/index0\n", wanted);
+
+  UINT pick = 0;
+  if (match_i >= 0)
+    pick = (UINT)match_i;
+  else if (primary_i >= 0)
+    pick = (UINT)primary_i;
+
+  IDXGIOutput *output = nullptr;
+  HRESULT hr = adapter->EnumOutputs(pick, &output);
+  if (FAILED(hr) || !output) {
+    printf("EnumOutputs(%u) retry failed: 0x%08lx\n", pick,
+           (unsigned long)hr);
+    return DxgiErr::NoOutput;
+  }
+
+  DXGI_OUTPUT_DESC desc{};
+  const HRESULT desc_hr = output->GetDesc(&desc);
+
+  IDXGIOutput1 *output1 = nullptr;
+  hr = output->QueryInterface(__uuidof(IDXGIOutput1), (void **)&output1);
+  output->Release();
+  output = nullptr;
+  if (FAILED(hr) || !output1) {
+    printf("QueryInterface IDXGIOutput1 failed: 0x%08lx\n", (unsigned long)hr);
+    return DxgiErr::DuplicateFailed;
+  }
+
+  if (SUCCEEDED(desc_hr))
+    fill_output_info(desc, pick, total, &g_output_info);
+  else
+    g_output_info = CaptureOutputInfo{};
+
+  *out = output1;
+  return DxgiErr::Ok;
+}
+
+static void log_capture_output() {
+  const RECT &r = g_output_info.desktop;
+  const int w = r.right - r.left;
+  const int h = r.bottom - r.top;
+  printf("capture output: %s %dx%d at (%d,%d)%s index=%u/%u\n",
+         g_output_info.device_name[0] ? g_output_info.device_name : "?", w, h,
+         (int)r.left, (int)r.top, g_output_info.is_primary ? " primary" : "",
+         g_output_info.index, g_output_info.total);
+}
+
 DxgiErr dxgi_init() {
   // 为什么：失败半截或休眠 teardown 后再 init，必须先清干净再重建
   if (g_device || g_context || g_duplication || g_staging)
@@ -134,24 +274,16 @@ DxgiErr dxgi_init() {
     return DxgiErr::QueryDxgiFailed;
   }
 
-  IDXGIOutput *output = nullptr;
-  hr = adapter->EnumOutputs(0, &output); // 0 = 主显示器
+  // wanted 空 = auto：先主屏再序号 0。配置字段 M2 再接到这里。
+  IDXGIOutput1 *output1 = nullptr;
+  const DxgiErr sel =
+      select_capture_output(adapter, nullptr, &output1);
   adapter->Release();
   adapter = nullptr;
-  if (FAILED(hr) || !output) {
-    printf("EnumOutputs(0) failed: 0x%08lx\n", (unsigned long)hr);
+  if (sel != DxgiErr::Ok || !output1) {
+    printf("select_capture_output failed: %d\n", (int)sel);
     dxgi_shutdown();
-    return DxgiErr::NoOutput;
-  }
-
-  IDXGIOutput1 *output1 = nullptr;
-  hr = output->QueryInterface(__uuidof(IDXGIOutput1), (void **)&output1);
-  output->Release();
-  output = nullptr;
-  if (FAILED(hr) || !output1) {
-    printf("QueryInterface IDXGIOutput1 failed: 0x%08lx\n", (unsigned long)hr);
-    dxgi_shutdown();
-    return DxgiErr::DuplicateFailed;
+    return sel != DxgiErr::Ok ? sel : DxgiErr::NoOutput;
   }
 
   // 为什么：DuplicateOutput 要绑定「创建桌面复制的那个 D3D 设备」
@@ -165,6 +297,7 @@ DxgiErr dxgi_init() {
   }
 
   printf("DuplicateOutput ok\n");
+  log_capture_output();
   return DxgiErr::Ok;
 }
 
@@ -538,6 +671,7 @@ void dxgi_shutdown() {
     g_device->Release();
     g_device = nullptr;
   }
+  g_output_info = {};
 }
 
 bool dxgi_is_ready() { return g_device != nullptr && g_duplication != nullptr; }
