@@ -35,3 +35,5 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
 // 采样可调参；IPC 经 engine_set_* 转发。内部 clamp。
 void dxgi_set_near_black(int v); // 0..64，默认 0
 void dxgi_set_blur(int v);       // 0..8，默认 0；0=不扩邻域
+// 下次 dxgi_init 用的目标屏；空 / "auto" = 主屏再序号 0。不立刻换屏。
+void dxgi_set_capture_output(const char *wanted);

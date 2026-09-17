@@ -5,6 +5,7 @@
 #include "config_json.h"
 
 #include "autostart.h"
+#include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "light_engine.h"
 #include "wall_comp.h"
@@ -171,9 +172,10 @@ void config_load() {
       printf("config_load: serialConfigured inferred=%d from lastCom\n",
              fresh.serialConfigured ? 1 : 0);
     }
-    printf("config_load: ok com=%s serialConfigured=%d alpha=%.3f\n",
+    printf("config_load: ok com=%s serialConfigured=%d alpha=%.3f capture=%s\n",
            fresh.comPort, fresh.serialConfigured ? 1 : 0,
-           (double)fresh.emaAlpha);
+           (double)fresh.emaAlpha,
+           fresh.captureOutput[0] ? fresh.captureOutput : "(auto)");
   } else {
     printf("config_load: parse fail, defaults\n");
     fresh = HelperConfig{};
@@ -213,6 +215,14 @@ void config_apply() {
     engine_set_wall_color(c.wallColor);
   else
     engine_clear_wall_color();
+  // 为什么：必须在 dxgi_init 之前生效；ACCESS_LOST 重建读的是这份 wanted
+  {
+    char capture[64];
+    clamp_capture_output(c.captureOutput, capture, (int)sizeof(capture));
+    dxgi_set_capture_output(capture);
+    std::lock_guard<std::mutex> lock(g_mu);
+    snprintf(g_cfg.captureOutput, sizeof(g_cfg.captureOutput), "%s", capture);
+  }
   if (!engine_set_com(c.comPort)) {
     printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
     engine_set_com("COM10");
@@ -331,6 +341,17 @@ void config_set_com(const char *com) {
   {
     std::lock_guard<std::mutex> lock(g_mu);
     snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "%s", com);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_capture_output(const char *name) {
+  char clamped[64];
+  clamp_capture_output(name, clamped, (int)sizeof(clamped));
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    snprintf(g_cfg.captureOutput, sizeof(g_cfg.captureOutput), "%s", clamped);
     mark_dirty_unlocked();
   }
   ensure_saver_started();

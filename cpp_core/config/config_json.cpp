@@ -382,6 +382,12 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
         return false;
       if (s[0] != '\0')
         snprintf(cfg->comPort, sizeof(cfg->comPort), "%s", s);
+    } else if (strcmp(key, "captureOutput") == 0) {
+      // 大缓冲再截断：超长名字不能让整份 JSON 解析失败
+      char s[256];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      clamp_capture_output(s, cfg->captureOutput, (int)sizeof(cfg->captureOutput));
     } else if (strcmp(key, "lastConnectedCom") == 0) {
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
@@ -555,6 +561,9 @@ std::string config_format_json(const HelperConfig &c) {
 
   o.append("  \"comPort\": ");
   append_escaped(&o, c.comPort);
+  o.append(",\n");
+  o.append("  \"captureOutput\": ");
+  append_escaped(&o, c.captureOutput);
   o.append(",\n");
   o.append("  \"lastConnectedCom\": ");
   append_escaped(&o, c.lastConnectedCom);

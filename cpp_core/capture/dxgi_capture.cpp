@@ -27,6 +27,8 @@ struct CaptureOutputInfo {
   UINT total = 0;
 };
 static CaptureOutputInfo g_output_info{};
+// 配置要抓的屏；shutdown 不清，ACCESS_LOST 重建仍按这个名字匹配。
+static char g_wanted_output[64] = "";
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
 static std::atomic<int> g_near_black{0}; // 0..64
@@ -72,6 +74,14 @@ void dxgi_set_blur(int v) {
   if (v > 8)
     v = 8;
   g_blur_step.store(v);
+}
+
+void dxgi_set_capture_output(const char *wanted) {
+  if (!wanted) {
+    g_wanted_output[0] = '\0';
+    return;
+  }
+  snprintf(g_wanted_output, sizeof(g_wanted_output), "%s", wanted);
 }
 
 // 为什么：真桌面 format 不固定；按 format 算每像素字节数，才能和 RowPitch
@@ -274,10 +284,9 @@ DxgiErr dxgi_init() {
     return DxgiErr::QueryDxgiFailed;
   }
 
-  // wanted 空 = auto：先主屏再序号 0。配置字段 M2 再接到这里。
   IDXGIOutput1 *output1 = nullptr;
   const DxgiErr sel =
-      select_capture_output(adapter, nullptr, &output1);
+      select_capture_output(adapter, g_wanted_output, &output1);
   adapter->Release();
   adapter = nullptr;
   if (sel != DxgiErr::Ok || !output1) {

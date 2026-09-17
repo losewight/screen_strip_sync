@@ -68,3 +68,24 @@ inline bool valid_region_bbox(int l, int t, int w, int h) {
 inline bool valid_rect(float x0, float y0, float x1, float y1) {
   return x0 >= 0.f && y0 >= 0.f && x1 <= 1.f && y1 <= 1.f && x0 < x1 && y0 < y1;
 }
+// 长度截断；空串归一为 auto。名字合不合法交给 select_capture_output 回退。
+inline void clamp_capture_output(const char *in, char *out, int cap) {
+  if (!out || cap <= 0)
+    return;
+  if (!in || in[0] == '\0') {
+    if (cap >= 5) {
+      out[0] = 'a';
+      out[1] = 'u';
+      out[2] = 't';
+      out[3] = 'o';
+      out[4] = '\0';
+    } else {
+      out[0] = '\0';
+    }
+    return;
+  }
+  int i = 0;
+  for (; in[i] && i + 1 < cap; ++i)
+    out[i] = in[i];
+  out[i] = '\0';
+}
