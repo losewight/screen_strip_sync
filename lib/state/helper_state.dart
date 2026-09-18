@@ -205,10 +205,16 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  /// 壳层「后台服务未响应」的重试：再连 IPC / 再要一份 cfg 快照。
-  Future<void> retrySnapshot() async {
+  /// 壳层「后台服务未运行」：自动重试与按钮共用；进行中合并成一次。
+  /// 成功前不把 snapshotTimedOut 拉回 false，避免整页在转圈和操作页之间闪。
+  Future<void> retrySnapshot() {
+    return _retrySnapshotInFlight ??= _retrySnapshotBody().whenComplete(() {
+      _retrySnapshotInFlight = null;
+    });
+  }
+
+  Future<void> _retrySnapshotBody() async {
     _patch(
-      snapshotTimedOut: false,
       message: '正在连接后台服务…',
       phase: state.phase == HelperPhase.failed
           ? HelperPhase.disconnected
@@ -216,8 +222,9 @@ class HelperStateNotifier extends _HelperStateBase
     );
     if (!_client.isConnected) {
       await ensureHelperConnected();
-      return;
     }
+    if (!_client.isConnected) return;
+    if (ref.read(configProvider.notifier).hasSnapshot) return;
     try {
       _sendIpc('sync');
     } catch (e) {

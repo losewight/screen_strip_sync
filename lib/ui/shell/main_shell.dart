@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
@@ -18,7 +20,7 @@ import '../widgets/strip_status_bar.dart';
 
 /// 顶栏 + 侧栏 + 内容区。进度条单实例挂壳层，切页不重建。
 ///
-/// 首帧等 helper `cfg end`：未就绪时 loading，超时显示「后台服务未响应」+ 重试。
+/// 首帧等 helper `cfg end`：未就绪时 loading，超时显示「后台服务未运行」+ 启动。
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -56,9 +58,8 @@ class _MainShellState extends ConsumerState<MainShell> {
             Expanded(
               child: snapshotTimedOut
                   ? _SnapshotUnresponsive(
-                      onRetry: () {
-                        ref.read(helperStateProvider.notifier).retrySnapshot();
-                      },
+                      onRetry: () =>
+                          ref.read(helperStateProvider.notifier).retrySnapshot(),
                     )
                   : const _SnapshotLoading(),
             ),
@@ -184,10 +185,31 @@ class _SnapshotLoading extends StatelessWidget {
   }
 }
 
-class _SnapshotUnresponsive extends StatelessWidget {
+class _SnapshotUnresponsive extends StatefulWidget {
   const _SnapshotUnresponsive({required this.onRetry});
 
-  final VoidCallback onRetry;
+  final Future<void> Function() onRetry;
+
+  @override
+  State<_SnapshotUnresponsive> createState() => _SnapshotUnresponsiveState();
+}
+
+class _SnapshotUnresponsiveState extends State<_SnapshotUnresponsive> {
+  static const _retryGap = Duration(seconds: 2);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_autoRetryLoop());
+  }
+
+  Future<void> _autoRetryLoop() async {
+    while (mounted) {
+      await widget.onRetry();
+      if (!mounted) return;
+      await Future<void>.delayed(_retryGap);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,13 +222,13 @@ class _SnapshotUnresponsive extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
-                Icons.cloud_off_outlined,
+                Icons.desktop_access_disabled,
                 size: 40,
                 color: AppTheme.textSecondary,
               ),
               const SizedBox(height: AppSpacing.text),
               const Text(
-                '后台服务未响应',
+                '后台服务未运行',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: AppTheme.fontFamily,
@@ -217,7 +239,7 @@ class _SnapshotUnresponsive extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.compact),
               const Text(
-                '灯带后台可能还没起来。确认 helper 已运行后点重试。',
+                '灯光由本机托盘程序控制。正在自动尝试启动，也可以点下面按钮。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: AppTheme.fontFamily,
@@ -227,8 +249,8 @@ class _SnapshotUnresponsive extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.section),
               FilledButton(
-                onPressed: onRetry,
-                child: const Text('重试'),
+                onPressed: () => unawaited(widget.onRetry()),
+                child: const Text('启动后台服务'),
               ),
             ],
           ),
