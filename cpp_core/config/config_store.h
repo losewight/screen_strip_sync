@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "segment_map.h"
 
@@ -15,7 +15,7 @@ struct RegionBBox {
 // 与 Dart AppConfig  JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
   float emaAlpha = 1.f; // UI 平滑度 = 1−α；默认 0 → α=1（跟得最快）
-  int nearBlack = 0;
+  int nearBlack = 15; // 0..64；越大越忽略黑边
   int blurStep = 0;
   float saturation = 1.2f; // 0.5..2；1=原色，默认 120%
   char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容

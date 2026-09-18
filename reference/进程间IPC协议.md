@@ -35,7 +35,7 @@
 | `quit` | 关闭后台服务：关灯 → 停引擎 → 关串口 → helper 退出 |
 | `reconnect` | 关闭串口并重试就绪（最多约 10 次） |
 | `set alpha <0.05..1>` | map EMA α |
-| `set near_black <0..64>` | map 近黑丢弃阈值；默认 12 |
+| `set near_black <0..64>` | map 近黑丢弃阈值；默认 15 |
 | `set blur <0..8>` | map 邻域半宽；默认 2 |
 | `set saturation <0.5..2>` | map 饱和度增益；默认 1.4 |
 | `set mode a\|b` | 已废弃，仅兼容旧配置 |
