@@ -16,16 +16,9 @@ static ID3D11DeviceContext *g_context = nullptr;
 static IDXGIOutputDuplication *g_duplication = nullptr;
 static ID3D11Texture2D *g_staging = nullptr;
 
-// 当前 duplicate 的那块屏。日志 / 后续 IPC 上报 / 校准蒙版对齐共用。
+// 当前 duplicate 的那块屏。日志 / IPC 上报 / 校准蒙版对齐共用。
 // DeviceName 转成 UTF-8 窄字符：helper.log 是字节流，项目开了 /utf-8，
 // 不能 printf("%ls")（宽窄混写会乱码）。
-struct CaptureOutputInfo {
-  char device_name[64]{};
-  RECT desktop{};
-  bool is_primary = false;
-  UINT index = 0;
-  UINT total = 0;
-};
 static CaptureOutputInfo g_output_info{};
 // 配置要抓的屏；shutdown 不清，ACCESS_LOST 重建仍按这个名字匹配。
 static char g_wanted_output[64] = "";
@@ -684,3 +677,51 @@ void dxgi_shutdown() {
 }
 
 bool dxgi_is_ready() { return g_device != nullptr && g_duplication != nullptr; }
+
+bool dxgi_current_output(CaptureOutputInfo *out) {
+  if (!out)
+    return false;
+  if (!dxgi_is_ready() || g_output_info.device_name[0] == '\0')
+    return false;
+  *out = g_output_info;
+  return true;
+}
+
+UINT dxgi_enum_outputs(CaptureOutputInfo *out, UINT cap) {
+  if (!out || cap == 0 || !g_device)
+    return 0;
+
+  IDXGIDevice *dxgi_device = nullptr;
+  HRESULT hr =
+      g_device->QueryInterface(__uuidof(IDXGIDevice), (void **)&dxgi_device);
+  if (FAILED(hr) || !dxgi_device)
+    return 0;
+
+  IDXGIAdapter *adapter = nullptr;
+  hr = dxgi_device->GetParent(__uuidof(IDXGIAdapter), (void **)&adapter);
+  dxgi_device->Release();
+  dxgi_device = nullptr;
+  if (FAILED(hr) || !adapter)
+    return 0;
+
+  UINT n = 0;
+  for (UINT i = 0; n < cap; ++i) {
+    IDXGIOutput *output = nullptr;
+    hr = adapter->EnumOutputs(i, &output);
+    if (hr == DXGI_ERROR_NOT_FOUND)
+      break;
+    if (FAILED(hr) || !output)
+      break;
+    DXGI_OUTPUT_DESC desc{};
+    if (SUCCEEDED(output->GetDesc(&desc))) {
+      fill_output_info(desc, i, 0, &out[n]);
+      ++n;
+    }
+    output->Release();
+  }
+  adapter->Release();
+
+  for (UINT i = 0; i < n; ++i)
+    out[i].total = n;
+  return n;
+}

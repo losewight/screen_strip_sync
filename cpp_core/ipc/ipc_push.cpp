@@ -3,6 +3,7 @@
 #include <ws2tcpip.h>
 
 #include "config_store.h"
+#include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
@@ -61,6 +62,34 @@ void send_display_status(SOCKET client) {
   }
 }
 
+static void send_capture_status(SOCKET client) {
+  CaptureOutputInfo cur{};
+  const bool has_cur = dxgi_current_output(&cur);
+  if (has_cur) {
+    const int w = cur.desktop.right - cur.desktop.left;
+    const int h = cur.desktop.bottom - cur.desktop.top;
+    send_line(client, "status capture_output %s %dx%d %d,%d\n", cur.device_name,
+              w, h, (int)cur.desktop.left, (int)cur.desktop.top);
+  }
+
+  CaptureOutputInfo list[16];
+  const UINT n = dxgi_enum_outputs(list, 16);
+  send_line(client, "status outputs %u\n", n);
+  for (UINT i = 0; i < n; ++i) {
+    const RECT &r = list[i].desktop;
+    const int w = r.right - r.left;
+    const int h = r.bottom - r.top;
+    const int is_cur =
+        (has_cur && std::strcmp(list[i].device_name, cur.device_name) == 0) ? 1
+                                                                           : 0;
+    send_line(client, "status output %u %s %dx%d %d,%d %d %d\n", list[i].index,
+              list[i].device_name, w, h, (int)r.left, (int)r.top,
+              list[i].is_primary ? 1 : 0, is_cur);
+  }
+  printf("ipc: capture_output %s outputs=%u\n",
+         has_cur ? cur.device_name : "(none)", n);
+}
+
 void push_runtime_status(SOCKET client, bool include_com) {
   if (include_com) {
     char com[16];
@@ -69,6 +98,7 @@ void push_runtime_status(SOCKET client, bool include_com) {
   }
   send_engine_status(client);
   send_display_status(client);
+  send_capture_status(client);
 }
 
 static void format_scene(char *out, size_t cap) {
@@ -103,6 +133,8 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg saturation %.2f\n", (double)c.saturation);
   send_line(client, "cfg mode %c\n", c.mode);
   send_line(client, "cfg com %s\n", c.comPort);
+  send_line(client, "cfg capture_output %s\n",
+            c.captureOutput[0] ? c.captureOutput : "auto");
   send_line(client, "cfg last_com %s\n", c.lastConnectedCom);
   send_line(client, "cfg serial_configured %d\n", c.serialConfigured ? 1 : 0);
   send_line(client, "cfg sleep_sync %d\n", c.autoSleepSync ? 1 : 0);
@@ -174,6 +206,7 @@ void push_config_snapshot(SOCKET client) {
     send_status(client, "reconnect_fail");
     send_engine_status(client);
     send_display_status(client);
+    send_capture_status(client);
   }
 }
 

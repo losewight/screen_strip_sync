@@ -37,3 +37,19 @@ void dxgi_set_near_black(int v); // 0..64，默认 0
 void dxgi_set_blur(int v);       // 0..8，默认 0；0=不扩邻域
 // 下次 dxgi_init 用的目标屏；空 / "auto" = 主屏再序号 0。不立刻换屏。
 void dxgi_set_capture_output(const char *wanted);
+
+// DeviceName 已转 UTF-8（如 \\.\DISPLAY1）；desktop 是虚拟桌面物理像素。
+struct CaptureOutputInfo {
+  char device_name[64]{};
+  RECT desktop{};
+  bool is_primary = false;
+  UINT index = 0;
+  UINT total = 0;
+};
+
+// 当前 duplicate 的那块（auto 解析后的结果）。未就绪返回 false。
+bool dxgi_current_output(CaptureOutputInfo *out);
+// 现场枚举当前 D3D 设备所在 adapter 的 output。返回写入条数（≤ cap）。
+// 为什么：混合显卡上 Flutter 能看见的屏不一定能 Duplicate；蒙版矩形须与
+// duplication 同源。
+UINT dxgi_enum_outputs(CaptureOutputInfo *out, UINT cap);
