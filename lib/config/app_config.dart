@@ -25,6 +25,7 @@ class AppConfig {
     this.saturation = 1.2,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
+    this.captureOutput = 'auto',
     this.lastConnectedCom = '',
     this.serialConfigured = false,
     this.autoSleepSync = true,
@@ -58,6 +59,9 @@ class AppConfig {
 
   /// 串口名，如 `COM10`；下拉/手输的当前选中。
   final String comPort;
+
+  /// DXGI 抓屏目标；`auto` = 主屏再序号 0，否则为 DeviceName（如 `\\.\DISPLAY1`）。
+  final String captureOutput;
 
   /// helper 曾成功打开的口；空表示从未连上过，不走快速连接。
   final String lastConnectedCom;
@@ -117,6 +121,7 @@ class AppConfig {
     double? saturation,
     ColorMode? mode,
     String? comPort,
+    String? captureOutput,
     String? lastConnectedCom,
     bool? serialConfigured,
     bool? autoSleepSync,
@@ -141,6 +146,7 @@ class AppConfig {
       saturation: saturation ?? this.saturation,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
+      captureOutput: captureOutput ?? this.captureOutput,
       lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
       serialConfigured: serialConfigured ?? this.serialConfigured,
       autoSleepSync: autoSleepSync ?? this.autoSleepSync,
@@ -169,6 +175,7 @@ class AppConfig {
     var saturation = 1.2;
     var mode = ColorMode.a;
     var com = 'COM10';
+    var capture = 'auto';
     var lastCom = '';
     var serialConfigured = false;
     var sleepSync = true;
@@ -217,6 +224,8 @@ class AppConfig {
           };
         case 'com':
           if (val.isNotEmpty) com = val;
+        case 'capture_output':
+          if (val.isNotEmpty) capture = val;
         case 'last_com':
           lastCom = val;
         case 'serial_configured':
@@ -280,6 +289,7 @@ class AppConfig {
       saturation: saturation,
       mode: mode,
       comPort: com,
+      captureOutput: capture,
       lastConnectedCom: lastCom,
       serialConfigured: serialConfigured,
       autoSleepSync: sleepSync,

@@ -13,6 +13,8 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
   String? _pendingSolid;
   Timer? _solidTimer;
   String? _lastSentSolid;
+  int _outputsExpect = 0;
+  final List<CaptureOutputInfo> _outputsBuf = [];
 
   HelperClient get _client => ref.read(helperClientProvider);
 
@@ -26,6 +28,9 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     bool? isScanningPorts,
     bool? engineRunning,
     bool? snapshotTimedOut,
+    List<CaptureOutputInfo>? captureOutputs,
+    CaptureOutputInfo? currentCapture,
+    bool clearCurrentCapture = false,
   }) {
     state = HelperUiState(
       phase: phase ?? state.phase,
@@ -37,6 +42,10 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
       isScanningPorts: isScanningPorts ?? state.isScanningPorts,
       engineRunning: engineRunning ?? state.engineRunning,
       snapshotTimedOut: snapshotTimedOut ?? state.snapshotTimedOut,
+      captureOutputs: captureOutputs ?? state.captureOutputs,
+      currentCapture: clearCurrentCapture
+          ? null
+          : (currentCapture ?? state.currentCapture),
     );
   }
 

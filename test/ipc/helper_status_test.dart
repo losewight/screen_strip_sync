@@ -114,6 +114,41 @@ void main() {
       expect(tryParseStatusLine('status display other'), isNull);
     });
 
+    test('parses status capture_output and output list', () {
+      expect(
+        tryParseStatusLine(r'status capture_output \\.\DISPLAY1 2560x1440 0,0'),
+        isA<HelperStatusCaptureOutput>()
+            .having((e) => e.name, 'name', r'\\.\DISPLAY1')
+            .having((e) => e.width, 'width', 2560)
+            .having((e) => e.height, 'height', 1440)
+            .having((e) => e.left, 'left', 0)
+            .having((e) => e.top, 'top', 0),
+      );
+      expect(
+        tryParseStatusLine(r'status capture_output \\.\DISPLAY2 1920x1080 2560,-200'),
+        isA<HelperStatusCaptureOutput>()
+            .having((e) => e.left, 'left', 2560)
+            .having((e) => e.top, 'top', -200),
+      );
+      expect(
+        tryParseStatusLine('status outputs 2'),
+        isA<HelperStatusOutputsCount>().having((e) => e.count, 'count', 2),
+      );
+      expect(
+        tryParseStatusLine(
+          r'status output 1 \\.\DISPLAY2 1920x1080 2560,0 0 1',
+        ),
+        isA<HelperStatusOutput>()
+            .having((e) => e.index, 'index', 1)
+            .having((e) => e.name, 'name', r'\\.\DISPLAY2')
+            .having((e) => e.isPrimary, 'isPrimary', isFalse)
+            .having((e) => e.isCurrent, 'isCurrent', isTrue),
+      );
+      expect(tryParseStatusLine('status capture_output'), isNull);
+      expect(tryParseStatusLine('status outputs'), isNull);
+      expect(tryParseStatusLine('status output'), isNull);
+    });
+
     test('ignores unknown key-value pairs', () {
       expect(tryParseStatusLine('status foo bar'), isNull);
     });

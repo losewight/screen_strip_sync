@@ -42,6 +42,53 @@ final class HelperStatusDisplay extends HelperStatusEvent {
   final HelperDisplayKind kind;
 }
 
+/// 当前真正 duplicate 的那块屏：`status capture_output NAME WxH L,T`
+final class HelperStatusCaptureOutput extends HelperStatusEvent {
+  const HelperStatusCaptureOutput({
+    required this.name,
+    required this.width,
+    required this.height,
+    required this.left,
+    required this.top,
+  });
+
+  final String name;
+  final int width;
+  final int height;
+  final int left;
+  final int top;
+}
+
+/// `status outputs <n>`：随后紧跟 n 条 [HelperStatusOutput]。
+final class HelperStatusOutputsCount extends HelperStatusEvent {
+  const HelperStatusOutputsCount(this.count);
+
+  final int count;
+}
+
+/// 一条可 duplicate 的屏：`status output i NAME WxH L,T primary current`
+final class HelperStatusOutput extends HelperStatusEvent {
+  const HelperStatusOutput({
+    required this.index,
+    required this.name,
+    required this.width,
+    required this.height,
+    required this.left,
+    required this.top,
+    required this.isPrimary,
+    required this.isCurrent,
+  });
+
+  final int index;
+  final String name;
+  final int width;
+  final int height;
+  final int left;
+  final int top;
+  final bool isPrimary;
+  final bool isCurrent;
+}
+
 HelperStatusWord parseHelperStatusWord(String word) {
   return switch (word) {
     'ready' => HelperStatusWord.ready,
@@ -71,8 +118,15 @@ HelperStatusEvent? tryParseStatusLine(String line) {
 
   final space = rest.indexOf(' ');
   if (space < 0) {
-    // 缺参的 com/engine/display 不算相位词
-    if (rest == 'com' || rest == 'engine' || rest == 'display') return null;
+    // 缺参的 kv 不算相位词
+    if (rest == 'com' ||
+        rest == 'engine' ||
+        rest == 'display' ||
+        rest == 'capture_output' ||
+        rest == 'outputs' ||
+        rest == 'output') {
+      return null;
+    }
     return HelperStatusPhase(parseHelperStatusWord(rest));
   }
 
@@ -89,5 +143,49 @@ HelperStatusEvent? tryParseStatusLine(String line) {
     final kind = parseHelperDisplayKind(value);
     if (kind != null) return HelperStatusDisplay(kind);
   }
+  if (key == 'capture_output') {
+    return _parseCaptureOutput(value);
+  }
+  if (key == 'outputs') {
+    final n = int.tryParse(value);
+    if (n != null && n >= 0) return HelperStatusOutputsCount(n);
+  }
+  if (key == 'output') {
+    return _parseOutput(value);
+  }
   return null;
+}
+
+final _captureOutputRest = RegExp(
+  r'^(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)$',
+);
+final _outputRest = RegExp(
+  r'^(\d+)\s+(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)\s+([01])\s+([01])$',
+);
+
+HelperStatusCaptureOutput? _parseCaptureOutput(String value) {
+  final m = _captureOutputRest.firstMatch(value);
+  if (m == null) return null;
+  return HelperStatusCaptureOutput(
+    name: m.group(1)!,
+    width: int.parse(m.group(2)!),
+    height: int.parse(m.group(3)!),
+    left: int.parse(m.group(4)!),
+    top: int.parse(m.group(5)!),
+  );
+}
+
+HelperStatusOutput? _parseOutput(String value) {
+  final m = _outputRest.firstMatch(value);
+  if (m == null) return null;
+  return HelperStatusOutput(
+    index: int.parse(m.group(1)!),
+    name: m.group(2)!,
+    width: int.parse(m.group(3)!),
+    height: int.parse(m.group(4)!),
+    left: int.parse(m.group(5)!),
+    top: int.parse(m.group(6)!),
+    isPrimary: m.group(7) == '1',
+    isCurrent: m.group(8) == '1',
+  );
 }

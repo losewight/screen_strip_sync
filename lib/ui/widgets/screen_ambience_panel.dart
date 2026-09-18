@@ -41,6 +41,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
     final box = cfg.regionBBox;
     // 与屏幕跟色平滑度滑条同粒度：0..0.95 / divisions:19。
     final regionSmoothUi = cfg.regionSmooth.clamp(0.0, 0.95);
+    final follow = ui.followCaptureLabel(cfg.captureOutput);
 
     return Center(
       child: SingleChildScrollView(
@@ -69,24 +70,39 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '取色区域',
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      FilledButton.icon(
-                        onPressed: canEdit
-                            ? () => _pickRegionBBox(context, ref)
-                            : null,
-                        icon: const Icon(Icons.content_cut, size: 18),
-                        label: const Text('划定取色区域'),
+                      Row(
+                        children: [
+                          FilledButton.icon(
+                            onPressed: canEdit
+                                ? () => _pickRegionBBox(context, ref)
+                                : null,
+                            icon: const Icon(Icons.content_cut, size: 18),
+                            label: const Text('划定取色区域'),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '尺寸: ${box.w}%×${box.h}%',
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      Text(
-                        '尺寸: ${box.w}%×${box.h}%',
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
+                      if (follow != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSpacing.text,
+                          ),
+                          child: Text(
+                            '当前跟随 $follow',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

@@ -12,6 +12,12 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         _onStatusEngine(running);
       case HelperStatusDisplay(:final kind):
         _onStatusDisplay(kind);
+      case HelperStatusCaptureOutput():
+        _onStatusCaptureOutput(event);
+      case HelperStatusOutputsCount(:final count):
+        _onStatusOutputsCount(count);
+      case HelperStatusOutput():
+        _onStatusOutput(event);
     }
   }
 
@@ -176,6 +182,47 @@ mixin _HelperStatusHandlers on _HelperStateBase {
     return '串口就绪（$com）';
   }
 
+  void _onStatusCaptureOutput(HelperStatusCaptureOutput e) {
+    _patch(
+      currentCapture: CaptureOutputInfo(
+        name: e.name,
+        width: e.width,
+        height: e.height,
+        left: e.left,
+        top: e.top,
+        isCurrent: true,
+      ),
+    );
+  }
+
+  void _onStatusOutputsCount(int count) {
+    _outputsExpect = count;
+    _outputsBuf.clear();
+    if (count == 0) {
+      _patch(captureOutputs: const []);
+    }
+  }
+
+  void _onStatusOutput(HelperStatusOutput e) {
+    if (_outputsExpect <= 0) return;
+    _outputsBuf.add(
+      CaptureOutputInfo(
+        name: e.name,
+        width: e.width,
+        height: e.height,
+        left: e.left,
+        top: e.top,
+        isPrimary: e.isPrimary,
+        isCurrent: e.isCurrent,
+      ),
+    );
+    if (_outputsBuf.length >= _outputsExpect) {
+      _patch(captureOutputs: List<CaptureOutputInfo>.unmodifiable(_outputsBuf));
+      _outputsExpect = 0;
+      _outputsBuf.clear();
+    }
+  }
+
   // 由 HelperStateNotifier 实现（UI 改参时下发）。
   void sendEmaAlpha(double alpha);
   void sendNearBlack(int nearBlack);
@@ -183,6 +230,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendSaturation(double saturation);
   void sendMode(ColorMode mode);
   void sendComPort(String port);
+  void sendCaptureOutput(String name);
   void sendSleepSync(bool enabled);
   void sendAutostart(bool enabled);
   void sendShutdownOff(bool enabled);

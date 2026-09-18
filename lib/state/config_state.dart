@@ -103,6 +103,12 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(comPort: value.trim());
   }
 
+  void setCaptureOutput(String value) {
+    final name = value.trim();
+    if (name.isEmpty) return;
+    state = state.copyWith(captureOutput: name);
+  }
+
   /// helper `status com` / 快照后的内存更新；不写盘。
   void setLastConnectedCom(String value) {
     final name = value.trim();

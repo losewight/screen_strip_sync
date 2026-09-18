@@ -22,6 +22,7 @@ class ScreenSyncPanel extends ConsumerWidget {
     final canEdit = can && ref.watch(configReadyProvider);
     // 与 regionSmooth 同概念、极性相反：UI 平滑度 = 1 − α（α∈[0.05,1] → 平滑∈[0,0.95]）。
     final smooth = (1.0 - cfg.emaAlpha).clamp(0.0, 0.95);
+    final follow = ui.followCaptureLabel(cfg.captureOutput);
 
     return Center(
       child: SingleChildScrollView(
@@ -56,7 +57,22 @@ class ScreenSyncPanel extends ConsumerWidget {
                         '把每段灯珠映射到对应画面位置，\n'
                         '用于跟色采样；未校准时按顶边均分。',
                   ),
-                  child: const SegmentMapCalibrator(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (follow != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: AppSpacing.text,
+                          ),
+                          child: Text(
+                            '当前跟随 $follow',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      const SegmentMapCalibrator(),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(

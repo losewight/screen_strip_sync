@@ -26,6 +26,7 @@ void main() {
       expect(cfg.saturation, 1.60);
       expect(cfg.mode, ColorMode.b);
       expect(cfg.comPort, 'COM7');
+      expect(cfg.captureOutput, 'auto');
       expect(cfg.lastConnectedCom, 'COM7');
       expect(cfg.serialConfigured, isTrue);
       expect(cfg.autoSleepSync, isFalse);
@@ -43,6 +44,7 @@ void main() {
       expect(cfg.saturation, 1.2);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
+      expect(cfg.captureOutput, 'auto');
       expect(cfg.lastConnectedCom, '');
       expect(cfg.serialConfigured, isFalse);
       expect(cfg.autoSleepSync, isTrue);
@@ -69,6 +71,19 @@ void main() {
           'cfg serial_configured 1',
         ]).serialConfigured,
         isTrue,
+      );
+    });
+
+    test('parses capture_output auto and device name', () {
+      expect(
+        AppConfig.fromCfgLines(const ['cfg capture_output auto']).captureOutput,
+        'auto',
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          r'cfg capture_output \\.\DISPLAY2',
+        ]).captureOutput,
+        r'\\.\DISPLAY2',
       );
     });
 

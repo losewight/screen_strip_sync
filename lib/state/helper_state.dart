@@ -24,6 +24,8 @@ class HelperStateNotifier extends _HelperStateBase
     _disconnectSub ??= _client.disconnectStream.listen((_) {
       _cancelPendingSolid();
       _lastDisplay = HelperDisplayKind.idle;
+      _outputsExpect = 0;
+      _outputsBuf.clear();
       _patch(
         message: 'helper 已断开',
         phase: HelperPhase.disconnected,
@@ -31,6 +33,8 @@ class HelperStateNotifier extends _HelperStateBase
         currentCom: '',
         engineRunning: false,
         snapshotTimedOut: true,
+        captureOutputs: const [],
+        clearCurrentCapture: true,
       );
     });
     ref.onDispose(() {
@@ -398,6 +402,19 @@ class HelperStateNotifier extends _HelperStateBase
     if (name.isEmpty) return;
     try {
       _sendIpc('set com $name');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendCaptureOutput(String name) {
+    if (!_client.isConnected) return;
+    final wanted = name.trim();
+    if (wanted.isEmpty) return;
+    ref.read(configProvider.notifier).setCaptureOutput(wanted);
+    try {
+      _sendIpc('set capture_output $wanted');
     } catch (e) {
       _patch(message: '$e');
     }

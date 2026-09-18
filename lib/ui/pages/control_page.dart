@@ -5,6 +5,7 @@ import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/capture_output_picker.dart';
 import '../widgets/color_swatch_button.dart';
 import '../widgets/info_hint.dart';
 import '../widgets/palette_color_picker.dart';
@@ -84,6 +85,8 @@ class ControlPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.text),
                 const SerialPortPicker(radius: _SwitchGroup.radius),
+                const SizedBox(height: AppSpacing.text),
+                const CaptureOutputPicker(radius: _SwitchGroup.radius),
                 const SizedBox(height: AppSpacing.text),
                 const _WallColorCompCard(),
                 const SizedBox(height: AppSpacing.card),
