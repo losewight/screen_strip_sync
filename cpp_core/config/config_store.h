@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "segment_map.h"
 
@@ -26,6 +26,7 @@ struct HelperConfig {
   // 首启门闩：false=须 UI 点连接才开口；true=启动可自动 try_serial
   bool serialConfigured = false;
   bool autoSleepSync = true;
+  bool screenOffSync = false;
   bool turnOffOnShutdown = true;
   bool startOnBoot = false;
   bool hasMap = false;
@@ -65,6 +66,7 @@ void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_capture_output(const char *name); // 空/"auto"/DeviceName
 void config_set_sleep_sync(bool on);
+void config_set_screen_off_sync(bool on);
 void config_set_shutdown_off(bool on);
 void config_set_autostart(bool on); // JSON + HKCU Run
 void config_set_last_scene(

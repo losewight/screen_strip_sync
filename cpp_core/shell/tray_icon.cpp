@@ -1,4 +1,4 @@
-﻿#include "tray_icon.h"
+#include "tray_icon.h"
 
 #include "config_store.h"
 #include "helper_lifecycle.h"
@@ -281,6 +281,20 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
       printf("power: resume (wParam=0x%Ix) -> resume_from_sleep\n", wParam);
       helper_resume_from_sleep();
       return TRUE;
+    }
+    if (wParam == PBT_POWERSETTINGCHANGE) {
+      auto *pbs = reinterpret_cast<const POWERBROADCAST_SETTING *>(lParam);
+      if (pbs && IsEqualGUID(pbs->PowerSetting, GUID_MONITOR_POWER_ON)) {
+        const DWORD state = *reinterpret_cast<const DWORD *>(pbs->Data);
+        printf("power: monitor %lu\n", state);
+        if (state == 0) {
+          helper_on_monitor_off();
+        } else {
+          // state==1 (on) 或 state==2 (dimmed) 均视为亮屏
+          helper_on_monitor_on();
+        }
+        return TRUE;
+      }
     }
     break;
 

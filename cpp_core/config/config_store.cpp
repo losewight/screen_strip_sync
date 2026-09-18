@@ -1,4 +1,4 @@
-﻿#include "config_store.h"
+#include "config_store.h"
 
 #include "app_paths.h"
 #include "config_clamp.h"
@@ -235,6 +235,7 @@ void config_apply() {
     snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "%s", norm);
   }
   helper_set_sleep_sync(c.autoSleepSync);
+  helper_set_screen_off_sync(c.screenOffSync);
 
   if (c.hasMap) {
     char payload[512];
@@ -366,6 +367,16 @@ void config_set_sleep_sync(bool on) {
   ensure_saver_started();
   // 为什么：JSON 与运行时旗标必须一起改，否则只落盘、休眠仍读旧 g_sleep_sync
   helper_set_sleep_sync(on);
+}
+
+void config_set_screen_off_sync(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.screenOffSync = on;
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  helper_set_screen_off_sync(on);
 }
 
 void config_set_shutdown_off(bool on) {

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -426,6 +426,17 @@ class HelperStateNotifier extends _HelperStateBase
     if (!_client.isConnected) return;
     try {
       _sendIpc('set sleep_sync ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  /// 息屏关灯开关：已连接则下发；未连接静默。
+  @override
+  void sendScreenOffSync(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set screen_off_sync ${enabled ? 1 : 0}');
     } catch (e) {
       _patch(message: '$e');
     }
