@@ -1,4 +1,4 @@
-﻿# 1. 指定 CMake 的最低版本要求，防止因为语法差异导致构建失败
+# 1. 指定 CMake 的最低版本要求，防止因为语法差异导致构建失败
 cmake_minimum_required(VERSION 3.10)
 
 project(ScreenStripSyncCore)
@@ -52,12 +52,12 @@ target_compile_options(helper PRIVATE
 )
 
 # experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
-add_executable(interval_limit_test
-  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/frame_interval_limit/interval_limit_test.cpp
-  engine/serial_port.cpp
-)
-target_include_directories(interval_limit_test PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/engine
-)
-target_link_libraries(interval_limit_test PRIVATE kernel32 winmm)
-target_compile_options(interval_limit_test PRIVATE /utf-8)
+# add_executable(interval_limit_test
+#   ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/frame_interval_limit/interval_limit_test.cpp
+#   engine/serial_port.cpp
+# )
+# target_include_directories(interval_limit_test PRIVATE
+#   ${CMAKE_CURRENT_SOURCE_DIR}/engine
+# )
+# target_link_libraries(interval_limit_test PRIVATE kernel32 winmm)
+# target_compile_options(interval_limit_test PRIVATE /utf-8)

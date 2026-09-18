@@ -1,4 +1,4 @@
-﻿import 'region_bbox.dart';
+import 'region_bbox.dart';
 import 'segment_map_codec.dart';
 import 'segment_sample.dart';
 
@@ -29,6 +29,7 @@ class AppConfig {
     this.lastConnectedCom = '',
     this.serialConfigured = false,
     this.autoSleepSync = true,
+    this.screenOffSync = false,
     this.turnOffOnShutdown = true,
     this.startOnBoot = false,
     this.segmentMap,
@@ -71,6 +72,9 @@ class AppConfig {
 
   /// 系统休眠时软关；唤醒后由 helper 按 lastScene 恢复。
   final bool autoSleepSync;
+
+  /// 息屏时自动熄灭灯带，亮屏后恢复（与 sleep_sync 独立）。
+  final bool screenOffSync;
 
   /// Windows 关机时是否自动关闭灯带；经 `set shutdown_off` 下发。
   final bool turnOffOnShutdown;
@@ -125,6 +129,7 @@ class AppConfig {
     String? lastConnectedCom,
     bool? serialConfigured,
     bool? autoSleepSync,
+    bool? screenOffSync,
     bool? turnOffOnShutdown,
     bool? startOnBoot,
     List<SegmentSample>? segmentMap,
@@ -150,6 +155,7 @@ class AppConfig {
       lastConnectedCom: lastConnectedCom ?? this.lastConnectedCom,
       serialConfigured: serialConfigured ?? this.serialConfigured,
       autoSleepSync: autoSleepSync ?? this.autoSleepSync,
+      screenOffSync: screenOffSync ?? this.screenOffSync,
       turnOffOnShutdown: turnOffOnShutdown ?? this.turnOffOnShutdown,
       startOnBoot: startOnBoot ?? this.startOnBoot,
       segmentMap: clearSegmentMap ? null : (segmentMap ?? this.segmentMap),
@@ -179,6 +185,7 @@ class AppConfig {
     var lastCom = '';
     var serialConfigured = false;
     var sleepSync = true;
+    var screenOffSync = false;
     var shutdownOff = true;
     var autostart = false;
     List<SegmentSample>? map;
@@ -232,6 +239,8 @@ class AppConfig {
           if (val == '0' || val == '1') serialConfigured = val == '1';
         case 'sleep_sync':
           if (val == '0' || val == '1') sleepSync = val == '1';
+        case 'screen_off_sync':
+          if (val == '0' || val == '1') screenOffSync = val == '1';
         case 'shutdown_off':
           if (val == '0' || val == '1') shutdownOff = val == '1';
         case 'autostart':
@@ -293,6 +302,7 @@ class AppConfig {
       lastConnectedCom: lastCom,
       serialConfigured: serialConfigured,
       autoSleepSync: sleepSync,
+      screenOffSync: screenOffSync,
       turnOffOnShutdown: shutdownOff,
       startOnBoot: autostart,
       segmentMap: map,

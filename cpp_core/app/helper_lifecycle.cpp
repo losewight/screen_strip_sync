@@ -1,4 +1,4 @@
-﻿#include "helper_lifecycle.h"
+#include "helper_lifecycle.h"
 
 #include "config_store.h"
 #include "dxgi_capture.h"
@@ -17,6 +17,8 @@ static HANDLE g_serial_handle = INVALID_HANDLE_VALUE;
 
 static std::atomic_bool g_shutting_down{false};
 static std::atomic_bool g_sleep_sync{true};
+static std::atomic_bool g_screen_off_sync{false};
+static std::atomic_bool g_monitor_blanked{false};
 
 // 休眠已拆资源；防 QUERYSUSPEND+SUSPEND 连发覆盖快照
 static std::atomic_bool g_resources_torn{false};
@@ -41,6 +43,47 @@ bool helper_get_sleep_sync() { return g_sleep_sync.load(); }
 
 void helper_note_resources_ready() { g_resources_torn.store(false); }
 
+void helper_set_screen_off_sync(bool on) {
+  g_screen_off_sync.store(on);
+  printf("screen_off_sync=%d\n", on ? 1 : 0);
+}
+
+bool helper_get_screen_off_sync() { return g_screen_off_sync.load(); }
+
+void helper_on_monitor_off() {
+  if (g_shutting_down.load()) return;
+  if (!g_screen_off_sync.load()) return;
+
+  bool expected = false;
+  if (!g_monitor_blanked.compare_exchange_strong(expected, true)) return;
+
+  engine_stop();
+  HANDLE *p = helper_serial();
+  if (p && *p != INVALID_HANDLE_VALUE) {
+    send_solid(*p, "000000");
+  }
+  ipc_push_runtime_status();
+  printf("monitor off: blanked (intent preserved)\n");
+}
+
+void helper_on_monitor_on() {
+  if (g_shutting_down.load()) return;
+  
+  bool expected = true;
+  if (!g_monitor_blanked.compare_exchange_strong(expected, false)) return;
+  
+  HANDLE *p = helper_serial();
+  if (!p || *p == INVALID_HANDLE_VALUE) {
+    printf("monitor on: no serial, skip restore\n");
+    return;
+  }
+  
+  DisplayIntent intent = engine_get_display_intent();
+  apply_display_intent(*p, intent);
+  ipc_push_runtime_status();
+  printf("monitor on: restored intent kind=%d\n", (int)intent.kind);
+}
+
 static void sleep_interruptible_shutdown(DWORD ms) {
   const DWORD slice = 50;
   const DWORD start = GetTickCount();
@@ -56,6 +99,7 @@ static void sleep_interruptible_shutdown(DWORD ms) {
 }
 
 void helper_on_suspend() {
+  g_monitor_blanked.store(false); // suspend 接管，blanked 语义结束
   if (g_shutting_down.load())
     return;
   // 为什么：sleep_sync=0 必须完全 no-op；拆 COM 会把正在追色的灯带弄灭
@@ -198,6 +242,7 @@ static void resume_worker_body() {
   }
 
   apply_display_intent(neu, snap);
+  g_monitor_blanked.store(false); // 唤醒后显示器必亮
   g_awaiting_resume.store(false);
   helper_note_resources_ready();
   ipc_push_runtime_status();

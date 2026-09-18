@@ -1,4 +1,4 @@
-﻿#include "config_json.h"
+#include "config_json.h"
 
 #include "config_clamp.h"
 
@@ -405,6 +405,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_bool(p, &b))
         return false;
       cfg->autoSleepSync = b;
+    } else if (strcmp(key, "screenOffSync") == 0) {
+      bool b = false;
+      if (!parse_bool(p, &b))
+        return false;
+      cfg->screenOffSync = b;
     } else if (strcmp(key, "turnOffOnShutdown") == 0) {
       bool b = true;
       if (!parse_bool(p, &b))
@@ -574,6 +579,9 @@ std::string config_format_json(const HelperConfig &c) {
 
   o.append("  \"autoSleepSync\": ");
   o.append(c.autoSleepSync ? "true" : "false");
+  o.append(",\n");
+  o.append("  \"screenOffSync\": ");
+  o.append(c.screenOffSync ? "true" : "false");
   o.append(",\n");
   o.append("  \"turnOffOnShutdown\": ");
   o.append(c.turnOffOnShutdown ? "true" : "false");

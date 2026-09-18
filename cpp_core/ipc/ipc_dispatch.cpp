@@ -1,4 +1,4 @@
-﻿// 必须先于 windows.h
+// 必须先于 windows.h
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -314,6 +314,18 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("cmd=set sleep_sync %c\n", *p);
     } else {
       printf("bad set sleep_sync: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set screen_off_sync ", 20) == 0) {
+    const char *p = line + 20;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_screen_off_sync(*p == '1');
+      printf("cmd=set screen_off_sync %c\n", *p);
+    } else {
+      printf("bad set screen_off_sync: [%s]\n", p);
     }
     return DispatchResult::Continue;
   }

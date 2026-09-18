@@ -1,4 +1,4 @@
-﻿part of 'helper_state.dart';
+part of 'helper_state.dart';
 
 /// helper `status …` 行 → 相位 / COM / 引擎 / 显示意图。
 mixin _HelperStatusHandlers on _HelperStateBase {
@@ -234,6 +234,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendComPort(String port);
   void sendCaptureOutput(String name);
   void sendSleepSync(bool enabled);
+  void sendScreenOffSync(bool enabled);
   void sendAutostart(bool enabled);
   void sendShutdownOff(bool enabled);
   void syncSegmentMapFromConfig();

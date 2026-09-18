@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -119,6 +119,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
 
   void setAutoSleepSync(bool value) {
     state = state.copyWith(autoSleepSync: value);
+  }
+
+  void setScreenOffSync(bool value) {
+    state = state.copyWith(screenOffSync: value);
   }
 
   void setTurnOffOnShutdown(bool value) {

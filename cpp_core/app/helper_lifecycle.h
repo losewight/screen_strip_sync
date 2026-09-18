@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <windows.h>
 
@@ -11,6 +11,15 @@ bool helper_is_shutting_down();
 // sleep_sync=0：休眠完全不插手（不拆 COM/DXGI、不关灯、唤醒也不恢复）
 void helper_set_sleep_sync(bool on);
 bool helper_get_sleep_sync();
+
+// screen_off_sync: 控制显示器息屏时是否关灯（与 sleep_sync 独立）
+void helper_set_screen_off_sync(bool on);
+bool helper_get_screen_off_sync();
+
+// 显示器息屏：停引擎 + 发黑帧，不污染 g_intent / lastScene
+void helper_on_monitor_off();
+// 显示器亮屏：按 g_intent 恢复
+void helper_on_monitor_on();
 
 void helper_on_suspend();
 void helper_resume_from_sleep();

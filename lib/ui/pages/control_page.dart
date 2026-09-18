@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
@@ -102,6 +102,17 @@ class ControlPage extends ConsumerWidget {
                           ? (v) {
                               config.setAutoSleepSync(v);
                               notifier.sendSleepSync(v);
+                            }
+                          : null,
+                    ),
+                    _SwitchRow(
+                      title: '息屏自动关灯',
+                      subtitle: '显示器关闭时自动熄灭灯带，亮屏后恢复之前的灯效',
+                      value: cfg.screenOffSync,
+                      onChanged: canEdit
+                          ? (v) {
+                              config.setScreenOffSync(v);
+                              notifier.sendScreenOffSync(v);
                             }
                           : null,
                     ),
