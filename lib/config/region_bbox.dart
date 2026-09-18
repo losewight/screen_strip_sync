@@ -1,4 +1,4 @@
-﻿/// 屏幕氛围取色框：主屏百分比整数 0..100（与 helper `region_bbox` 对齐）。
+﻿/// 屏幕氛围取色框：被抓那块屏的百分比整数 0..100（与 helper `region_bbox` 对齐）。
 class RegionBBox {
   const RegionBBox({
     this.l = 10,
@@ -36,7 +36,7 @@ class RegionBBox {
     return box.isValid ? box : null;
   }
 
-  /// 物理像素 → 主屏百分比（四舍五入后夹紧并保证可解析）。
+  /// 物理像素 → 被抓那块屏的百分比（四舍五入后夹紧并保证可解析）。
   static RegionBBox fromPixels({
     required int left,
     required int top,

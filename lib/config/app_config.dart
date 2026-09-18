@@ -97,7 +97,7 @@ class AppConfig {
   /// 屏幕氛围暗场阈值 0..50（RGB 皆低于此 → 段置黑）。
   final int regionDark;
 
-  /// 屏幕氛围取色框（主屏百分比）。
+  /// 屏幕氛围取色框（被抓那块屏的百分比）。
   final RegionBBox regionBBox;
 
   /// helper `cfg scene`；含 `engine` / `region` / …

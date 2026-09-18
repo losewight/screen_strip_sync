@@ -45,12 +45,13 @@
 | `set autostart 0\|1` | 写入注册表开机自启 |
 | `highlight <0..9>` | 校准：仅点亮指定段 |
 | `set map default` | 恢复顶边均分采样 |
-| `set map x0,y0,x1,y1;...` | 10 段矩形（主屏 0..100 百分比） |
+| `set map x0,y0,x1,y1;...` | 10 段矩形（被抓那块屏的 0..100 百分比） |
 | `set region_algo mean\|max` | 氛围聚合算法 |
 | `set region_blur <0..20>` | 氛围空间模糊 |
 | `set region_smooth <0..0.99>` | 氛围时间惯性（与 map α「越大越跟手」极性相反） |
 | `set region_dark <0..50>` | 氛围暗场阈值 |
-| `set region_bbox L,T,W,H` | 氛围取色框 |
+| `set region_bbox L,T,W,H` | 氛围取色框（被抓那块屏的百分比整数 0..100） |
+| `set capture_output <DeviceName\|auto>` | DXGI 抓哪块屏；`auto` = 主屏。热切换不动串口 |
 | `set last_custom_solid RRGGBB` | 记住自定义纯色 |
 
 `set …` 生效后，helper 会 debounce（约 1 秒）写回 JSON。场景类命令会更新 `lastScene`。数值在 helper 侧夹紧。
@@ -61,7 +62,7 @@
 
 | 文本 | 含义 |
 | --- | --- |
-| `cfg <key> <value>` | 配置快照项（key 与 `set` 同名） |
+| `cfg <key> <value>` | 配置快照项（key 与 `set` 同名，含 `capture_output`） |
 | `cfg map …` | 当前采样映射 |
 | `cfg scene …` | `engine` / `region` / `solid RRGGBB` / `off` / `idle` |
 | `cfg end` | 快照结束；界面收到后才视为配置完整 |
@@ -70,6 +71,9 @@
 | `status com COMn` | 当前打开的 COM |
 | `status engine 0\|1` | 发帧线程是否在运行 |
 | `status display …` | `engine` / `region` / `solid` / `soft_off` / `idle` |
+| `status capture_output NAME WxH L,T [friendly…]` | 当前 duplicate 的屏＋桌面矩形；友好名可选 |
+| `status outputs <n>` | 随后 n 条 `status output` |
+| `status output i NAME WxH L,T p c [friendly…]` | 可 duplicate 的一块屏（primary / current） |
 | `status serial_lost` / `serial_ok` | 串口掉线 / 恢复（部分路径） |
 | `ui show` | 托盘请求：把已有窗口置顶 |
 
@@ -81,8 +85,8 @@
 
 | 路径 | IPC 入口 | 采样 |
 | --- | --- | --- |
-| 屏幕跟色 map | `start` | `segmentMap` 或顶边均分；α / near_black / blur / saturation |
-| 屏幕氛围 region | `start_region` | `region_bbox` 竖直切 10 段；mean/max + blur/smooth/dark |
+| 屏幕跟色 map | `start` | `segmentMap` 或顶边均分；百分比相对被抓那块屏；α / near_black / blur / saturation |
+| 屏幕氛围 region | `start_region` | `region_bbox` 竖直切 10 段；bbox 相对被抓那块屏；mean/max + blur/smooth/dark |
 
 截图与框选只在 Flutter 完成；IPC 只传百分比等结果，不传像素流。
 
@@ -101,6 +105,7 @@
 | `saturation` | 饱和度 |
 | `mode` | 废弃字段，兼容保留 |
 | `comPort` / `lastConnectedCom` | 串口 |
+| `captureOutput` | DXGI DeviceName；空 = auto 跟主屏 |
 | `autoSleepSync` | 休眠同步 |
 | `turnOffOnShutdown` | 关机关灯 |
 | `startOnBoot` | 开机自启 |

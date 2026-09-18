@@ -4,7 +4,7 @@
 
 #include <cstddef>
 
-// 屏幕氛围（region）取色框：主屏百分比整数 0..100
+// 屏幕氛围（region）取色框：被抓那块屏的百分比整数 0..100
 struct RegionBBox {
   int l = 10;
   int t = 20;
