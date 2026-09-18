@@ -20,7 +20,7 @@ class CaptureOutputPicker extends ConsumerWidget {
       if (o.isCurrent) '当前',
     ];
     final tag = tags.isEmpty ? '' : '（${tags.join(' · ')}）';
-    return '${o.shortName}  ${o.width}×${o.height}$tag';
+    return '${o.displayLabel}  ${o.width}×${o.height}$tag';
   }
 
   @override
@@ -74,7 +74,10 @@ class CaptureOutputPicker extends ConsumerWidget {
               if (needsSynthetic)
                 DropdownMenuItem(
                   value: selected,
-                  child: Text(selected, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    CaptureOutputInfo.toShortName(selected),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               for (final o in outputs)
                 DropdownMenuItem(

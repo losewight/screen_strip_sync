@@ -191,6 +191,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         left: e.left,
         top: e.top,
         isCurrent: true,
+        friendlyName: e.friendlyName,
       ),
     );
   }
@@ -214,6 +215,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         top: e.top,
         isPrimary: e.isPrimary,
         isCurrent: e.isCurrent,
+        friendlyName: e.friendlyName,
       ),
     );
     if (_outputsBuf.length >= _outputsExpect) {

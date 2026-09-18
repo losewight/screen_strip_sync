@@ -142,7 +142,24 @@ void main() {
             .having((e) => e.index, 'index', 1)
             .having((e) => e.name, 'name', r'\\.\DISPLAY2')
             .having((e) => e.isPrimary, 'isPrimary', isFalse)
-            .having((e) => e.isCurrent, 'isCurrent', isTrue),
+            .having((e) => e.isCurrent, 'isCurrent', isTrue)
+            .having((e) => e.friendlyName, 'friendlyName', ''),
+      );
+      expect(
+        tryParseStatusLine(
+          r'status capture_output \\.\DISPLAY1 2560x1440 0,0 Q27G4SL_WS',
+        ),
+        isA<HelperStatusCaptureOutput>()
+            .having((e) => e.name, 'name', r'\\.\DISPLAY1')
+            .having((e) => e.friendlyName, 'friendlyName', 'Q27G4SL_WS'),
+      );
+      expect(
+        tryParseStatusLine(
+          r'status output 1 \\.\DISPLAY2 1920x1080 2560,0 0 1 MNG007DA6-2',
+        ),
+        isA<HelperStatusOutput>()
+            .having((e) => e.index, 'index', 1)
+            .having((e) => e.friendlyName, 'friendlyName', 'MNG007DA6-2'),
       );
       expect(tryParseStatusLine('status capture_output'), isNull);
       expect(tryParseStatusLine('status outputs'), isNull);

@@ -1,4 +1,7 @@
-﻿#include "dxgi_capture.h"
+﻿#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
+#include "dxgi_capture.h"
 
 #include "dxgi_mapped.h"
 #include "helper_log.h"
@@ -8,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 
@@ -122,6 +126,83 @@ static void wide_to_utf8(const WCHAR *wide, char *out, int cap) {
     out[0] = '\0';
 }
 
+// 友好名会进 IPC 行尾；去掉换行和 '%'，避免拆行 / printf 吃掉后续格式。
+static void sanitize_ipc_rest(char *s) {
+  if (!s)
+    return;
+  char *w = s;
+  for (const char *r = s; *r; ++r) {
+    const char c = *r;
+    if (c == '\r' || c == '\n' || c == '%')
+      continue;
+    *w++ = c;
+  }
+  *w = '\0';
+  while (w > s && (w[-1] == ' ' || w[-1] == '\t'))
+    *--w = '\0';
+  char *p = s;
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  if (p != s)
+    std::memmove(s, p, std::strlen(p) + 1);
+}
+
+// DXGI DeviceName（\\.\DISPLAYn）对 CCD 的 viewGdiDeviceName。
+// 优先 QueryDisplayConfig 的 monitorFriendlyDeviceName（Twinkle Tray 同类），
+// 查不到再退 EnumDisplayDevices 的监视器 DeviceString。
+static void fill_friendly_name(const WCHAR *gdi_device, char *out, int cap) {
+  if (!out || cap <= 1)
+    return;
+  out[0] = '\0';
+  if (!gdi_device || !gdi_device[0])
+    return;
+
+  UINT32 pathCount = 0, modeCount = 0;
+  if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount,
+                                  &modeCount) == ERROR_SUCCESS &&
+      pathCount > 0 && pathCount <= 32 && modeCount > 0 && modeCount <= 128) {
+    DISPLAYCONFIG_PATH_INFO paths[32];
+    DISPLAYCONFIG_MODE_INFO modes[128];
+    UINT32 pc = pathCount;
+    UINT32 mc = modeCount;
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths, &mc, modes,
+                           nullptr) == ERROR_SUCCESS) {
+      for (UINT32 i = 0; i < pc; ++i) {
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME src{};
+        src.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        src.header.size = sizeof(src);
+        src.header.adapterId = paths[i].sourceInfo.adapterId;
+        src.header.id = paths[i].sourceInfo.id;
+        if (DisplayConfigGetDeviceInfo(&src.header) != ERROR_SUCCESS)
+          continue;
+        if (std::wcscmp(src.viewGdiDeviceName, gdi_device) != 0)
+          continue;
+
+        DISPLAYCONFIG_TARGET_DEVICE_NAME tgt{};
+        tgt.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+        tgt.header.size = sizeof(tgt);
+        tgt.header.adapterId = paths[i].targetInfo.adapterId;
+        tgt.header.id = paths[i].targetInfo.id;
+        if (DisplayConfigGetDeviceInfo(&tgt.header) != ERROR_SUCCESS)
+          continue;
+        if (tgt.monitorFriendlyDeviceName[0] == L'\0')
+          continue;
+        wide_to_utf8(tgt.monitorFriendlyDeviceName, out, cap);
+        sanitize_ipc_rest(out);
+        if (out[0])
+          return;
+      }
+    }
+  }
+
+  DISPLAY_DEVICEW mon{};
+  mon.cb = sizeof(mon);
+  if (EnumDisplayDevicesW(gdi_device, 0, &mon, 0) && mon.DeviceString[0]) {
+    wide_to_utf8(mon.DeviceString, out, cap);
+    sanitize_ipc_rest(out);
+  }
+}
+
 static bool wanted_is_auto(const char *wanted) {
   return wanted == nullptr || wanted[0] == '\0' ||
          std::strcmp(wanted, "auto") == 0;
@@ -134,6 +215,8 @@ static void fill_output_info(const DXGI_OUTPUT_DESC &desc, UINT index,
   *info = CaptureOutputInfo{};
   wide_to_utf8(desc.DeviceName, info->device_name,
                (int)sizeof(info->device_name));
+  fill_friendly_name(desc.DeviceName, info->friendly_name,
+                     (int)sizeof(info->friendly_name));
   info->desktop = desc.DesktopCoordinates;
   // 为什么：Windows 定义主屏左上角即虚拟桌面原点 (0,0)，与上报的
   // DesktopCoordinates 同源，不必再调 GetMonitorInfo。
@@ -231,10 +314,12 @@ static void log_capture_output() {
   const RECT &r = g_output_info.desktop;
   const int w = r.right - r.left;
   const int h = r.bottom - r.top;
-  printf("capture output: %s %dx%d at (%d,%d)%s index=%u/%u\n",
+  printf("capture output: %s %dx%d at (%d,%d)%s index=%u/%u%s%s\n",
          g_output_info.device_name[0] ? g_output_info.device_name : "?", w, h,
          (int)r.left, (int)r.top, g_output_info.is_primary ? " primary" : "",
-         g_output_info.index, g_output_info.total);
+         g_output_info.index, g_output_info.total,
+         g_output_info.friendly_name[0] ? " " : "",
+         g_output_info.friendly_name);
 }
 
 DxgiErr dxgi_init() {

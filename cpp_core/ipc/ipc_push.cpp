@@ -68,8 +68,14 @@ static void send_capture_status(SOCKET client) {
   if (has_cur) {
     const int w = cur.desktop.right - cur.desktop.left;
     const int h = cur.desktop.bottom - cur.desktop.top;
-    send_line(client, "status capture_output %s %dx%d %d,%d\n", cur.device_name,
-              w, h, (int)cur.desktop.left, (int)cur.desktop.top);
+    if (cur.friendly_name[0])
+      send_line(client, "status capture_output %s %dx%d %d,%d %s\n",
+                cur.device_name, w, h, (int)cur.desktop.left,
+                (int)cur.desktop.top, cur.friendly_name);
+    else
+      send_line(client, "status capture_output %s %dx%d %d,%d\n",
+                cur.device_name, w, h, (int)cur.desktop.left,
+                (int)cur.desktop.top);
   }
 
   CaptureOutputInfo list[16];
@@ -82,9 +88,15 @@ static void send_capture_status(SOCKET client) {
     const int is_cur =
         (has_cur && std::strcmp(list[i].device_name, cur.device_name) == 0) ? 1
                                                                            : 0;
-    send_line(client, "status output %u %s %dx%d %d,%d %d %d\n", list[i].index,
-              list[i].device_name, w, h, (int)r.left, (int)r.top,
-              list[i].is_primary ? 1 : 0, is_cur);
+    if (list[i].friendly_name[0])
+      send_line(client, "status output %u %s %dx%d %d,%d %d %d %s\n",
+                list[i].index, list[i].device_name, w, h, (int)r.left,
+                (int)r.top, list[i].is_primary ? 1 : 0, is_cur,
+                list[i].friendly_name);
+    else
+      send_line(client, "status output %u %s %dx%d %d,%d %d %d\n",
+                list[i].index, list[i].device_name, w, h, (int)r.left,
+                (int)r.top, list[i].is_primary ? 1 : 0, is_cur);
   }
   printf("ipc: capture_output %s outputs=%u\n",
          has_cur ? cur.device_name : "(none)", n);

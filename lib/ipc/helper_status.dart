@@ -42,7 +42,7 @@ final class HelperStatusDisplay extends HelperStatusEvent {
   final HelperDisplayKind kind;
 }
 
-/// 当前真正 duplicate 的那块屏：`status capture_output NAME WxH L,T`
+/// 当前真正 duplicate 的那块屏：`status capture_output NAME WxH L,T [friendly…]`
 final class HelperStatusCaptureOutput extends HelperStatusEvent {
   const HelperStatusCaptureOutput({
     required this.name,
@@ -50,6 +50,7 @@ final class HelperStatusCaptureOutput extends HelperStatusEvent {
     required this.height,
     required this.left,
     required this.top,
+    this.friendlyName = '',
   });
 
   final String name;
@@ -57,6 +58,9 @@ final class HelperStatusCaptureOutput extends HelperStatusEvent {
   final int height;
   final int left;
   final int top;
+
+  /// CCD/EDID 友好名；旧 helper 不带则为空。
+  final String friendlyName;
 }
 
 /// `status outputs <n>`：随后紧跟 n 条 [HelperStatusOutput]。
@@ -66,7 +70,7 @@ final class HelperStatusOutputsCount extends HelperStatusEvent {
   final int count;
 }
 
-/// 一条可 duplicate 的屏：`status output i NAME WxH L,T primary current`
+/// 一条可 duplicate 的屏：`status output i NAME WxH L,T primary current [friendly…]`
 final class HelperStatusOutput extends HelperStatusEvent {
   const HelperStatusOutput({
     required this.index,
@@ -77,6 +81,7 @@ final class HelperStatusOutput extends HelperStatusEvent {
     required this.top,
     required this.isPrimary,
     required this.isCurrent,
+    this.friendlyName = '',
   });
 
   final int index;
@@ -87,6 +92,7 @@ final class HelperStatusOutput extends HelperStatusEvent {
   final int top;
   final bool isPrimary;
   final bool isCurrent;
+  final String friendlyName;
 }
 
 HelperStatusWord parseHelperStatusWord(String word) {
@@ -157,10 +163,10 @@ HelperStatusEvent? tryParseStatusLine(String line) {
 }
 
 final _captureOutputRest = RegExp(
-  r'^(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)$',
+  r'^(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)(?:\s+(.+))?$',
 );
 final _outputRest = RegExp(
-  r'^(\d+)\s+(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)\s+([01])\s+([01])$',
+  r'^(\d+)\s+(\S+)\s+(\d+)x(\d+)\s+(-?\d+),(-?\d+)\s+([01])\s+([01])(?:\s+(.+))?$',
 );
 
 HelperStatusCaptureOutput? _parseCaptureOutput(String value) {
@@ -172,6 +178,7 @@ HelperStatusCaptureOutput? _parseCaptureOutput(String value) {
     height: int.parse(m.group(3)!),
     left: int.parse(m.group(4)!),
     top: int.parse(m.group(5)!),
+    friendlyName: m.group(6)?.trim() ?? '',
   );
 }
 
@@ -187,5 +194,6 @@ HelperStatusOutput? _parseOutput(String value) {
     top: int.parse(m.group(6)!),
     isPrimary: m.group(7) == '1',
     isCurrent: m.group(8) == '1',
+    friendlyName: m.group(9)?.trim() ?? '',
   );
 }

@@ -1,13 +1,13 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../config/segment_map_codec.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/mask_window.dart';
 import '../widgets/screen_mask_select.dart';
 
 /// 全屏半透明蒙版校准：罩住桌面，拖框选区，ESC 取消。
@@ -33,10 +33,9 @@ class _SegmentMapCalibratePageState
   SegmentSample? _currentRect;
   String? _error;
   bool _exiting = false;
+  bool _alignedToCapture = true;
 
-  bool _wasFullScreen = false;
-  bool _wasAlwaysOnTop = false;
-  Rect? _savedBounds;
+  MaskWindowRestore? _restore;
 
   final _focusNode = FocusNode();
 
@@ -63,27 +62,26 @@ class _SegmentMapCalibratePageState
   }
 
   Future<void> _enterMaskWindow() async {
-    _wasFullScreen = await windowManager.isFullScreen();
-    _wasAlwaysOnTop = await windowManager.isAlwaysOnTop();
-    _savedBounds = await windowManager.getBounds();
-    await windowManager.setAlwaysOnTop(true);
-    if (!_wasFullScreen) {
-      await windowManager.setFullScreen(true);
-    }
-    // 为什么：蒙版镂空要透出桌面，窗体背景必须透明
-    await windowManager.setBackgroundColor(const Color(0x00000000));
+    final ui = ref.read(helperStateProvider);
+    final physical = captureDesktopPhysicalRect(
+      ui.currentCapture,
+      ui.captureOutputs,
+    );
+    final dpr = View.of(context).devicePixelRatio;
+    final result = await enterCaptureMaskWindow(
+      physicalDesktop: physical,
+      dpr: dpr,
+    );
+    _restore = result.restore;
+    if (mounted) setState(() => _alignedToCapture = result.aligned);
   }
 
   Future<void> _leaveMaskWindow() async {
-    if (!_wasFullScreen) {
-      await windowManager.setFullScreen(false);
+    final restore = _restore;
+    if (restore != null) {
+      await leaveCaptureMaskWindow(restore);
+      _restore = null;
     }
-    await windowManager.setAlwaysOnTop(_wasAlwaysOnTop);
-    final bounds = _savedBounds;
-    if (bounds != null && !_wasFullScreen) {
-      await windowManager.setBounds(bounds);
-    }
-    await windowManager.setBackgroundColor(const Color(0x00000000));
   }
 
   Future<void> _popCancel() async {
@@ -210,6 +208,23 @@ class _SegmentMapCalibratePageState
                           ),
                         ),
                       ),
+                      if (!_alignedToCapture) ...[
+                        const SizedBox(height: AppSpacing.text),
+                        const IgnorePointer(
+                          child: Text(
+                            '未能对准抓屏显示器，蒙版留在本窗口所在屏',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              color: AppTheme.textSecondary,
+                              fontSize: 16,
+                              shadows: [
+                                Shadow(blurRadius: 8, color: Colors.black54),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.text),
                         IgnorePointer(

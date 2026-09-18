@@ -23,9 +23,10 @@ class CaptureOutputInfo {
     required this.top,
     this.isPrimary = false,
     this.isCurrent = false,
+    this.friendlyName = '',
   });
 
-  /// DXGI DeviceName，如 `\\.\DISPLAY1`。
+  /// DXGI DeviceName，如 `\\.\DISPLAY1`。选屏身份用这个，不要用友好名。
   final String name;
   final int width;
   final int height;
@@ -34,10 +35,23 @@ class CaptureOutputInfo {
   final bool isPrimary;
   final bool isCurrent;
 
+  /// CCD/EDID 友好名（如 `Q27G4SL_WS`）；查不到为空。
+  final String friendlyName;
+
   /// 去掉 `\\.\` 前缀后的短名，如 `DISPLAY1`。
-  String get shortName {
+  static String toShortName(String name) {
     const prefix = r'\\.\';
-    return name.startsWith(prefix) ? name.substring(prefix.length) : name;
+    final t = name.trim();
+    return t.startsWith(prefix) ? t.substring(prefix.length) : t;
+  }
+
+  String get shortName => toShortName(name);
+
+  /// 下拉 / 跟随文案：有友好名用友好名，否则 DISPLAY1。
+  String get displayLabel {
+    final f = friendlyName.trim();
+    if (f.isNotEmpty) return f;
+    return shortName;
   }
 }
 
@@ -115,10 +129,16 @@ class HelperUiState {
 
   /// 框选/校准时提示正在跟哪块屏；优先 status 真值，否则 cfg。
   String? followCaptureLabel(String cfgCapture) {
-    final cur = currentCapture?.name.trim() ?? '';
-    if (cur.isNotEmpty) return cur;
+    final cur = currentCapture;
+    if (cur != null) {
+      final label = cur.displayLabel;
+      if (label.isNotEmpty) return label;
+    }
     final c = cfgCapture.trim();
-    if (c.isNotEmpty && c != 'auto') return c;
-    return null;
+    if (c.isEmpty || c == 'auto') return null;
+    for (final o in captureOutputs) {
+      if (o.name == c) return o.displayLabel;
+    }
+    return CaptureOutputInfo.toShortName(c);
   }
 }

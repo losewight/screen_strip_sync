@@ -39,8 +39,11 @@ void dxgi_set_blur(int v);       // 0..8，默认 0；0=不扩邻域
 void dxgi_set_capture_output(const char *wanted);
 
 // DeviceName 已转 UTF-8（如 \\.\DISPLAY1）；desktop 是虚拟桌面物理像素。
+// friendly_name 是 CCD/EDID 友好名（如 Q27G4SL_WS）；查不到则为空。
+// 选屏身份永远是 DeviceName，友好名只给 UI 显示。
 struct CaptureOutputInfo {
   char device_name[64]{};
+  char friendly_name[128]{};
   RECT desktop{};
   bool is_primary = false;
   UINT index = 0;

@@ -42,7 +42,7 @@ target_include_directories(helper PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/shell
 )
 
-target_link_libraries(helper PRIVATE kernel32 shell32 ole32 comctl32 advapi32 ws2_32 d3d11 dxgi)
+target_link_libraries(helper PRIVATE kernel32 user32 shell32 ole32 comctl32 advapi32 ws2_32 d3d11 dxgi)
 
 # 为什么：GUI 子系统下原生 printf 无控制台；/FI 宏转到 g_helper_log
 # /utf-8：源文件与执行字符集均按 UTF-8，消掉中文注释触发的 C4819（代码页 936）
