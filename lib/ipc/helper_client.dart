@@ -90,7 +90,7 @@ class HelperClient {
 
     await _teardownSocket();
 
-    const failMsg = '连接失败：helper 未就绪或已退出，请确认灯带已插上后重试';
+    const failMsg = '暂时无法控制灯带，请确认灯带已接好后重试';
 
     // 为什么：helper 已常驻时直接连，避免再起次实例又立刻退出导致误判失败（H5）
     try {

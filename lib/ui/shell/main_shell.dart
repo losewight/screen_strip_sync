@@ -1,11 +1,7 @@
-﻿import 'dart:async';
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/spacing.dart';
 import '../../app/theme.dart';
-import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
 import '../pages/control_page.dart';
@@ -20,7 +16,8 @@ import '../widgets/strip_status_bar.dart';
 
 /// 顶栏 + 侧栏 + 内容区。进度条单实例挂壳层，切页不重建。
 ///
-/// 首帧等 helper `cfg end`：未就绪时 loading，超时显示「后台服务未运行」+ 启动。
+/// 首帧即出主控；cfg 未到时各页靠 canConfigure / canControl 灰显控件，
+/// 静默连 helper，不对用户暴露双进程细节。
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -44,30 +41,6 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final cfgReady = ref.watch(configReadyProvider);
-    final snapshotTimedOut = ref.watch(
-      helperStateProvider.select((s) => s.snapshotTimedOut),
-    );
-
-    if (!cfgReady) {
-      return Scaffold(
-        backgroundColor: AppTheme.contentBg,
-        body: Column(
-          children: [
-            const StoreTitleBar(),
-            Expanded(
-              child: snapshotTimedOut
-                  ? _SnapshotUnresponsive(
-                      onRetry: () =>
-                          ref.read(helperStateProvider.notifier).retrySnapshot(),
-                    )
-                  : const _SnapshotLoading(),
-            ),
-          ],
-        ),
-      );
-    }
-
     final phase = ref.watch(helperStateProvider).phase;
     final phaseStyle = HelperPhaseStyle.of(phase);
     final lightingTab = ref.watch(lightingSchemeTabProvider);
@@ -151,110 +124,6 @@ class _MainShellState extends ConsumerState<MainShell> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SnapshotLoading extends StatelessWidget {
-  const _SnapshotLoading();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          SizedBox(height: AppSpacing.text),
-          Text(
-            '正在连接后台服务…',
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 14,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SnapshotUnresponsive extends StatefulWidget {
-  const _SnapshotUnresponsive({required this.onRetry});
-
-  final Future<void> Function() onRetry;
-
-  @override
-  State<_SnapshotUnresponsive> createState() => _SnapshotUnresponsiveState();
-}
-
-class _SnapshotUnresponsiveState extends State<_SnapshotUnresponsive> {
-  static const _retryGap = Duration(seconds: 2);
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_autoRetryLoop());
-  }
-
-  Future<void> _autoRetryLoop() async {
-    while (mounted) {
-      await widget.onRetry();
-      if (!mounted) return;
-      await Future<void>.delayed(_retryGap);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: AppSpacing.pageInsets,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.desktop_access_disabled,
-                size: 40,
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(height: AppSpacing.text),
-              const Text(
-                '后台服务未运行',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.compact),
-              const Text(
-                '灯光由本机托盘程序控制。正在自动尝试启动，也可以点下面按钮。',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.section),
-              FilledButton(
-                onPressed: () => unawaited(widget.onRetry()),
-                child: const Text('启动后台服务'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

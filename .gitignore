@@ -49,6 +49,7 @@ app.*.map.json
 .cursor/
 .agents/
 .cursorrules
+AGENTS.md
 .github/copilot-instructions.md
 /dist/
 /dist_stage/

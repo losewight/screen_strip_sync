@@ -9,6 +9,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
   StreamSubscription<void>? _disconnectSub;
   bool _ensureHelperInFlight = false;
   Future<void>? _retrySnapshotInFlight;
+  Timer? _autoRetryTimer;
   bool _engineWanted = false;
   HelperDisplayKind _lastDisplay = HelperDisplayKind.idle;
   String? _pendingSolid;

@@ -98,8 +98,8 @@ class CaptureOutputPicker extends ConsumerWidget {
           const SizedBox(height: AppSpacing.control),
           Text(
             outputs.isEmpty
-                ? '尚未收到后台屏幕列表；连上后台服务后会出现可抓取的显示器。'
-                : '列表来自后台正在使用的显卡。换屏后灯效会停一下再按刚才的模式继续。',
+                ? '尚未收到显示器列表；灯带就绪后会出现可抓取的屏幕。'
+                : '列表来自当前正在使用的显卡。换屏后灯效会停一下再按刚才的模式继续。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

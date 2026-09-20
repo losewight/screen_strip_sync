@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,27 +35,32 @@ class ControlPage extends ConsumerWidget {
         anchor.isNotEmpty &&
         cfg.comPort.toUpperCase() != anchor.toUpperCase();
 
-    final canConnect =
-        cfgReady &&
-        ui.phase != HelperPhase.connecting &&
-        (ui.phase == HelperPhase.disconnected ||
-            ui.phase == HelperPhase.failed ||
-            ui.phase == HelperPhase.needConnect ||
-            ui.phase == HelperPhase.openFailed ||
-            portChanged ||
-            !ui.hasDevice);
+    // 无快照：只静默拉 / 重试 helper，不开串口（connect() 内已分流）
+    final needsHelper = !cfgReady;
+    final canConnect = ui.phase != HelperPhase.connecting &&
+        (needsHelper
+            ? ui.snapshotTimedOut
+            : (ui.phase == HelperPhase.disconnected ||
+                ui.phase == HelperPhase.failed ||
+                ui.phase == HelperPhase.needConnect ||
+                ui.phase == HelperPhase.openFailed ||
+                portChanged ||
+                !ui.hasDevice));
 
     // 重连串口：仅「IPC 已通且所选口就是当前打开口」
     final canReconnectSerial =
+        cfgReady &&
         ui.phase != HelperPhase.connecting &&
         ui.currentCom.isNotEmpty &&
         cfg.comPort.isNotEmpty &&
         cfg.comPort.toUpperCase() == ui.currentCom.toUpperCase() &&
         (ui.canControl || ui.phase == HelperPhase.openFailed);
 
-    // 换口失败后选回上次成功口 →「重新连接」；选其它口 →「换口连接」
+    // 无快照且超时 →「重试」；换口失败后选回上次成功口 →「重新连接」；选其它口 →「换口连接」
     final String connectLabel;
-    if (portChanged) {
+    if (needsHelper) {
+      connectLabel = '重试';
+    } else if (portChanged) {
       connectLabel = '换口连接';
     } else if (ui.lastGoodCom.isNotEmpty &&
         (ui.phase == HelperPhase.failed ||
@@ -76,12 +83,28 @@ class ControlPage extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (ui.snapshotTimedOut && !cfgReady) ...[
+                  _UnreachableBanner(
+                    onRetry: () {
+                      unawaited(notifier.retrySnapshot());
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.text),
+                ],
                 _ConnectBar(
                   canConnect: canConnect,
                   connectLabel: connectLabel,
                   canReconnectSerial: canReconnectSerial,
-                  onConnect: notifier.connect,
-                  onReconnectSerial: notifier.reconnectSerial,
+                  onConnect: () {
+                    if (needsHelper) {
+                      unawaited(notifier.retrySnapshot());
+                    } else {
+                      unawaited(notifier.connect());
+                    }
+                  },
+                  onReconnectSerial: () {
+                    unawaited(notifier.reconnectSerial());
+                  },
                 ),
                 const SizedBox(height: AppSpacing.text),
                 const SerialPortPicker(radius: _SwitchGroup.radius),
@@ -130,8 +153,8 @@ class ControlPage extends ConsumerWidget {
                     _SwitchRow(
                       title: '开机软件自启',
                       subtitle:
-                          '打开后随 Windows 开机静默启动 Screen Strip Sync '
-                          '后台服务（托盘常驻），并按上次灯效自动亮起',
+                          '打开后随 Windows 开机静默启动，托盘常驻，'
+                          '并按上次灯效自动亮起',
                       value: cfg.startOnBoot,
                       onChanged: canEdit
                           ? (v) {
@@ -146,6 +169,44 @@ class ControlPage extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UnreachableBanner extends StatelessWidget {
+  const _UnreachableBanner({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 38, 43, 60),
+        borderRadius: BorderRadius.circular(_SwitchGroup.radius),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      padding: AppSpacing.cardInsets,
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              '暂时无法控制灯带',
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color.fromARGB(255, 240, 240, 240),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.text),
+          FilledButton(
+            onPressed: onRetry,
+            child: const Text('重试'),
+          ),
+        ],
       ),
     );
   }

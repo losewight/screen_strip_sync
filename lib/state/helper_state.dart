@@ -27,7 +27,7 @@ class HelperStateNotifier extends _HelperStateBase
       _outputsExpect = 0;
       _outputsBuf.clear();
       _patch(
-        message: 'helper 已断开',
+        message: '暂时无法控制灯带',
         phase: HelperPhase.disconnected,
         hasDevice: false,
         currentCom: '',
@@ -36,9 +36,11 @@ class HelperStateNotifier extends _HelperStateBase
         captureOutputs: const [],
         clearCurrentCapture: true,
       );
+      _startAutoRetryIfNeeded();
     });
     ref.onDispose(() {
       _cancelPendingSolid();
+      _stopAutoRetry();
       _statusSub?.cancel();
       _disconnectSub?.cancel();
     });
@@ -88,7 +90,7 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   /// 只连 helper IPC（不开口）。界面启动 / 扫口前用。
-  /// 为什么：connecting 相位只表示开串口；连后台不改顶栏，等 helper 推 status。
+  /// 为什么：connecting 相位只表示开串口；连 IPC 静默，不改顶栏黑话。
   Future<void> ensureHelperConnected() async {
     if (_ensureHelperInFlight || _client.isConnected) return;
 
@@ -96,14 +98,15 @@ class HelperStateNotifier extends _HelperStateBase
     try {
       await _client.connect();
       unawaited(_ensureConfigSnapshot());
-    } catch (e) {
+    } catch (_) {
       _patch(
-        message: '$e',
+        message: '暂时无法控制灯带',
         phase: HelperPhase.failed,
         hasDevice: false,
         currentCom: '',
         snapshotTimedOut: true,
       );
+      _startAutoRetryIfNeeded();
     } finally {
       _ensureHelperInFlight = false;
     }
@@ -175,7 +178,7 @@ class HelperStateNotifier extends _HelperStateBase
   /// 未配备时快照到达后再扫一次，避免 cfg 默认 COM10 盖掉推荐口。
   Future<void> _ensureConfigSnapshot() async {
     const step = Duration(milliseconds: 100);
-    const waitTries = 20; // 与壳层约 2s 超时对齐
+    const waitTries = 20; // 约 2s 超时
     Future<bool> waitSnapshot() async {
       for (var i = 0; i < waitTries; i++) {
         if (ref.read(configProvider.notifier).hasSnapshot) return true;
@@ -187,17 +190,23 @@ class HelperStateNotifier extends _HelperStateBase
 
     if (await waitSnapshot()) {
       _patch(snapshotTimedOut: false);
+      _stopAutoRetry();
     } else {
-      _patch(snapshotTimedOut: true);
+      _patch(
+        message: '暂时无法控制灯带',
+        snapshotTimedOut: true,
+      );
+      _startAutoRetryIfNeeded();
       if (!_client.isConnected) return;
       try {
         _sendIpc('sync');
-      } catch (e) {
-        _patch(message: '$e');
+      } catch (_) {
+        _patch(message: '暂时无法控制灯带');
         return;
       }
       if (!await waitSnapshot()) return;
       _patch(snapshotTimedOut: false);
+      _stopAutoRetry();
     }
 
     if (!ref.read(configProvider).serialConfigured) {
@@ -205,8 +214,8 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  /// 壳层「后台服务未运行」：自动重试与按钮共用；进行中合并成一次。
-  /// 成功前不把 snapshotTimedOut 拉回 false，避免整页在转圈和操作页之间闪。
+  /// 连不上时自动 / 手动重试；进行中合并成一次。
+  /// 成功前不把 snapshotTimedOut 拉回 false，避免控件在灰显与可点之间闪。
   Future<void> retrySnapshot() {
     return _retrySnapshotInFlight ??= _retrySnapshotBody().whenComplete(() {
       _retrySnapshotInFlight = null;
@@ -214,24 +223,49 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   Future<void> _retrySnapshotBody() async {
-    _patch(
-      message: '正在连接后台服务…',
-      phase: state.phase == HelperPhase.failed
-          ? HelperPhase.disconnected
-          : null,
-    );
+    // 为什么：重试过程静默，不刷「正在连接后台」；失败文案留给 snapshotTimedOut。
+    if (state.phase == HelperPhase.failed) {
+      _patch(phase: HelperPhase.disconnected);
+    }
     if (!_client.isConnected) {
       await ensureHelperConnected();
     }
-    if (!_client.isConnected) return;
-    if (ref.read(configProvider.notifier).hasSnapshot) return;
+    if (!_client.isConnected) {
+      _startAutoRetryIfNeeded();
+      return;
+    }
+    if (ref.read(configProvider.notifier).hasSnapshot) {
+      _patch(snapshotTimedOut: false);
+      _stopAutoRetry();
+      return;
+    }
     try {
       _sendIpc('sync');
-    } catch (e) {
-      _patch(message: '$e', snapshotTimedOut: true);
+    } catch (_) {
+      _patch(message: '暂时无法控制灯带', snapshotTimedOut: true);
+      _startAutoRetryIfNeeded();
       return;
     }
     await _ensureConfigSnapshot();
+  }
+
+  /// 快照超时后每 2s 静默重试，直到收到 cfg 或 dispose。
+  void _startAutoRetryIfNeeded() {
+    if (_autoRetryTimer != null) return;
+    if (!state.snapshotTimedOut) return;
+    _autoRetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!state.snapshotTimedOut ||
+          ref.read(configProvider.notifier).hasSnapshot) {
+        _stopAutoRetry();
+        return;
+      }
+      unawaited(retrySnapshot());
+    });
+  }
+
+  void _stopAutoRetry() {
+    _autoRetryTimer?.cancel();
+    _autoRetryTimer = null;
   }
 
   /// 松手滑条后下发；helper 侧再 clamp。未连接则静默跳过。
