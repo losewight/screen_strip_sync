@@ -76,6 +76,7 @@
 | `status output i NAME WxH L,T p c [friendly…]` | 可 duplicate 的一块屏（primary / current） |
 | `status serial_lost` / `serial_ok` | 串口掉线 / 恢复（部分路径） |
 | `ui show` | 托盘请求：把已有窗口置顶 |
+| `ui quit` | 后台完全退出：界面立刻 `exit(0)`，且不得再拉起 helper |
 
 连接建立时，helper 会主动推送一轮 `cfg …` + `cfg end` + `status …`。
 
@@ -125,4 +126,4 @@
 | --- | --- | --- |
 | 关界面窗口 | `bye` | 不断灯；helper 继续 |
 | 界面「关灯」 | `soft_off` | 停追色 + 黑帧；一般不下电 |
-| 托盘退出 / 完全退出 | `quit` | 关灯并退出 helper（真下电走 `set_power 0` 一类路径） |
+| 托盘退出 / 完全退出 | 先 `ui quit`（若有客户端），再 `quit` / `helper_shutdown` | 通知界面退出后关灯并退出 helper（真下电走 `set_power 0` 一类路径） |

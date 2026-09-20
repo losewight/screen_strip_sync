@@ -22,6 +22,11 @@ class HelperStateNotifier extends _HelperStateBase
   HelperUiState build() {
     _statusSub ??= _client.statusStream.listen(_onStatusEvent);
     _disconnectSub ??= _client.disconnectStream.listen((_) {
+      // 为什么：托盘完全退出已推 ui quit，勿开 auto-retry 再拉 helper
+      if (_client.isQuitting) {
+        _stopAutoRetry();
+        return;
+      }
       _cancelPendingSolid();
       _lastDisplay = HelperDisplayKind.idle;
       _outputsExpect = 0;
@@ -92,13 +97,16 @@ class HelperStateNotifier extends _HelperStateBase
   /// 只连 helper IPC（不开口）。界面启动 / 扫口前用。
   /// 为什么：connecting 相位只表示开串口；连 IPC 静默，不改顶栏黑话。
   Future<void> ensureHelperConnected() async {
+    if (_client.isQuitting) return;
     if (_ensureHelperInFlight || _client.isConnected) return;
 
     _ensureHelperInFlight = true;
     try {
       await _client.connect();
+      if (_client.isQuitting) return;
       unawaited(_ensureConfigSnapshot());
     } catch (_) {
+      if (_client.isQuitting) return;
       _patch(
         message: '暂时无法控制灯带',
         phase: HelperPhase.failed,
@@ -223,6 +231,7 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   Future<void> _retrySnapshotBody() async {
+    if (_client.isQuitting) return;
     // 为什么：重试过程静默，不刷「正在连接后台」；失败文案留给 snapshotTimedOut。
     if (state.phase == HelperPhase.failed) {
       _patch(phase: HelperPhase.disconnected);
@@ -230,6 +239,7 @@ class HelperStateNotifier extends _HelperStateBase
     if (!_client.isConnected) {
       await ensureHelperConnected();
     }
+    if (_client.isQuitting) return;
     if (!_client.isConnected) {
       _startAutoRetryIfNeeded();
       return;
@@ -251,9 +261,14 @@ class HelperStateNotifier extends _HelperStateBase
 
   /// 快照超时后每 2s 静默重试，直到收到 cfg 或 dispose。
   void _startAutoRetryIfNeeded() {
+    if (_client.isQuitting) return;
     if (_autoRetryTimer != null) return;
     if (!state.snapshotTimedOut) return;
     _autoRetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (_client.isQuitting) {
+        _stopAutoRetry();
+        return;
+      }
       if (!state.snapshotTimedOut ||
           ref.read(configProvider.notifier).hasSnapshot) {
         _stopAutoRetry();

@@ -9,7 +9,8 @@ import '../ipc/helper_client.dart';
 import '../state/helper_state.dart';
 import 'crash_log.dart';
 
-/// App 级生命周期：关窗视觉立刻消失，后台 bye 后 exit(0)；托盘 `ui show` 置顶。
+/// App 级生命周期：关窗视觉立刻消失，后台 bye 后 exit(0)；托盘 `ui show` 置顶；
+/// 托盘/IPC 完全退出推 `ui quit` 时同样 exit(0)。
 class AppLifecycleHost extends ConsumerStatefulWidget {
   const AppLifecycleHost({super.key, required this.child});
 
@@ -25,6 +26,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
 
   bool _closing = false;
   StreamSubscription<void>? _uiShowSub;
+  StreamSubscription<void>? _uiQuitSub;
 
   @override
   void initState() {
@@ -32,9 +34,16 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     windowManager.addListener(this);
     // 为什么：不拦截则 close 立刻杀进程，bye 来不及写
     unawaited(_armPreventClose());
+    final client = ref.read(helperClientProvider);
     // 托盘双击且客户端仍在：helper 推 ui show → 置顶
-    _uiShowSub = ref.read(helperClientProvider).uiShowStream.listen((_) {
+    _uiShowSub = client.uiShowStream.listen((_) {
       unawaited(_bringToFront());
+    });
+    // 托盘「退出」：helper 推 ui quit → 立刻关窗，禁止再拉 helper
+    _uiQuitSub = client.uiQuitStream.listen((_) {
+      if (_closing) return;
+      _closing = true;
+      unawaited(_shutdown());
     });
   }
 
@@ -60,6 +69,8 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
   void dispose() {
     unawaited(_uiShowSub?.cancel());
     _uiShowSub = null;
+    unawaited(_uiQuitSub?.cancel());
+    _uiQuitSub = null;
     windowManager.removeListener(this);
     super.dispose();
   }
@@ -90,7 +101,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
     } on TimeoutException {
       // helper 挂起：超时后仍 exit
     } catch (_) {
-      // 未连接等：忽略
+      // 未连接 / helper 已在退：忽略
     }
 
     CrashLog.event('lifecycle', 'exit(0)');

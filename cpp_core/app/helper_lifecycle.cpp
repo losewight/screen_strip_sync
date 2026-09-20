@@ -405,6 +405,12 @@ void helper_shutdown(bool turn_off_lights) {
   printf("helper_shutdown begin (lights=%d)\n", turn_off_lights ? 1 : 0);
   g_awaiting_resume.store(false);
 
+  // 为什么：先拦 CreateProcess，再通知在线 UI 立刻 exit(0)，避免断线后 Flutter
+  // 误 Process.start 把 helper 拉活
+  ui_shutdown();
+  if (ipc_push_ui_quit())
+    Sleep(150);
+
   {
     std::lock_guard<std::mutex> lock(g_boot_thread_mu);
     if (g_boot_worker.joinable())
@@ -430,6 +436,5 @@ void helper_shutdown(bool turn_off_lights) {
   }
   dxgi_shutdown();
   ipc_cancel();
-  ui_shutdown(); // 只关子进程句柄，不杀 Flutter
   printf("helper_shutdown done\n");
 }

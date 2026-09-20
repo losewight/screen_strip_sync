@@ -277,6 +277,8 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
           break;
         }
         if (dr == DispatchResult::ShutdownService) {
+          // 为什么：dispatch 已推 ui quit；短等让 TCP 发出去再 drop
+          Sleep(150);
           g_ipc_quit.store(true);
           break;
         }
@@ -303,6 +305,8 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
       continue;
     }
     if (dr == DispatchResult::ShutdownService) {
+      // 为什么：dispatch 已推 ui quit；短等让 TCP 发出去再 drop
+      Sleep(150);
       g_ipc_quit.store(true);
       break;
     }

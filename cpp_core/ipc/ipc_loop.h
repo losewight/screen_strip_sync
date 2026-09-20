@@ -15,6 +15,8 @@ void ipc_cancel();
 bool ipc_has_client();
 // 有客户端则推 `ui show\n` 置顶窗口；无则返回 false。可从托盘线程调用。
 bool ipc_push_ui_show();
+// 有客户端则推 `ui quit\n`：后台完全退出，前端立刻 exit(0) 且不得再拉 helper。
+bool ipc_push_ui_quit();
 // 有客户端则推 status engine/display；无客户端不读 intent、不组包。
 // include_com 仅连接快照 / reconnect / 口变更；托盘·电源默认 false。
 // 与串口 120 字节帧长红线无关，本门禁只管 IPC。

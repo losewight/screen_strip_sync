@@ -45,9 +45,13 @@ class HelperClient {
   final StringBuffer _rxBuf = StringBuffer();
   StreamSubscription<List<int>>? _socketSub;
 
+  /// helper 推 `ui quit` 后置位：禁止再 Process.start，断线也不自愈。
+  bool _quitting = false;
+
   final _statusController = StreamController<HelperStatusEvent>.broadcast();
   final _disconnectController = StreamController<void>.broadcast();
   final _uiShowController = StreamController<void>.broadcast();
+  final _uiQuitController = StreamController<void>.broadcast();
   final _configController = StreamController<AppConfig>.broadcast();
   final _cfgBuf = <String>[];
 
@@ -60,14 +64,21 @@ class HelperClient {
   /// 托盘双击且已有客户端：helper 推 `ui show`，前端置顶窗口。
   Stream<void> get uiShowStream => _uiShowController.stream;
 
+  /// 托盘/IPC 完全退出：helper 推 `ui quit`，前端立刻 exit(0)。
+  Stream<void> get uiQuitStream => _uiQuitController.stream;
+
   /// 每次 `cfg …` + `cfg end` 组成的完整快照（可多次推送）。
   Stream<AppConfig> get configSnapshots => _configController.stream;
 
   bool get isConnected => _sock != null;
 
+  /// 后台正在完全退出；为 true 时不得再拉 helper。
+  bool get isQuitting => _quitting;
+
   /// 先试连已有 helper；失败才 `Process.start(..., ['--no-ui'])` 再重试。
   /// [comPort] 保留参数兼容；开口只走 JSON / IPC（H2 后 argv 不再传 COM）。
   Future<void> connect({String? comPort}) async {
+    if (_quitting) return;
     if (isConnected) return;
     final inFlight = _inFlightConnect;
     if (inFlight != null) {
@@ -86,9 +97,10 @@ class HelperClient {
   }
 
   Future<void> _connectInternal() async {
-    if (isConnected) return;
+    if (_quitting || isConnected) return;
 
     await _teardownSocket();
+    if (_quitting) return;
 
     const failMsg = '暂时无法控制灯带，请确认灯带已接好后重试';
 
@@ -99,6 +111,10 @@ class HelperClient {
         _ipcPort,
         timeout: const Duration(milliseconds: 300),
       );
+      if (_quitting) {
+        existing.destroy();
+        return;
+      }
       _sock = existing;
       _listenSocket(existing);
       debugPrint('helper: connected to existing instance');
@@ -106,6 +122,9 @@ class HelperClient {
     } catch (_) {
       // 未在听 → 自拉后重试 9527
     }
+
+    // 为什么：托盘「退出」已推 ui quit 时绝不能再拉起 helper
+    if (_quitting) return;
 
     final helperFile = resolveHelperExecutable();
     debugPrint('helper: ${helperFile.path} --no-ui');
@@ -118,11 +137,14 @@ class HelperClient {
       mode: ProcessStartMode.detached,
     );
 
+    if (_quitting) return;
+
     const maxTries = 10;
     Socket? sock;
     Object? lastErr;
 
     for (var i = 1; i <= maxTries; i++) {
+      if (_quitting) return;
       try {
         sock = await Socket.connect(
           InternetAddress.loopbackIPv4,
@@ -136,6 +158,11 @@ class HelperClient {
           await Future<void>.delayed(const Duration(milliseconds: 200));
         }
       }
+    }
+
+    if (_quitting) {
+      sock?.destroy();
+      return;
     }
 
     if (sock == null) {
@@ -175,6 +202,14 @@ class HelperClient {
 
   void _onLine(String line) {
     if (line.isEmpty) return;
+    if (line == 'ui quit') {
+      // 为什么：必须同步置位，否则 onDone 竞态里 auto-retry 会先 Process.start
+      _quitting = true;
+      if (!_uiQuitController.isClosed) {
+        _uiQuitController.add(null);
+      }
+      return;
+    }
     if (line == 'ui show') {
       if (!_uiShowController.isClosed) {
         _uiShowController.add(null);
@@ -238,6 +273,9 @@ class HelperClient {
     }
     if (!_uiShowController.isClosed) {
       await _uiShowController.close();
+    }
+    if (!_uiQuitController.isClosed) {
+      await _uiQuitController.close();
     }
     if (!_configController.isClosed) {
       await _configController.close();

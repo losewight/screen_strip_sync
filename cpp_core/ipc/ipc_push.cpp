@@ -242,6 +242,15 @@ bool ipc_push_ui_show() {
   return true;
 }
 
+bool ipc_push_ui_quit() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  send_line(cs, "ui quit\n");
+  printf("ipc: pushed ui quit\n");
+  return true;
+}
+
 bool ipc_push_runtime_status(bool include_com) {
   // 为什么：无 UI 时托盘/电源仍可能调用；先看 socket，再读 intent，避免无谓组包
   SOCKET cs = g_client_sock;

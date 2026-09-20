@@ -88,7 +88,8 @@ static void cmd_set_capture_output(const char *wanted, HANDLE *serial,
 
 DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "quit") == 0) {
-    // 为什么：关窗走 bye；quit 才关后台服务
+    // 为什么：关窗走 bye；quit 才关后台服务。先通知 UI，再让 ipc_run 收尾。
+    ipc_push_ui_quit();
     engine_stop();
     printf("cmd=quit\n");
     return DispatchResult::ShutdownService;
