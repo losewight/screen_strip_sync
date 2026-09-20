@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/diag_export.dart';
 import '../../app/spacing.dart';
-import '../../app/theme.dart';
 import '../../ipc/helper_client.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/scheme_card.dart';
 
 /// 设置：开源排障诊断导出（不写配置、不控灯）。
 class SettingsPage extends ConsumerStatefulWidget {
@@ -72,8 +72,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Center(
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
@@ -81,43 +79,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           constraints: const BoxConstraints(maxWidth: 720),
           child: SizedBox(
             width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '诊断 / 反馈',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: AppTheme.textPrimary,
+            child: SchemeCard(
+              title: '诊断 / 反馈',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SchemeParamLabel(
+                    '导出本机诊断信息，便于在开源仓库提交 Issue 时附上。'
+                    '仅生成本地文件，不会自动上传；提交前请自行确认内容。',
                   ),
-                ),
-                const SizedBox(height: AppSpacing.compact),
-                Text(
-                  '导出本机诊断信息，便于在开源仓库提交 Issue 时附上。'
-                  '仅生成本地文件，不会自动上传；提交前请自行确认内容。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
+                  const SizedBox(height: AppSpacing.text),
+                  FilledButton.icon(
+                    onPressed: _exporting ? null : _exportDiag,
+                    icon: _exporting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.bug_report_outlined),
+                    label: Text(_exporting ? '正在导出…' : '导出诊断信息'),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.text),
-                FilledButton.icon(
-                  onPressed: _exporting ? null : _exportDiag,
-                  icon: _exporting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.bug_report_outlined),
-                  label: Text(_exporting ? '正在导出…' : '导出诊断信息'),
-                ),
-                const SizedBox(height: AppSpacing.control),
-                OutlinedButton.icon(
-                  onPressed: _openLogDir,
-                  icon: const Icon(Icons.folder_open_outlined),
-                  label: const Text('打开日志所在文件夹'),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.control),
+                  OutlinedButton.icon(
+                    onPressed: _openLogDir,
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text('打开日志所在文件夹'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
