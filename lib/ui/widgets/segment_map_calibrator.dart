@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
@@ -29,7 +29,7 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
   Future<void> _start() async {
     final ui = ref.read(helperStateProvider);
     if (!ui.canControl) {
-      setState(() => _error = '请先连接 helper');
+      setState(() => _error = '请先连接灯带');
       return;
     }
     if (_busy) return;
@@ -78,7 +78,12 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
   @override
   Widget build(BuildContext context) {
     final cfg = ref.watch(configProvider);
-    final can = ref.watch(helperStateProvider.select((s) => s.canControl));
+    final canAct = ref.watch(helperStateProvider.select((s) => s.canControl));
+    final canEdit =
+        ref.watch(
+          helperStateProvider.select((s) => s.canConfigure),
+        ) &&
+        ref.watch(configReadyProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,12 +100,12 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
           alignment: WrapAlignment.center,
           children: [
             FilledButton.icon(
-              onPressed: (_busy || !can) ? null : _start,
+              onPressed: (_busy || !canAct) ? null : _start,
               icon: const Icon(Icons.center_focus_strong, size: 18),
               label: Text(_busy ? '准备中…' : '开始校准'),
             ),
             OutlinedButton.icon(
-              onPressed: cfg.hasSegmentMap && can ? _restoreDefault : null,
+              onPressed: cfg.hasSegmentMap && canEdit ? _restoreDefault : null,
               icon: const Icon(Icons.restart_alt, size: 18),
               label: const Text('恢复默认映射'),
             ),

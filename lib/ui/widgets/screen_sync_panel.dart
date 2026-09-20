@@ -19,7 +19,7 @@ class ScreenSyncPanel extends ConsumerWidget {
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
-    final canEdit = can && ref.watch(configReadyProvider);
+    final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
     // 与 regionSmooth 同概念、极性相反：UI 平滑度 = 1 − α（α∈[0.05,1] → 平滑∈[0,0.95]）。
     final smooth = (1.0 - cfg.emaAlpha).clamp(0.0, 0.95);
     final follow = ui.followCaptureLabel(cfg.captureOutput);

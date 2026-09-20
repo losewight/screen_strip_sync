@@ -17,7 +17,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
 
   Future<void> _pickRegionBBox(BuildContext context, WidgetRef ref) async {
     final ui = ref.read(helperStateProvider);
-    if (!ui.canControl) return;
+    if (!ui.canConfigure) return;
     final box = await Navigator.of(context).push<RegionBBox?>(
       PageRouteBuilder(
         opaque: true,
@@ -37,7 +37,7 @@ class ScreenAmbiencePanel extends ConsumerWidget {
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
-    final canEdit = can && ref.watch(configReadyProvider);
+    final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
     final box = cfg.regionBBox;
     // 与屏幕跟色平滑度滑条同粒度：0..0.95 / divisions:19。
     final regionSmoothUi = cfg.regionSmooth.clamp(0.0, 0.95);

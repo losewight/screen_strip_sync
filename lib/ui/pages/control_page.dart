@@ -25,7 +25,7 @@ class ControlPage extends ConsumerWidget {
     final ui = ref.watch(helperStateProvider);
     final notifier = ref.read(helperStateProvider.notifier);
     final cfgReady = ref.watch(configReadyProvider);
-    final canEdit = ui.canControl && cfgReady;
+    final canEdit = ui.canConfigure && cfgReady;
     // 锚点：当前打开口，或换口失败后仍保留的 lastGoodCom
     final anchor = ui.anchorCom;
     final portChanged =
@@ -235,7 +235,7 @@ class _WallColorCompCard extends ConsumerWidget {
     final notifier = ref.read(helperStateProvider.notifier);
     final cfgReady = ref.watch(configReadyProvider);
     final ui = ref.watch(helperStateProvider);
-    final canEdit = ui.canControl && cfgReady;
+    final canEdit = ui.canConfigure && cfgReady;
     final hasColor = cfg.hasWallColor;
     final wallColor = colorFromSolidHex(cfg.wallColor);
 

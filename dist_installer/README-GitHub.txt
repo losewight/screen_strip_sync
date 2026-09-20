@@ -1,7 +1,7 @@
 ﻿Release 产物（本目录）
 
-- ScreenStripSync-1.0.2-windows-x64-Setup.exe  … Inno 安装包（有 ISCC 时）
-- ScreenStripSync-1.0.2-windows-x64.zip         … 绿色版（解压后运行 helper.exe）
+- ScreenStripSync-1.0.3-windows-x64-Setup.exe  … Inno 安装包（有 ISCC 时）
+- ScreenStripSync-1.0.3-windows-x64.zip         … 绿色版（解压后运行 helper.exe）
 - SHA256SUMS.txt
 
 关于 32 位（x86）：

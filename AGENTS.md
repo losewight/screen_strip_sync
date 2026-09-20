@@ -1,0 +1,402 @@
+﻿# Screen Strip Sync — 项目框架与推进规则
+
+> 本文件是本项目的**唯一权威**（架构 + 红线 + 计划 + 协作纪律）。
+> `docs/AI_STATUS.md`、`docs/PROJECT_STATUS.md` 为详细背景参考，不再与本文件双向同步；
+> 旧的 Day 1-25 教学日程已归档在 `backup/cursorrules`，**不再作为进度依据**。
+>
+> **2026-08 架构翻转（v2 → v3）**：主从关系反过来了。
+> 旧：Flutter 是主进程，`Process.start` 拉起 helper，独占配置文件，休眠靠 helper 自杀 + Flutter 唤醒重连。
+> 新：`helper.exe` 是常驻主进程（托盘 + 配置属主 + 串口属主），Flutter 退化成可随时开关的纯前端。
+> 翻转前的阶段 A / B / M 清单处置见第 6 节末尾「旧清单处置」。
+
+---
+
+## 1. 项目与架构
+
+Windows PC screen sync LED driver for 米家追光灯带 Pro（unofficial，20 颗物理 RGB 灯珠；第三方俗称勿当产品名）。
+
+### 1.1 架构 v3 — helper 主导双进程
+
+| 进程 | 角色 | 职责 | 禁止 |
+|------|------|------|------|
+| `helper.exe`（C++） | **主进程 / 常驻** | 单实例守卫、托盘图标与菜单、配置属主（读**写** JSON）、串口唯一属主、DXGI 抓屏、stride 采样、组 ASCII 帧、发帧循环、IPC 服务、开机自启注册表、电源自恢复、按需拉起 UI | 对外监听、并发多客户端、让 Flutter 碰 COM、**因前端退出而关灯或退进程** |
+| `screen_strip_sync.exe`（Flutter） | **纯前端 / 可随时开关** | UI 交互、参数展示与编辑、发命令、渲染 helper 推来的配置与状态、框选校准与截屏 | **写配置文件**、开串口、传逐帧像素、常驻后台、杀 helper、在 Dart 侧做 EMA / 组帧 |
+
+两进程只经本机 IPC（`127.0.0.1:9527` 回环 TCP）传**命令 / 状态 / 配置文本**；逐帧像素与发帧热路径全部留在 helper 内，**不经 `dart:ffi`**。
+
+```mermaid
+flowchart LR
+ Reg["注册表 Run: helper.exe --autostart"] --> Helper
+ Lnk["快捷方式: helper.exe"] --> Helper
+
+ subgraph Helper [helper_exe_常驻主进程]
+  Single[single_instance_mutex]
+  Tray[tray_icon_and_menu]
+  Cfg[config_store_json]
+  IPC[ipc_loop_9527]
+  Engine[light_engine]
+  DXGI[dxgi_capture]
+  Serial[serial_port]
+  Power[power_watch]
+ end
+
+ subgraph Flutter [screen_strip_sync_exe_纯前端]
+  UI[Pages_material3]
+  State[Riverpod_Notifiers]
+  Client[HelperClient]
+ end
+
+ Helper -->|"CreateProcess --no-ui"| Flutter
+ Client -->|"commands_text"| IPC
+ IPC -->|"cfg_and_status_text"| Client
+ IPC -->|"ui show"| Client
+ Cfg --> Engine
+ IPC --> Engine
+ Engine --> DXGI
+ Engine --> Serial
+ Serial -->|"ASCII_lt_120B"| Device[LED_Strip]
+```
+
+### 1.2 生命周期五条线（产品定义，不是实现细节）
+
+| 场景 | 流程 |
+|------|------|
+| **正常启动** | 双击 `helper.exe` → 单实例检查 → 挂托盘 → 读配置 → 尝试开串口（失败则跳过场景恢复，**进程与托盘仍常驻**）→ listen 9527 → 拉起 Flutter 显示界面 |
+| **静默自启** | 注册表 `HKCU\...\Run\Screen Strip Sync` → `helper.exe --autostart` → 同上，但**不拉 Flutter**；有串口则按上次配置干活 |
+| **打开界面** | 托盘双击 → 已有客户端则推 `ui show` 置顶现有窗口；无客户端则 `CreateProcess` 拉起 Flutter → Flutter 连 9527 → helper 推全量配置快照 → 界面渲染 |
+| **隐藏界面** | Flutter 右上角 X → 发 `bye` → `exit(0)` **整进程退出（内存清零）**；helper、串口、灯效、托盘全部不受影响 |
+| **完全退出** | 托盘「退出」（或 IPC `quit`）→ 关灯 → 停引擎 → 关串口 → 关 DXGI → 摘托盘 → helper 进程退出 |
+
+### 1.3 历史废案（勿回改主线）
+
+- v1：「Flutter + C++ DLL 同进程 + `dart:ffi`」，发帧线程与 Flutter 渲染抢资源，窗口可见时丢帧。学习产物在 `cpp_core/废案_同进程FFI_Day11-14/`、`backup/lib - 副本/`，**不要从里面复制 FFI 代码**。
+- v2：「Flutter 主进程拉起 helper」，配置在 Flutter、执行在 helper，导致开机自启做不干净、前端一关灯就灭、唤醒重连状态机复杂。本次翻转即为解决这三点。
+
+---
+
+## 2. 硬红线（任何实现不得突破）
+
+### 2.1 设备与协议
+
+- 米家追光灯带 Pro，20 颗物理 RGB；10 段渲染、每段 `Step=2`。
+- 纯 ASCII 文本串口，**230400 8N1**，每帧必须以 `\r\n` 结尾。
+
+### 2.2 帧长
+
+- 含 `\r\n` 工程限制 **< 120 字节**；代码层拒绝 `>= 120`（见 `serial_port.cpp` 的 `send_one_frame` 与 `light_engine.cpp` 组帧后的二次校验）。
+- 设备硬上限 128 且**无防溢出保护**，超限会死机、只能硬件重启。**绝不试探 128**，绝不为提高分辨率而加长指令。
+- **这条只管串口帧。** IPC 行长上限（512 字符）是另一回事，两者不得互相引用、不得互相"对齐"。
+
+### 2.3 帧间隔
+
+- `WriteFile` 之后必须 `Sleep(50)` 以上（实测极限，再短丢帧）。**不得为提高帧率压到 50ms 以下。**
+
+### 2.4 并发
+
+- 所有串口写（含关灯 / 握手 / 高亮路径）统一走 `send_one_frame` 的 `std::mutex`；`WriteFile` 成功后仍持锁 `Sleep(50)`。
+- 引擎停止顺序：置停止标志 → `join` 发帧线程 → `power_off` → 关串口。不要在 worker 还在跑时先 `power_off`（会 0ms 连写、灯可能被 RGB 重新点亮）。
+
+### 2.5 进程边界（v3 重写）
+
+- **串口唯一属主 = `helper.exe`**；Flutter 绝不直接开串口。
+- **helper 与 Flutter 各自单实例**，都用命名互斥体守卫（`Global\ScreenStripSyncHelper` / `Local\ScreenStripSyncUi`）。helper 用 `Global\` 是为了跨完整性级别（普通快捷方式 ↔ 提权托盘）仍是同一把锁。第二个 helper 实例不得开串口、不得 bind 端口，只负责通知首实例「打开界面」然后立刻退出。
+- **helper 不得因客户端断开而关灯 / 停引擎 / 退进程。** 前端是可选件，掉线只清 socket。
+- **Flutter 兜底自拉 helper 时必须先试连 9527，且必须带 `--no-ui`。** `--autostart` / `--no-ui` **永不** `CreateProcess` Flutter（未配备串口也不覆盖静默）。否则 helper 会反过来再拉一个 Flutter，形成互相拉起。
+- IPC 绑定 `127.0.0.1`、同时只服务**单个**客户端（新连接踢掉旧连接），不对外监听；只传命令 / 状态 / 配置，**绝不传逐帧像素**。
+- 托盘双击不得无条件 `CreateProcess`：有活跃客户端 → 推 `ui show`；子进程句柄仍存活（含冷却窗口）→ 什么都不做。
+
+### 2.6 配置边界（v3 重写）
+
+- **配置文件写方唯一 = helper。** Flutter 只接收快照、只发命令，`lib/config/config_store.dart` 的写盘能力必须删除。
+- **帧长上限与 50ms 节流永远不是可配置项**，不进 JSON、不进 IPC、不进 UI。
+- 可下发的只有 EMA α、near_black、blur、饱和度、模式、COM 口名、采样映射、休眠同步、开机自启等；任何来自 IPC 或 JSON 的数值都要在 helper 侧夹紧（clamp）后再用。
+- 配置写盘走 debounce（约 1s），**绝不在发帧热路径里写文件**。
+
+---
+
+## 3. 代码框架
+
+### 3.1 helper（`cpp_core/`）
+
+源码按职责分子目录；`#include "foo.h"` 仍靠 CMake `target_include_directories` 扁平查找。废案在 `废案_同进程FFI_Day11-14/`，`backup/` 不编入。
+
+| 路径 | 职责 | 状态 |
+|------|------|------|
+| `app/helper_main.cpp` | 入口：`WinMain` → 单实例 → 参数解析 → 日志重定向 → 读配置 → DXGI → 串口就绪 → 托盘 + 电源窗 → 恢复场景 → `ipc_run` 阻塞 → `helper_shutdown` | 阶段 H 改造 |
+| `app/helper_lifecycle.{h,cpp}` | 退出序列（`helper_shutdown` 多路径防重入）、休眠软关 / 唤醒恢复 | 阶段 H 扩 |
+| `app/helper_log.{h,cpp}` | GUI 子系统下 stdout → `helper.log`（`/FI` 宏） | |
+| `config/config_store.{h,cpp}` | 配置属主：load/apply/setter/debounce 写盘 | H2 |
+| `config/config_json.{h,cpp}` + `config_clamp.h` | JSON 解析/格式化与数值夹紧 | |
+| `config/autostart.{h,cpp}` | 读写 `HKCU\...\Run`（值名 `Screen Strip Sync`）；路径漂移纠正、清旧键 | H7 |
+| `capture/dxgi_capture.cpp` + `dxgi_mapped.h` | Desktop Duplication、共享 map/unmap、map 路径采样 | 就绪 |
+| `capture/dxgi_region.cpp` | 屏幕氛围 region 采样（bbox 切 10 段） | |
+| `shell/tray_icon.{h,cpp}` | 隐藏顶层窗 + 托盘 + 电源消息（原 `power_watch` 已并入） | H4 |
+| `shell/ui_launcher.{h,cpp}` | 三级判定后 `CreateProcess` 拉 Flutter | H5 |
+| `shell/helper.rc` + `resource.h` | 托盘图标与版本资源 | |
+| `ipc/ipc_loop.cpp` / `ipc_push.cpp` / `ipc_dispatch.cpp`（`ipc_internal.h`） | 监听 accept / 回推 / 分派；对外 `ipc_loop.h` | 阶段 H 改造 |
+| `engine/`：`engine_params` / `engine_serial` / `engine_frame` / `engine_intent`（`engine_internal.h`；对外 `light_engine.h`） | 参数与 map、握手·纯色·高亮、produce+frame_loop、intent | 基本就绪 |
+| `engine/serial_port.cpp` | `open_com` / `send_one_frame`（帧长校验 + 互斥）/ `read_response_ok` / `close_com` | 就绪 |
+| `engine/wall_comp.{h,cpp}` | 墙面反射补偿（Ref 反除 + 峰值归一）；map/region/solid 挂接 | |
+| `engine/segment_map.h` | 段矩形映射类型 | |
+
+### 3.2 Flutter（`lib/`）
+
+```text
+lib/
+├── main.dart               # 单实例守卫 + 窗口初始化 + runApp
+├── app/                    # MaterialApp 壳、生命周期（关窗 = bye + exit）
+├── ui/
+│   ├── pages/              # control / lighting_schemes（薄壳）/ settings / region_bbox_pick
+│   └── widgets/            # scheme 面板、calibrator、screen_mask_select 等
+├── state/                  # helper_state（含 map IPC mixin）、config_state（由 cfg 快照驱动）
+├── ipc/                    # helper_client、截屏相关（框选蒙版路径）
+└── config/                 # app_config（只读模型 + cfg 行解析）、segment_sample、segment_map_codec
+```
+
+映射校准入口在「灯光方案 → 屏幕跟色」；屏幕氛围用独立「划定取色区域」。
+
+---
+
+## 4. 前端技术栈约定
+
+**UI：Material 3（Flutter 内置）**
+
+- `MaterialApp` + `ThemeData(colorScheme: ColorScheme.fromSeed(...))`，浅色 / 深色各一套、跟随系统。
+- 桌面壳用自绘顶栏 + 侧栏（`store_title_bar` / `store_sidebar`），页面主体 `Scaffold`。**不混用 `fluent_ui`。**
+- 扩展包**克制**引入：确有需要再加，加之前先说明为什么内置能力不够。
+
+**状态管理：`flutter_riverpod ^3.4.1`**
+
+- 用 `Notifier` + `NotifierProvider`。**`StateNotifier` / `StateProvider` 是 legacy，禁止生成。**
+- 页面用 `ConsumerWidget` / `ConsumerStatefulWidget`；`build` 里 `ref.watch(...)`，回调里 `ref.read(...).方法()`。
+- 副作用（`Process.start`、`Socket`、窗口操作）只允许出现在 Notifier 方法或 `ref.onDispose` 中，**绝不写在 `build` 里**。
+- `HelperClient` 由 `Provider` 暴露单例，`ref.onDispose` 里发 `bye` 后 `destroy` socket（**不再 kill helper**）。
+
+**配置：Flutter 侧只读**
+
+- `AppConfig` 保留为不可变模型 + `fromCfgLines`，**删除 `toJson` 写盘路径**。
+- 首帧渲染前等 helper 推完 `cfg …` + `cfg end`；超时则显示「后台服务未响应」并给重试。
+
+**路径解析规则**
+
+- helper 找 Flutter：exe 同目录 `screen_strip_sync.exe` 优先，回退开发路径 `build\windows\x64\runner\{Debug,Release}\`。
+- Flutter 兜底找 helper：exe 同目录优先，回退 `cpp_core\build\Release\helper.exe`。
+- **两侧都禁止硬编码绝对路径。**
+
+**前端职责边界**
+
+| 做 | 不做 |
+|----|------|
+| UI 交互、参数编辑、状态呈现、框选校准、截屏 | 写配置文件、网络请求、开串口、逐帧像素热路径、EMA / 组帧、常驻后台 |
+
+---
+
+## 5. IPC 协议
+
+一行一条命令，`\n` 结尾。未知命令 helper 打日志并忽略、不崩；超长行（>512 字符）丢弃到行尾。
+
+### 5.1 Flutter → helper
+
+| 文本 | 含义 |
+|------|------|
+| `sync` | 请求全量配置 + 状态快照（连接建立时 helper 会主动推一次，此命令用于手动刷新） |
+| `start` | **屏幕跟色（map）**：启动逐段/顶边均分追色；`lastScene=engine` |
+| `start_region` | **屏幕氛围（region）**：整块 bbox 竖直切 10 段追色；与 `start` 正交、互斥；`lastScene=region` |
+| `stop` | 停止引擎（join 线程）；map / region 共用 |
+| `solid RRGGBB` | 发一帧纯色（6 位 hex，非法值忽略） |
+| `soft_off` | UI 关灯：停引擎 + 纯黑一帧（含 ≥50ms）；**不** `set_power 0` |
+| `off` | 真下电：停引擎 + `set_power 0`（UI 不用；备用） |
+| `bye` | **前端退出**：helper 只关这条连接，灯效 / 引擎 / 托盘全部保持 |
+| `quit` | **关闭后台服务**：关灯 → 停引擎 → 关串口 → helper 进程退出。只由托盘「退出」或 UI 的「完全退出」触发，**不是关窗** |
+| `reconnect` | 关串口并重试就绪（最多 10 次） |
+| `set alpha <0.05..1>` | map 路径 EMA α；helper 侧 clamp；非法忽略 |
+| `set near_black <0..64>` | map 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；默认 15 |
+| `set blur <0..8>` | map 采样邻域半宽；`0` = 不扩邻域；默认 2 |
+| `set saturation <0.5..2>` | map 饱和度增益（Rec.601 亮度守恒）；`1`=原色；默认 1.4 |
+| `set mode a\|b` | **已废弃亮度方案**，仅存盘兼容；引擎不读 |
+| `set com COMn` | 只改配置，不自动开口；切口靠 `reconnect` |
+| `set sleep_sync 0\|1` | 休眠同步：1 = 挂起时软关、唤醒自恢复；0 = 休眠**完全不插手**（不拆 COM/DXGI、不关灯、唤醒也不恢复） |
+| `set shutdown_off 0\|1` | 关机 / 注销时是否关灯 |
+| `set autostart 0\|1` | **写注册表** `HKCU\...\Run`（值名 `Screen Strip Sync`）；helper 是唯一写方 |
+| `highlight <0..9>` | 校准：仅该段白、其余黑一帧（≥50ms） |
+| `set map default` | 清空自定义采样表，恢复顶边均分 |
+| `set map x0,y0,x1,y1;...` | 10 段矩形（被抓那块屏的 0..100 整数百分比，`;` 分隔）；非法整句忽略 |
+| `set region_algo mean\|max` | 屏幕氛围：柔和融合 / 高亮追踪 |
+| `set region_blur <0..20>` | 屏幕氛围空间模糊（近似 BoxBlur） |
+| `set region_smooth <0..0.99>` | 屏幕氛围时间惯性（高=更钝；与 map `alpha` 极性相反） |
+| `set region_dark <0..50>` | 屏幕氛围暗场：R/G/B 皆低于阈值 → 该段置黑 |
+| `set region_bbox L,T,W,H` | 屏幕氛围取色框（**被抓的那块屏**的百分比整数 0..100）；非法整句忽略 |
+| `set capture_output <DeviceName\|auto>` | 下次 DXGI 抓哪块屏；`auto` / 空 = 主屏再序号 0。热切换：停引擎 → 重建 DXGI → 按 `lastScene` 恢复，**不动串口**。找不到该名则回退 auto 并推 cfg 纠偏 |
+| `set last_custom_solid RRGGBB` | 纯色「自定义」色圈；6 位 hex，helper clamp 小写后存盘 |
+
+**所有 `set …` 生效后 helper 都要 debounce 写回 JSON。** 场景类命令（`start` / `start_region` / `stop` / `solid` / `soft_off`）同时更新 `lastScene`。
+
+### 5.2 helper → Flutter
+
+| 文本 | 含义 |
+|------|------|
+| `cfg alpha 0.30` 等 | 配置快照逐项回推，key 与 5.1 的 `set` 同名（含 `region_algo` / `region_blur` / `region_smooth` / `region_dark` / `region_bbox` / `capture_output` / `last_custom_solid`） |
+| `cfg capture_output <DeviceName\|auto>` | 配置里要抓的屏；`auto` = 跟主屏 |
+| `cfg map default` / `cfg map x0,y0,...` | 当前采样映射 |
+| `cfg scene engine\|region\|solid RRGGBB\|off\|idle` | 上次 / 当前场景，供 UI 高亮对应按钮 |
+| `cfg end` | **快照结束标记**；Flutter 收到才认为配置完整、可渲染 |
+| `status ready` | 客户端接通、串口已就绪 |
+| `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程与结果 |
+| `status com COMn` | 当前已打开的串口 |
+| `status engine 0\|1` | 追色发帧线程是否在跑 |
+| `status display engine\|region\|solid\|soft_off\|idle` | 当前显示意图（`engine`=屏幕跟色，`region`=屏幕氛围） |
+| `status capture_output NAME WxH L,T [friendly…]` | **当前真正 duplicate 的那块**＋虚拟桌面物理矩形；行尾可选 CCD 友好名（只显示，不是选屏身份） |
+| `status outputs <n>` | 随后紧跟 n 条 `status output`（运行时枚举，不进 JSON） |
+| `status output i NAME WxH L,T p c [friendly…]` | 一块可 duplicate 的屏；`p`/`c` 为 primary/current 的 `0\|1` |
+| `status serial_lost` / `serial_ok` | **暂缓**（COM 掉线自愈未做；不要新实现。掉线目前只靠 IPC `reconnect`） |
+| `ui show` | **托盘双击且已有客户端**：让 Flutter 置顶自己的窗口 |
+
+**采样映射（屏幕跟色）**：与屏幕氛围 region **正交**。无有效 `segmentMap` → DXGI 顶边均分。有表时矩形内步进抽点 + 丢近黑 + RMS；`set blur` 在格子点上扩 `±n` 邻域。百分比相对**被 duplicate 的那块屏**，不是虚拟桌面。
+
+**屏幕氛围（region）**：单块 `region_bbox` 竖直切 10 段；`mean`/`max` 聚合 + `region_blur` + 暗场阈值 + 惯性平滑。bbox 同样是被抓那块屏的百分比。截图与框选只在 Flutter；IPC **不传**逐帧像素。
+
+### 5.3 配置文件字段（`screen_strip_sync_config.json`，`%LocalAppData%\Screen Strip Sync\`）
+
+`emaAlpha` / `nearBlack` / `blurStep` / `saturation` / `mode`（废弃） / `comPort` / `lastConnectedCom` / **`captureOutput`**（DXGI DeviceName，空 = auto 跟主屏） / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` / **`lastScene`**（`"engine"` / `"region"` / `"solid RRGGBB"` / `"off"` / `"idle"`）/ **`lastCustomSolid`**（纯色自定义色圈，6 位 hex，可空）。
+
+字段名保持与旧 Dart `AppConfig` 一致，**老配置文件必须能被新 helper 直接读**；缺字段回退默认，解析失败整体回退默认且不阻塞启动。
+
+---
+
+## 6. 推进计划
+
+**用法**：从上往下取**第一项未勾选**的做；一次只推一小步，验收通过再进下一项。已掌握的概念可跳过讲解，但不跳过验收。
+
+### 阶段 H — helper 主导化（当前主线）
+
+- [ ] **H1 无窗口化 + 单实例 + 参数**
+      `main` → `WinMain`，CMake 加 `/SUBSYSTEM:WINDOWS`（托盘常驻不能挂黑控制台）；`freopen_s` 把 stdout 重定向到 `%LocalAppData%\Screen Strip Sync\helper.log`（**保留现有 `printf` 不逐个改**），Debug 下额外 `AllocConsole`；命名互斥体 `Global\ScreenStripSyncHelper`（跨完整性级别）；参数 `--autostart`（静默自启）/ `--no-ui`（供 Flutter 兜底自拉，**永不拉 UI**）。
+      *验收*：双击 helper 无黑窗、日志进 `helper.log`；连开两次只有一个进程活着；带 `--autostart` 不拉界面。
+- [ ] **H2 配置属主搬到 helper**
+      新增 `config_store.{h,cpp}` 读写 `screen_strip_sync_config.json`（含 `segmentMap` 与新增 `lastScene`）；启动时应用到引擎（`com` / `alpha` / `near_black` / `blur` / `mode` / `map`）；删掉 `light_engine.cpp` 写死的 `"COM10"` 与 `helper_main.cpp` 的 `argv[1]` 传口；`set …` 后 debounce 写回。
+      *验收*：手改 JSON 的 `comPort` 后重启 helper，开的是新口；删掉 JSON 不崩、按默认跑；`set alpha` 后重启值还在。
+- [ ] **H3 IPC 生命周期反转**
+      `ipc_run` 改循环 `accept`；同时只留一个客户端，新连接踢旧；客户端断开只清 socket、**不关灯不退进程**；行长上限提到 512（注释写明与 120 字节帧长红线无关）；新增 `bye` / `sync` / `set autostart` / `set shutdown_off`；`quit` 语义收窄为关闭服务；连接建立即推 `cfg …` + `cfg end` + `status …` 全量快照。
+      *验收*：Flutter 连上→关掉→再连上，灯效全程不断；第二次连上后界面参数与关掉前一致。
+- [ ] **H4 托盘 + 电源窗合并**
+      新增 `tray_icon.{h,cpp}`：隐藏顶层窗（同时收电源广播，`power_watch.cpp` 并入后删除）+ `Shell_NotifyIcon` + `WM_TASKBARCREATED` 重加；右键菜单：打开界面 / 追色 开·停 / 关灯 / 开机自启（勾选）/ 退出；补 `.ico` 与 `.rc`（现只有 `assets/app_icon.png`）。
+      *验收*：托盘图标在；重启 explorer.exe 后图标自动回来；菜单各项都能控灯；「退出」后灯灭、COM 可被再次打开。
+- [ ] **H5 拉起 Flutter（防重复）**
+      `ui_launcher.{h,cpp}`：三级判定 —— 有活跃 IPC 客户端 → 推 `ui show`；子进程句柄 `WaitForSingleObject(h,0)` 仍在运行（含约 1.5s 冷却）→ 不动；否则 `CreateProcess`。exe 路径解析与 Flutter 侧对称，禁止绝对路径。
+      *验收*：界面开着时连点托盘 10 次，只有一个 Flutter 进程且窗口被置顶；界面关掉后双击托盘能重新拉起。
+- [ ] **H6 电源自恢复**
+      `PBT_APMSUSPEND` 从「`helper_shutdown` 自杀」改成「关灯 + 停引擎 + `close_com`，进程存活」；`PBT_APMRESUMEAUTOMATIC` 重开串口（重试）+ 按 `lastScene` 恢复 + 有客户端则推 `status`。`sleep_sync=0` 时休眠完全不插手。
+      *验收*：睡眠→唤醒后，helper 进程号不变、灯自动恢复到睡前场景；界面开着时状态条同步更新。
+- [ ] **H7 开机自启**
+      `autostart.{h,cpp}` 读写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `Screen Strip Sync`），值 `"<helper绝对路径>" --autostart`；启动时校验路径漂移并纠正、清旧键 `ScreenStripSyncHelper`；`set autostart` 落到注册表 + JSON。
+      *验收*：UI 打开开关 → 注册表出现 `Screen Strip Sync` 正确项 → 重启电脑后无界面但灯按上次场景亮起。
+- [ ] **H8 场景持久化**
+      `start` / `stop` / `solid` / `soft_off` 与参数变更后更新 `lastScene` 并 debounce 写盘；启动与唤醒都据此恢复。
+      *验收*：设成纯色紫 → 完全退出 helper → 重开 → 直接是紫色。
+
+### 阶段 F — Flutter 瘦身（H3 完成后可并行）
+
+- [ ] **F1 `HelperClient` 反转**：先 `Socket.connect` 试连 → 失败才 `Process.start(helper, ['--no-ui'])` → 重试连接；`quit()` 改发 `bye` 且只断 socket；删除 `_killHelper` 的杀进程语义。
+      *验收*：`flutter run` 能在 helper 已跑时直接连上（不新起进程）；helper 没跑时能自己拉起且只拉一个。
+- [ ] **F2 配置层反转**：`ConfigNotifier` 由 `cfg …` 快照驱动，所有 setter 只发 IPC；删除 `ConfigStore` 写盘（文件与引用一并清理）。
+      *验收*：全项目搜不到 Flutter 侧写 `screen_strip_sync_config.json` 的代码；改参数后重启 helper 值仍在。
+- [x] **F3 生命周期归零**：删除 `lib/state/helper_wake_reconnect.dart` 与 `_maybeConnectOnBoot`；`AppLifecycleHost` 关窗 = 瞬间 hide 后 `bye` → `exit(0)`；处理 `ui show`；`main.dart` 加 `Local\ScreenStripSyncUi`。
+ *验收*：点 X 后任务管理器无 Flutter 残留、灯照常亮；托盘双击能唤回窗口；手动双击 Flutter exe 不会开出第二个窗口。
+- [ ] **F4 UI 文案与开关**：「连接 / 断开」概念改为「后台服务运行中 / 未运行」；`startOnBoot` 开关改为下发 `set autostart`；连接失败页给「启动后台服务」按钮。
+      *验收*：拔掉 helper 后界面文案说人话且能一键恢复。
+
+### 阶段 P — 打包与收尾
+
+- [ ] **P1 同目录分发**：`helper.exe` 与 Flutter bundle 同目录；开始菜单 / 桌面快捷方式指向 `helper.exe`；卸载时清注册表项。
+- [ ] **P2 红线复查**：按第 8 节「稳定性排查顺序」全线走查一遍。
+
+### 阶段 X — 延伸（可选，不阻塞主线）
+
+- [ ] **X1 托盘快捷场景**：菜单里放几个常用纯色 / 「屏幕同步」开关，不开界面也能换色，进一步坐实「Flutter 可有可无」。
+- [ ] **X2 `helper.exe --status`**：命令行查询当前状态（串口 / 引擎 / 场景 / 配置路径）打印后退出，排障用，不影响常驻实例。
+- [x] **X3 按需推送**：无客户端不组包；只推 UI 未知变更（托盘/电源 → `status engine|display`）与 `set` clamp 纠偏（cfg 整包）；UI 自下发场景/`set` 不回声。
+
+### 阶段 C — 产品债（延后）
+
+- [ ] ~~**C1 方案 A 确认**~~ —— **已废弃**（可行性不好；Brightness 仍写死 `63`）。
+- [ ] ~~**C2 方案 B**~~ —— **已废弃**（同上）。屏幕氛围用独立 region 路径（mean/max），与 A/B 无关。
+- [x] **C3 helper 自愈（DXGI）**：追色热路径检测 `ACCESS_LOST` → `dxgi_shutdown` + 强制重建；COM 掉线自动重连**暂缓**（仅 IPC `reconnect`）。
+- [x] ~~C3-old 父进程 PID 监测~~ —— **架构翻转后作废**，helper 已是父进程。
+
+### 已完成（保留存档）
+
+- [x] **阶段 A**：Riverpod 壳、`HelperClient` 抽取、状态层、主控页、设置页、JSON 落盘、生命周期收口（其中"JSON 落盘"由 F2 反转到 helper）。
+- [x] **B4 状态上报加宽**：`status com` / `status engine` / `status display` 回传与 Dart 对齐。
+- [x] **M1-M5、M2.5 段映射校准**：`SegmentSample` / codec / helper 矩形采样 / win32 截屏 / 逐段框选向导 / RMS 近似。
+
+### 旧清单处置
+
+- 阶段 A 的 A0-A7 全部视为已完成，其中 A5（Flutter 落盘）被 F2 反转。
+- 阶段 B 的 B1-B3（配置下发 helper）被阶段 H2 吸收并扩大（helper 不只接收，还成为属主）；B4 保留为已完成。
+- 阶段 M 全部保留为已完成，映射逻辑不受本次翻转影响。
+- 阶段 C 的「父进程 PID 监测」「IPC 断连后重回 listen」分别作废与并入 H3；亮度方案 A/B **已废弃**（Brightness 仍写死 `63`）。
+
+---
+
+## 7. 已知产品债与诊断纪律
+
+### 亮度模型（已废弃；Brightness 仍写死 `63`）
+
+- 设备事实：`set_rgb_pc` 的 `{Brightness}` 字段是**全局亮度**（hex ≈ 百分比；`63` ≈ 99%，`01` ≈ 1%）。
+- 当前实现：`light_engine.cpp` 的 `send_solid` 与 `produce_colors_*` 组帧串里 Brightness **写死 `63`**。
+- 方案 A/B（luma→Brightness）**不做**。屏幕氛围是 region 路径（mean/max + 暗场阈值），不是亮度模型。
+- **诊断纪律**：用户报「EMA α 无效 / 灯硬切亮灭」时，**第一句先说明 BRT 仍写死 `63`**，勿误判为超时、采样、调度或线程 bug。
+
+### 双追色路径（与废弃的 A/B 无关）
+
+| 路径 | 入口 | 要点 |
+|------|------|------|
+| 屏幕跟色（map） | `start` / `lastScene=engine` | 逐段 `segmentMap` 或顶边均分；`alpha` / `near_black` / `blur` / `saturation` |
+| 屏幕氛围（region） | `start_region` / `lastScene=region` | 整块 bbox 切 10 段；`region_algo` mean\|max + blur/smooth/dark |
+
+映射（阶段 M）只服务 map 路径；region 用独立 `regionBBox`。
+
+### 其它已知缺口
+
+- COM 掉线不自动重连（仅 IPC `reconnect`；自动重连暂缓）。
+- 翻转期间会短暂出现「helper 已是属主但 Flutter 仍在写 JSON」的双写窗口 —— **F2 必须紧跟 H2/H3 完成**，不得长期停在中间态。
+
+---
+
+## 8. 协作纪律
+
+### 节奏
+
+- 你是学习助手：用户「先学概念 → 再写代码 → 再验收」，边做边学。
+- **每次只推进一小步**（一个概念点，或一个函数 / 一处循环的改动）。
+- 回复结构固定：**本步目标 → 必要代码或对照 → 一句验收**。回复要短，禁止一次铺开整个阶段。
+- 给 Flutter 代码时，简要说明 **Widget 树结构与状态流向**（谁 watch、谁 read、状态存在哪）。
+- 给 C++ 核心逻辑时，注释解释**「为什么这么做」**而不只是「做了什么」；热路径避免不必要的内存拷贝。
+
+### 工具纪律
+
+- `user-dart` 的 `analyze_files`（及同类依赖 DTD / Analysis Server 就绪的 MCP）在本机易长时间无响应，会卡住整轮 Agent 对话。
+- **禁止**把静态检查默认走该 MCP；改用终端 `dart analyze <paths>`，或编辑器 `ReadLints` / IDE 诊断。
+- 其余 `user-dart` 能力（热重载、运行时错误等）可按需用；若同样无响应则立刻改用等价终端命令，不要空等。
+- 改完 C++ 后用 `cmake --build cpp_core/build --config Release` 验证，别只靠肉眼。
+
+### 优先级
+
+1. **前债不可欠**：推进当前项前，若发现更早的实现缺项或与红线不符，先修再继续。
+2. **红线问题立刻改**：帧长、节流、互斥、线程退出顺序、stride、单实例、僵尸进程、配置双写。
+3. **唯一例外**：写死 `63` 的 Brightness 属已知硬件妥协，勿在排障时当成 bug 去「修」。方案 A/B 已废弃。
+
+### 稳定性排查顺序
+
+帧长 → 节流（50ms）→ 串口互斥 → 线程退出顺序 → stride → 单实例与进程残留（helper / Flutter 各查一遍）→ IPC 断连与 helper 存活性 → COM 是否被残留进程占用 → 配置读写方是否唯一 → 最后才查采样与调度。
+（若现象是「α 无效 / 硬切亮灭」，先查写死的 Brightness，见第 7 节。）
+
+### Git / GitHub 署名红线
+
+- **禁止**在 commit message、trailer、作者/提交者字段中写入 Codex agent 身份，尤其是 `Co-authored-by: Codex <cursoragent@cursor.com>` 与任何含 `cursoragent` 的字样。
+- 代用户提交时：消息只写变更本身；**不要**追加 Codex / cursoragent 的 `Co-authored-by`；**不要**用 `--no-verify` 绕过 `.githooks`。
+- 仓库强制手段见 `docs/git-no-cursoragent.md` 与 `.githooks/`（`prepare-commit-msg` 剥离、`commit-msg` / `pre-push` 拦截）。
+
+### 后置话题
+
+不主动展开调度算法细节、分页段页、死锁检测算法、磁盘调度、虚拟机。

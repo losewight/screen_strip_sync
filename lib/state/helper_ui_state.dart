@@ -127,6 +127,10 @@ class HelperUiState {
       phase == HelperPhase.running ||
       phase == HelperPhase.poweredOff;
 
+  /// 后台已通，可改参数 / 选屏 / 开关。灯带未开口（needConnect / openFailed）也算。
+  /// 控灯（开始追色、纯色、关灯、校准点亮）仍看 [canControl]。
+  bool get canConfigure => phase != HelperPhase.disconnected;
+
   /// 框选/校准时提示正在跟哪块屏；优先 status 真值，否则 cfg。
   String? followCaptureLabel(String cfgCapture) {
     final cur = currentCapture;

@@ -61,6 +61,7 @@ abstract final class DiagExporter {
     buf.writeln('hasDevice: ${ui.hasDevice}');
     buf.writeln('engineRunning: ${ui.engineRunning}');
     buf.writeln('canControl: ${ui.canControl}');
+    buf.writeln('canConfigure: ${ui.canConfigure}');
     buf.writeln('lastScene: ${config.lastScene}');
     buf.writeln('comPort(config): ${config.comPort}');
     buf.writeln('autoSleepSync: ${config.autoSleepSync}');

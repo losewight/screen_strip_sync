@@ -29,7 +29,7 @@ class CaptureOutputPicker extends ConsumerWidget {
     final ui = ref.watch(helperStateProvider);
     final helper = ref.read(helperStateProvider.notifier);
     final cfgReady = ref.watch(configReadyProvider);
-    final canEdit = cfgReady && ui.phase != HelperPhase.disconnected;
+    final canEdit = cfgReady && ui.canConfigure;
 
     final outputs = ui.captureOutputs;
     final cfgName = cfg.captureOutput.trim();
