@@ -22,3 +22,6 @@ bool ipc_push_runtime_status(bool include_com = false);
 // 有客户端则推全量 cfg … + cfg end（不含 status ready）；托盘改自启 / clamp
 // 纠偏用。
 bool ipc_push_config_snapshot();
+// boot 线程成功 / 放弃：对齐连接快照的 status 相位（ready / reconnect_fail）
+bool ipc_push_serial_ready();
+bool ipc_push_serial_fail();

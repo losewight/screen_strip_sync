@@ -214,6 +214,12 @@ void push_config_snapshot(SOCKET client) {
   if (has_serial) {
     send_status(client, "ready");
     push_runtime_status(client, true);
+  } else if (helper_boot_serial_busy()) {
+    // 为什么：boot 异步开口中；推 reconnecting=未就绪，勿 reconnect_fail 误报打开失败
+    send_status(client, "reconnecting");
+    send_engine_status(client);
+    send_display_status(client);
+    send_capture_status(client);
   } else {
     // 为什么：无 COM 时勿推 ready/com，否则 UI 会当成有设备
     send_status(client, "reconnect_fail");
@@ -243,6 +249,28 @@ bool ipc_push_runtime_status(bool include_com) {
     return false;
   push_runtime_status(cs, include_com);
   printf("ipc: pushed runtime status (com=%d)\n", include_com ? 1 : 0);
+  return true;
+}
+
+bool ipc_push_serial_ready() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  send_status(cs, "ready");
+  push_runtime_status(cs, true);
+  printf("ipc: pushed serial ready\n");
+  return true;
+}
+
+bool ipc_push_serial_fail() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  send_status(cs, "reconnect_fail");
+  send_engine_status(cs);
+  send_display_status(cs);
+  send_capture_status(cs);
+  printf("ipc: pushed serial fail\n");
   return true;
 }
 

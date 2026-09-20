@@ -30,6 +30,11 @@ static std::mutex g_resume_thread_mu;
 static std::thread g_resume_worker;
 static std::atomic_bool g_resuming{false};
 
+// 启动期串口 worker：与 resume 对称，shutdown / reconnect 必须 wait/join
+static std::mutex g_boot_thread_mu;
+static std::thread g_boot_worker;
+static std::atomic_bool g_boot_busy{false};
+
 HANDLE *helper_serial() { return &g_serial_handle; }
 
 bool helper_is_shutting_down() { return g_shutting_down.load(); }
@@ -280,6 +285,118 @@ void helper_resume_from_sleep() {
   g_resume_worker = std::thread(resume_worker_body);
 }
 
+static void boot_worker_body(HelperConfig boot_cfg) {
+  printf("boot: begin serialConfigured=%d\n",
+         boot_cfg.serialConfigured ? 1 : 0);
+
+  auto finish = []() { g_boot_busy.store(false); };
+
+  auto abort_owned = [&](HANDLE neu) {
+    if (neu != INVALID_HANDLE_VALUE) {
+      power_off(neu);
+      close_com(neu);
+    }
+    finish();
+  };
+
+  if (!boot_cfg.serialConfigured) {
+    printf("boot: serialConfigured=0; skip auto open\n");
+    finish();
+    return;
+  }
+
+  HANDLE neu = INVALID_HANDLE_VALUE;
+  bool serial_ok = false;
+  for (int i = 1; i <= 10; ++i) {
+    if (g_shutting_down.load())
+      break;
+    if (try_serial_ready(&neu)) {
+      serial_ok = true;
+      printf("boot: serial ok (try %d/10)\n", i);
+      break;
+    }
+    printf("boot: serial fail (try %d/10)\n", i);
+    sleep_interruptible_shutdown(500);
+  }
+
+  if (!serial_ok) {
+    // 为什么：无灯带也不能退进程；托盘+IPC 已常驻，用户可稍后换口/重连
+    printf("boot: give up after 10 tries; stay alive without COM\n");
+    abort_owned(neu);
+    // 为什么：连接快照可能已推 reconnecting；失败后须改推 fail，否则 UI 停在连接中
+    if (!g_shutting_down.load() && ipc_has_client())
+      ipc_push_serial_fail();
+    return;
+  }
+
+  // 为什么：写回前必须再看退出旗标；已 shutdown 则本线程负责灭灯关口，禁止覆盖 INVALID
+  if (g_shutting_down.load()) {
+    printf("boot: shutting down, drop new handle\n");
+    abort_owned(neu);
+    return;
+  }
+
+  HANDLE *p = helper_serial();
+  if (p != nullptr)
+    *p = neu;
+
+  if (g_shutting_down.load()) {
+    // shutdown 正在 join 我们，随后会 power_off+close；这里不要双关
+    printf("boot: wrote handle but shutdown raced; yield to shutdown\n");
+    finish();
+    return;
+  }
+
+  char com[16];
+  engine_get_com(com, sizeof(com));
+  config_set_last_connected_com(com);
+  config_set_serial_configured(true);
+
+  DisplayIntent boot{};
+  if (parse_last_scene(boot_cfg.lastScene, &boot)) {
+    apply_display_intent(neu, boot);
+  } else {
+    printf("boot: bad lastScene [%s], stay idle\n", boot_cfg.lastScene);
+  }
+
+  helper_note_resources_ready();
+  // 为什么：先清 busy 再推 ready，避免快照竞态仍读到 busy
+  finish();
+  if (!g_shutting_down.load() && ipc_has_client())
+    ipc_push_serial_ready();
+  printf("boot: done\n");
+}
+
+void helper_boot_serial_async(const HelperConfig &boot_cfg) {
+  if (g_shutting_down.load())
+    return;
+
+  // 为什么：未配备不造线程；与 WinMain 旧路径「skip auto open」同语义
+  if (!boot_cfg.serialConfigured) {
+    printf("boot: serialConfigured=0; skip thread\n");
+    return;
+  }
+
+  HelperConfig copy = boot_cfg;
+  std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+  if (g_shutting_down.load())
+    return;
+  if (g_boot_worker.joinable())
+    g_boot_worker.join();
+  g_boot_busy.store(true);
+  g_boot_worker = std::thread(boot_worker_body, copy);
+  printf("boot: async started\n");
+}
+
+void helper_boot_serial_wait() {
+  // 为什么：reconnect 与 shutdown 共用；join 保证开口完全结束后再动 COM
+  std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+  if (g_boot_worker.joinable())
+    g_boot_worker.join();
+}
+
+bool helper_boot_serial_busy() { return g_boot_busy.load(); }
+
 void helper_shutdown(bool turn_off_lights) {
   bool expected = false;
   if (!g_shutting_down.compare_exchange_strong(expected, true))
@@ -287,6 +404,12 @@ void helper_shutdown(bool turn_off_lights) {
 
   printf("helper_shutdown begin (lights=%d)\n", turn_off_lights ? 1 : 0);
   g_awaiting_resume.store(false);
+
+  {
+    std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+    if (g_boot_worker.joinable())
+      g_boot_worker.join();
+  }
 
   {
     std::lock_guard<std::mutex> lock(g_resume_thread_mu);

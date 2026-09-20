@@ -568,6 +568,10 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     return DispatchResult::Continue;
   }
   if (strcmp(line, "reconnect") == 0) {
+    // 为什么：启动 boot 线程可能还在 try_serial；并行开口会双开 COM
+    helper_boot_serial_wait();
+    if (helper_is_shutting_down())
+      return DispatchResult::Continue;
     engine_stop();
     send_status(client, "reconnecting");
     if (*serial != INVALID_HANDLE_VALUE) {
