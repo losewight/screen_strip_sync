@@ -83,14 +83,6 @@ class ControlPage extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (ui.snapshotTimedOut && !cfgReady) ...[
-                  _UnreachableBanner(
-                    onRetry: () {
-                      unawaited(notifier.retrySnapshot());
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.text),
-                ],
                 _ConnectBar(
                   canConnect: canConnect,
                   connectLabel: connectLabel,
@@ -169,44 +161,6 @@ class ControlPage extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _UnreachableBanner extends StatelessWidget {
-  const _UnreachableBanner({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 38, 43, 60),
-        borderRadius: BorderRadius.circular(_SwitchGroup.radius),
-        border: Border.all(color: AppTheme.divider),
-      ),
-      padding: AppSpacing.cardInsets,
-      child: Row(
-        children: [
-          const Expanded(
-            child: Text(
-              '暂时无法控制灯带',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color.fromARGB(255, 240, 240, 240),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.text),
-          FilledButton(
-            onPressed: onRetry,
-            child: const Text('重试'),
-          ),
-        ],
       ),
     );
   }

@@ -109,7 +109,7 @@ class HelperUiState {
   /// helper 追色发帧线程是否在跑（来自 `status engine`）。
   final bool engineRunning;
 
-  /// 已连上 IPC 但约 2s 内未收到 `cfg end`（主控条幅「暂时无法控制灯带」）。
+  /// 已连上 IPC 但约 2s 内未收到 `cfg end`（主控「连接」可点「重试」）。
   final bool snapshotTimedOut;
 
   /// helper 当前 adapter 能 duplicate 的屏（`status output` 收齐后落盘）。
