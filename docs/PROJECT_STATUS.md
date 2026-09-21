@@ -1,4 +1,4 @@
-﻿# Screen Strip Sync 项目现状
+# Screen Strip Sync 项目现状
 
 > **过期（v2 文档，勿按本文实现）**：架构已翻转为 v3（`helper.exe` 常驻主进程；Flutter 是可随时开关的纯前端，**不写 JSON、关窗不杀 helper**）。以仓库根目录 `.cursorrules` 为准。
 
@@ -42,7 +42,7 @@ Flutter **绝不**直接开串口（防两进程抢 COM）。helper 须随 App �
 - 引擎：握手 / 纯色 / 氛围灯后台循环（DXGI 采样 → RGB EMA → 组 ASCII 帧 → 互斥写 + Sleep 50ms）。
 - DXGI：Desktop Duplication、stride 采样、10 段边缘、blurStep 水平平均。
 - IPC：Winsock 监听 `127.0.0.1:9527`，按行解析命令，可回传 `status …`。
-- 生命周期：Ctrl-C / 关控制台 / 休眠 / 注销等路径走 `helper_shutdown`（停引擎、关灯、关串口、关 DXGI、取消 IPC）。
+- 生命周期与外壳：托盘菜单支持显示当前运行模式对勾；接管 Ctrl-C / 关机 / 休眠 / 息屏 / 注销等状态（休眠/息屏同步暂停引擎，退出走 `helper_shutdown`）。
 
 ### Flutter（活跃树仅 `lib/main.dart`）
 
