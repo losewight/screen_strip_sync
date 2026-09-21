@@ -14,9 +14,10 @@ import '../widgets/palette_color_picker.dart';
 import '../widgets/serial_port_picker.dart';
 import '../widgets/win11_switch.dart';
 
-/// 主控：顶部灯带状态栏 + 连接操作 + 休眠 / 开关机联动开关。
+/// 主控：顶部灯带状态栏 + 连接操作 + 休眠 / 息屏 / 关机联动开关。
 ///
 /// 连接走 [helperStateProvider]；开关乐观改本地并由 helper 快照对齐。
+/// 开机自启在「软件设置」页。
 class ControlPage extends ConsumerWidget {
   const ControlPage({super.key});
 
@@ -142,21 +143,9 @@ class ControlPage extends ConsumerWidget {
                             }
                           : null,
                     ),
-                    _SwitchRow(
-                      title: '开机软件自启',
-                      subtitle:
-                          '打开后随 Windows 开机静默启动，托盘常驻，'
-                          '并按上次灯效自动亮起',
-                      value: cfg.startOnBoot,
-                      onChanged: canEdit
-                          ? (v) {
-                              config.setStartOnBoot(v);
-                              notifier.sendAutostart(v);
-                            }
-                          : null,
-                    ),
                   ],
                 ),
+
               ],
             ),
           ),

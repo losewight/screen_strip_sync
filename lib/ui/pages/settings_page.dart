@@ -12,6 +12,7 @@ import '../../state/helper_state.dart';
 import '../../state/update_check_state.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/strip_status_bar.dart';
+import '../widgets/win11_switch.dart';
 
 /// 开源仓库首页；诊断导出后可据此去提 Issue。
 const _kGitHubRepoUrl = 'https://github.com/losewight/screen_strip_sync';
@@ -103,6 +104,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final accent = Theme.of(context).colorScheme.primary;
     final update = ref.watch(updateCheckProvider);
     final hasUpdate = update.hasUpdate;
+    final cfg = ref.watch(configProvider);
+    final config = ref.read(configProvider.notifier);
+    final ui = ref.watch(helperStateProvider);
+    final notifier = ref.read(helperStateProvider.notifier);
+    final cfgReady = ref.watch(configReadyProvider);
+    final canEdit = ui.canConfigure && cfgReady;
 
     return Center(
       child: SingleChildScrollView(
@@ -185,6 +192,44 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         onPressed: _openLogDir,
                         icon: const Icon(Icons.folder_open_outlined),
                         label: const Text('打开日志所在文件夹'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.control),
+                SchemeCard(
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '开机软件自启',
+                              style: SchemeCard.titleStyle,
+                            ),
+                            SizedBox(height: AppSpacing.compact),
+                            Text(
+                              '打开后随 Windows 开机静默启动，托盘常驻，'
+                              '并按上次灯效自动亮起',
+                              style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.card),
+                      Win11Switch(
+                        value: cfg.startOnBoot,
+                        onChanged: canEdit
+                            ? (v) {
+                                config.setStartOnBoot(v);
+                                notifier.sendAutostart(v);
+                              }
+                            : null,
                       ),
                     ],
                   ),
