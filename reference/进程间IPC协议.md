@@ -1,4 +1,4 @@
-﻿# Screen Strip Sync — 进程间 IPC 协议
+# Screen Strip Sync — 进程间 IPC 协议
 
 本文描述本软件内部 **Flutter 界面 ↔ `helper.exe`** 的本机通信约定。  
 灯带串口协议见 [`灯带串口通信协议.md`](./灯带串口通信协议.md)。
@@ -41,6 +41,7 @@
 | `set mode a\|b` | 已废弃，仅兼容旧配置 |
 | `set com COMn` | 只改配置；真正切串口需 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步 |
+| `set screen_off_sync 0\|1` | 息屏同步（显示器关闭时关灯） |
 | `set shutdown_off 0\|1` | 关机 / 注销时是否关灯 |
 | `set autostart 0\|1` | 写入注册表开机自启 |
 | `highlight <0..9>` | 校准：仅点亮指定段 |
@@ -108,6 +109,7 @@
 | `comPort` / `lastConnectedCom` | 串口 |
 | `captureOutput` | DXGI DeviceName；空 = auto 跟主屏 |
 | `autoSleepSync` | 休眠同步 |
+| `screenOffSync` | 息屏同步（显示器关闭时关灯） |
 | `turnOffOnShutdown` | 关机关灯 |
 | `startOnBoot` | 开机自启 |
 | `segmentMap` | map 段矩形 |
