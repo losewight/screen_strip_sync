@@ -1,4 +1,4 @@
-﻿# Screen Strip Sync AI 状态说明（现状 / 下一步）
+# Screen Strip Sync AI 状态说明（现状 / 下一步）
 
 > **过期（v2 文档，勿按本文实现）**：架构已翻转为 v3（`helper.exe` 常驻主进程；Flutter 是可随时开关的纯前端，**不写 JSON、关窗不杀 helper**）。以仓库根目录 `.cursorrules` 为准。
 
@@ -60,7 +60,8 @@
 | 灯引擎 | ✅ | `light_engine.cpp`：握手 / 纯色 / 氛围灯后台循环（DXGI 采样 → RGB EMA → 组 ASCII 帧 → 互斥写 + Sleep 50ms） |
 | DXGI 抓屏 | ✅ | `dxgi_capture.cpp`：Desktop Duplication、stride 采样、10 段边缘、blurStep 水平平均 |
 | IPC 服务 | ✅ | `ipc_loop.cpp`：Winsock 监听 `127.0.0.1:9527`，按行解析命令，可回传 `status …` |
-| 生命周期 | ⚠️ 部分 | `helper_main.cpp`、`helper_lifecycle.h`、`power_watch.cpp`：Ctrl-C / 关控制台 / 休眠 / 注销等走 `helper_shutdown`；**缺父进程 PID 监测、IPC 断连后重回 listen** |
+| 托盘与系统 | ✅ | `tray_icon.cpp`：支持右键菜单状态对勾；接管系统电源广播（休眠/息屏暂停引擎） |
+| 生命周期 | ⚠️ 部分 | `helper_main.cpp`、`helper_lifecycle.h`、`power_watch.cpp`：休眠 / 息屏 / 注销 / 关机等已接管；**缺父进程 PID 监测、IPC 断连后重回 listen** |
 | 入口 | ✅ | `helper_main.cpp` |
 
 ### 3.2 Flutter（活跃树）
