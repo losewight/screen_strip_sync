@@ -7,10 +7,10 @@ import 'app_paths.dart';
 import 'crash_log.dart';
 
 /// 与 [pubspec.yaml] `version:` 对齐；无 package_info 时硬编码。
-const kAppVersion = '1.0.1+2';
+const kAppVersion = '1.1.0';
 
 /// helper.rc ProductVersion；与 C++ 启动横幅一致。
-const kHelperVersion = '1.0.1';
+const kHelperVersion = '1.1.0';
 
 const _helperLogName = 'helper.log';
 const _configName = 'screen_strip_sync_config.json';

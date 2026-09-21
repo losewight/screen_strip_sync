@@ -6,7 +6,7 @@ $OutDir = Join-Path $Root "dist_installer"
 $Helper = Join-Path $Root "cpp_core\build\Release\helper.exe"
 $FlutterRelease = Join-Path $Root "build\windows\x64\runner\Release"
 $Iss = Join-Path $PSScriptRoot "screen_strip_sync.iss"
-$Version = "1.0.3"
+$Version = "1.1.0"
 $Arch = "x64"
 $ZipName = "ScreenStripSync-$Version-windows-$Arch.zip"
 

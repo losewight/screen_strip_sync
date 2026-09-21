@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../state/helper_state.dart';
 import '../../state/lighting_scheme_tab.dart';
+import '../../state/update_check_state.dart';
 import '../pages/control_page.dart';
 import '../pages/lighting_schemes_page.dart';
 import '../pages/settings_page.dart';
@@ -34,9 +35,15 @@ class _MainShellState extends ConsumerState<MainShell> {
     SettingsPage(),
   ];
 
+  static const _settingsIndex = 2;
+
   void _select(int i) {
     if (i == _index) return;
     setState(() => _index = i);
+    // 一切到软件设置就消侧栏圆点（每个远端版本只提醒一次）。
+    if (i == _settingsIndex) {
+      ref.read(updateCheckProvider.notifier).acknowledgeBadge();
+    }
   }
 
   @override
@@ -44,6 +51,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final phase = ref.watch(helperStateProvider).phase;
     final phaseStyle = HelperPhaseStyle.of(phase);
     final lightingTab = ref.watch(lightingSchemeTabProvider);
+    final showUpdateBadge = ref.watch(updateCheckProvider).showBadge;
 
     return Scaffold(
       backgroundColor: AppTheme.contentBg,
@@ -56,13 +64,13 @@ class _MainShellState extends ConsumerState<MainShell> {
                 StoreSidebar(
                   selectedIndex: _index,
                   onSelected: _select,
-                  items: const [
-                    StoreNavItem(
+                  items: [
+                    const StoreNavItem(
                       icon: Icons.lightbulb_outline,
                       selectedIcon: Icons.lightbulb,
                       label: '主控',
                     ),
-                    StoreNavItem(
+                    const StoreNavItem(
                       icon: Icons.style_outlined,
                       selectedIcon: Icons.style,
                       label: '灯光方案',
@@ -71,6 +79,7 @@ class _MainShellState extends ConsumerState<MainShell> {
                       icon: Icons.settings_outlined,
                       selectedIcon: Icons.settings,
                       label: '软件设置',
+                      showBadge: showUpdateBadge,
                     ),
                   ],
                 ),

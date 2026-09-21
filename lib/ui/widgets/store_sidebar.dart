@@ -11,11 +11,15 @@ class StoreNavItem {
     required this.icon,
     required this.selectedIcon,
     required this.label,
+    this.showBadge = false,
   });
 
   final IconData icon;
   final IconData selectedIcon;
   final String label;
+
+  /// WinUI AttentionDot 风格：图标右上角 `#4CC2FF` 纯色小圆点。
+  final bool showBadge;
 }
 
 /// 微软商店风格侧栏：蓝条 Squash & stretch + 弹簧进度。
@@ -256,10 +260,21 @@ class _StoreNavButton extends StatelessWidget {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        selected ? item.selectedIcon : item.icon,
-                        size: 22,
-                        color: color,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            selected ? item.selectedIcon : item.icon,
+                            size: 22,
+                            color: color,
+                          ),
+                          if (item.showBadge)
+                            const Positioned(
+                              right: -9,
+                              top: -7,
+                              child: _AttentionDotBadge(),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: AppSpacing.compact),
                       Text(
@@ -278,6 +293,28 @@ class _StoreNavButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 对齐 WinUI `AttentionDotInfoBadgeStyle`：纯色小圆点。
+class _AttentionDotBadge extends StatelessWidget {
+  const _AttentionDotBadge();
+
+  static const _bg = Color(0xFF4CC2FF);
+  static const double _size = 9;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: _bg,
+        shape: BoxShape.circle,
+        // 选中态齿轮同色时，白描边保证圆点仍可见。
+        border: Border.all(color: Colors.white, width: 1.5),
       ),
     );
   }

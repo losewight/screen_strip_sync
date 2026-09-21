@@ -31,6 +31,10 @@ abstract final class AppPaths {
   static File? get crashLogFile =>
       _fileInDataDir('screen_strip_sync_crash.log');
 
+  /// UI 更新提醒落盘（与 helper 配置文件分离，避免双写）。
+  static File? get updateNudgeFile =>
+      _fileInDataDir('update_nudge.json');
+
   static File? _fileInDataDir(String name) {
     final dir = dataDirectory;
     if (dir == null) return null;

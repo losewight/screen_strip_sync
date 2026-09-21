@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/diag_export.dart';
 import '../../app/spacing.dart';
+import '../../app/theme.dart';
 import '../../ipc/helper_client.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../../state/update_check_state.dart';
 import '../widgets/scheme_card.dart';
+import '../widgets/strip_status_bar.dart';
 
 /// 开源仓库首页；诊断导出后可据此去提 Issue。
 const _kGitHubRepoUrl = 'https://github.com/losewight/screen_strip_sync';
@@ -75,20 +78,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _openGitHubRepo() async {
+  Future<void> _openUrl(String url) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       // Windows：空标题参数避免 start 把 URL 当窗口标题吞掉。
-      await Process.start('cmd', ['/c', 'start', '', _kGitHubRepoUrl]);
+      await Process.start('cmd', ['/c', 'start', '', url]);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('打开失败：$e')));
     }
   }
 
+  Future<void> _openGitHubRepo() => _openUrl(_kGitHubRepoUrl);
+
+  Future<void> _openUpdatePage() async {
+    final update = ref.read(updateCheckProvider);
+    final url = update.releaseUrl;
+    if (url == null || url.isEmpty) return;
+    await _openUrl(url);
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
+    final update = ref.watch(updateCheckProvider);
+    final hasUpdate = update.hasUpdate;
+
     return Center(
       child: SingleChildScrollView(
         padding: AppSpacing.pageInsets,
@@ -100,6 +115,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
+                SchemeCard(
+                  title: '版本',
+                  titleTrailing: hasUpdate
+                      ? StripStatusPill(
+                          color: AppTheme.accent,
+                          label: '有新版本 ${update.remoteVersion}',
+                        )
+                      : null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '当前版本 $kAppVersion',
+                        style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      if (hasUpdate) ...[
+                        const SizedBox(height: AppSpacing.control),
+                        FilledButton.icon(
+                          onPressed: _openUpdatePage,
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('打开更新页面'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.control),
                 SchemeCard(
                   title: '项目地址',
                   child: OutlinedButton.icon(

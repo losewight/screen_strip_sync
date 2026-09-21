@@ -52,7 +52,7 @@ body:
     attributes:
       label: App / helper version
       description: From the diagnostics file `## meta` section if unsure.
-      placeholder: "1.0.0+1 / helper 1.0.0"
+      placeholder: "1.1.0+5 / helper 1.1.0"
     validations:
       required: false
 
