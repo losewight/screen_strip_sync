@@ -39,7 +39,7 @@ void main() {
     test('empty lines fall back to defaults', () {
       final cfg = AppConfig.fromCfgLines(const []);
       expect(cfg.emaAlpha, 1.0);
-      expect(cfg.nearBlack, 15);
+      expect(cfg.nearBlack, 4);
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.2);
       expect(cfg.mode, ColorMode.a);

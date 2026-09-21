@@ -20,7 +20,7 @@ enum ColorMode {
 class AppConfig {
   const AppConfig({
     this.emaAlpha = 1.0,
-    this.nearBlack = 15,
+    this.nearBlack = 4,
     this.blurStep = 0,
     this.saturation = 1.2,
     this.mode = ColorMode.a,
@@ -176,7 +176,7 @@ class AppConfig {
   /// 缺字段保留 [AppConfig] 默认值。不以 `cfg end` 为输入（调用方在 end 处组包）。
   factory AppConfig.fromCfgLines(Iterable<String> lines) {
     var alpha = 1.0;
-    var nearBlack = 15;
+    var nearBlack = 4;
     var blurStep = 0;
     var saturation = 1.2;
     var mode = ColorMode.a;

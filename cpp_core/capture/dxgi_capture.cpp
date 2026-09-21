@@ -28,7 +28,7 @@ static CaptureOutputInfo g_output_info{};
 static char g_wanted_output[64] = "";
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
-static std::atomic<int> g_near_black{15}; // 0..64；默认与 HelperConfig 对齐
+static std::atomic<int> g_near_black{4}; // 0..64；默认与 HelperConfig 对齐
 static std::atomic<int> g_blur_step{0};  // 0..8
 
 // 热路径失败限流窗口（ms）；首条立即打，同 key 重复合并

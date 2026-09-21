@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/diag_export.dart';
@@ -7,6 +9,9 @@ import '../../ipc/helper_client.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../widgets/scheme_card.dart';
+
+/// 开源仓库首页；诊断导出后可据此去提 Issue。
+const _kGitHubRepoUrl = 'https://github.com/losewight/screen_strip_sync';
 
 /// 设置：开源排障诊断导出（不写配置、不控灯）。
 class SettingsPage extends ConsumerStatefulWidget {
@@ -70,6 +75,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  Future<void> _openGitHubRepo() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      // Windows：空标题参数避免 start 把 URL 当窗口标题吞掉。
+      await Process.start('cmd', ['/c', 'start', '', _kGitHubRepoUrl]);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('打开失败：$e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -90,6 +106,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     '仅生成本地文件，不会自动上传；提交前请自行确认内容。',
                   ),
                   const SizedBox(height: AppSpacing.text),
+                  OutlinedButton.icon(
+                    onPressed: _openGitHubRepo,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('打开 GitHub 原项目'),
+                  ),
+                  const SizedBox(height: AppSpacing.control),
                   FilledButton.icon(
                     onPressed: _exporting ? null : _exportDiag,
                     icon: _exporting
