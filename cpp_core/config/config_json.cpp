@@ -376,6 +376,14 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
         cfg->sampleAlgo = 'm';
       else
         cfg->sampleAlgo = 'r';
+    } else if (strcmp(key, "nearBlackLuma") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "mean") == 0 || s[0] == 'a' || s[0] == 'A')
+        cfg->nearBlackLuma = 'a';
+      else
+        cfg->nearBlackLuma = '6';
     } else if (strcmp(key, "mode") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -570,6 +578,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(num);
   o.append("  \"sampleAlgo\": ");
   append_escaped(&o, c.sampleAlgo == 'm' ? "mean" : "rms");
+  o.append(",\n");
+  o.append("  \"nearBlackLuma\": ");
+  append_escaped(&o, c.nearBlackLuma == 'a' ? "mean" : "rec601");
   o.append(",\n");
   o.append("  \"mode\": \"");
   o.push_back(c.mode);

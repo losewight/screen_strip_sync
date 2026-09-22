@@ -43,6 +43,7 @@ void main() {
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.2);
       expect(cfg.sampleAlgo, SampleAlgo.rms);
+      expect(cfg.nearBlackLuma, NearBlackLuma.rec601);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
       expect(cfg.captureOutput, 'auto');
@@ -171,6 +172,28 @@ void main() {
       expect(
         AppConfig.fromCfgLines(const ['cfg sample_algo xyz']).sampleAlgo,
         SampleAlgo.rms,
+      );
+    });
+
+    test('parses near_black_luma rec601 and mean; illegal falls back to rec601',
+        () {
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg near_black_luma mean'],
+        ).nearBlackLuma,
+        NearBlackLuma.mean,
+      );
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg near_black_luma rec601'],
+        ).nearBlackLuma,
+        NearBlackLuma.rec601,
+      );
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg near_black_luma xyz'],
+        ).nearBlackLuma,
+        NearBlackLuma.rec601,
       );
     });
 

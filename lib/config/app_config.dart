@@ -20,6 +20,15 @@ enum SampleAlgo {
   mean,
 }
 
+/// 近黑亮度算法（与 helper `near_black_luma rec601|mean` 对齐）。
+enum NearBlackLuma {
+  /// Rec.601 加权；绿权重大，暗绿更易被剔、暗蓝更易保留。
+  rec601,
+
+  /// (R+G+B)/3；三通道等权。
+  mean,
+}
+
 /// 用户可改参数快照（由 helper `cfg …` 驱动；Flutter 不写盘）。
 ///
 /// 帧长 / 50ms 节流永不进此类。
@@ -30,6 +39,7 @@ class AppConfig {
     this.blurStep = 0,
     this.saturation = 1.2,
     this.sampleAlgo = SampleAlgo.rms,
+    this.nearBlackLuma = NearBlackLuma.rec601,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
     this.captureOutput = 'auto',
@@ -54,7 +64,7 @@ class AppConfig {
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
   final double emaAlpha;
 
-  /// 丢近黑阈值（Rec.601 luma 低于此跳过）；0..64。
+  /// 丢近黑像素（亮度低于此跳过）；0..64；亮度算法见 [nearBlackLuma]。
   final int nearBlack;
 
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
@@ -65,6 +75,9 @@ class AppConfig {
 
   /// map 采样聚合：RMS 偏亮，算术平均更接近光学混合。
   final SampleAlgo sampleAlgo;
+
+  /// 近黑亮度：Rec.601（默认）或 (R+G+B)/3。
+  final NearBlackLuma nearBlackLuma;
 
   final ColorMode mode;
 
@@ -134,6 +147,7 @@ class AppConfig {
     int? blurStep,
     double? saturation,
     SampleAlgo? sampleAlgo,
+    NearBlackLuma? nearBlackLuma,
     ColorMode? mode,
     String? comPort,
     String? captureOutput,
@@ -161,6 +175,7 @@ class AppConfig {
       blurStep: blurStep ?? this.blurStep,
       saturation: saturation ?? this.saturation,
       sampleAlgo: sampleAlgo ?? this.sampleAlgo,
+      nearBlackLuma: nearBlackLuma ?? this.nearBlackLuma,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
       captureOutput: captureOutput ?? this.captureOutput,
@@ -192,6 +207,7 @@ class AppConfig {
     var blurStep = 0;
     var saturation = 1.2;
     var sampleAlgo = SampleAlgo.rms;
+    var nearBlackLuma = NearBlackLuma.rec601;
     var mode = ColorMode.a;
     var com = 'COM10';
     var capture = 'auto';
@@ -241,6 +257,11 @@ class AppConfig {
           sampleAlgo = switch (val) {
             'mean' => SampleAlgo.mean,
             _ => SampleAlgo.rms,
+          };
+        case 'near_black_luma':
+          nearBlackLuma = switch (val) {
+            'mean' => NearBlackLuma.mean,
+            _ => NearBlackLuma.rec601,
           };
         case 'mode':
           mode = switch (val) {
@@ -315,6 +336,7 @@ class AppConfig {
       blurStep: blurStep,
       saturation: saturation,
       sampleAlgo: sampleAlgo,
+      nearBlackLuma: nearBlackLuma,
       mode: mode,
       comPort: com,
       captureOutput: capture,

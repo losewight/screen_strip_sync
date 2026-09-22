@@ -21,8 +21,8 @@ void dxgi_shutdown();
 // 休眠拆资源后为 false；ensure 时据此决定是否再 init
 bool dxgi_is_ready();
 DxgiErr dxgi_grab_one_frame(UINT timeout_ms);
-// out_rgb[i]={R,G,B}。rects 非空：按矩形步进抽点+Rec.601 丢近黑+rms/mean；
-// nullptr：顶边均分 + Rec.601 丢近黑 + blur；count==0 输出黑。
+// out_rgb[i]={R,G,B}。rects 非空：按矩形步进抽点+近黑 luma 丢弃+rms/mean；
+// nullptr：顶边均分 + 近黑 luma 丢弃 + blur；count==0 输出黑。
 DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
                              const SegmentRect *rects);
 
@@ -36,6 +36,7 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
 void dxgi_set_near_black(int v); // 0..64，默认 0
 void dxgi_set_blur(int v);       // 0..8，默认 0；0=不扩邻域
 void dxgi_set_sample_algo(char algo); // 'r'=rms, 'm'=mean；默认 rms
+void dxgi_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg；默认 rec601
 // 下次 dxgi_init 用的目标屏；空 / "auto" = 主屏再序号 0。不立刻换屏。
 void dxgi_set_capture_output(const char *wanted);
 

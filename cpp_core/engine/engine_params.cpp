@@ -63,6 +63,8 @@ void engine_set_blur(int v) { dxgi_set_blur(v); }
 
 void engine_set_sample_algo(char algo) { dxgi_set_sample_algo(algo); }
 
+void engine_set_near_black_luma(char mode) { dxgi_set_near_black_luma(mode); }
+
 void engine_set_saturation(float v) {
   if (v < 0.5f)
     v = 0.5f;

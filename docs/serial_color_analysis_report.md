@@ -1,5 +1,7 @@
 # Screen Strip Sync — 串口取色逻辑分析与暗部优化报告
 
+<!-- markdownlint-disable MD060 -->
+
 > **来源对话**: [串口取色逻辑分析](conversation://9fccad1a-7ef4-439e-848e-ed6040e82b60)
 > **本项目**: [Screen Strip Sync](file:///C:/Users/svip7/.gemini/antigravity/worktrees/zeeray_ambilight/serial_color_analysis_report) — 为米家追光氛围灯带定制的非官方 PC 上位控制系统
 > **引用项目**: [awawa-dev/HyperHDR](https://github.com/awawa-dev/HyperHDR) — 下一代开源氛围灯系统，高精度浮点色彩管线，突破传统 RGB 24-bit 限制

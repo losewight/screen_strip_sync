@@ -14,6 +14,8 @@ class ScreenSyncPanel extends ConsumerWidget {
 
   static const _algoRmsLabel = 'RMS（偏亮，对比色更冲）';
   static const _algoMeanLabel = '算术平均（更接近光学混合）';
+  static const _lumaRec601Label = 'Rec.601（绿权重大，暗绿更易剔）';
+  static const _lumaMeanLabel = '(R+G+B)/3（三通道等权）';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -105,6 +107,33 @@ class ScreenSyncPanel extends ConsumerWidget {
                                 if (v == null) return;
                                 config.setSampleAlgo(v);
                                 notifier.sendSampleAlgo(v);
+                              }
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      DropdownButtonFormField<NearBlackLuma>(
+                        key: ValueKey(cfg.nearBlackLuma),
+                        initialValue: cfg.nearBlackLuma,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                          labelText: '暗部亮度算法',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: NearBlackLuma.rec601,
+                            child: Text(_lumaRec601Label),
+                          ),
+                          DropdownMenuItem(
+                            value: NearBlackLuma.mean,
+                            child: Text(_lumaMeanLabel),
+                          ),
+                        ],
+                        onChanged: canEdit
+                            ? (v) {
+                                if (v == null) return;
+                                config.setNearBlackLuma(v);
+                                notifier.sendNearBlackLuma(v);
                               }
                             : null,
                       ),

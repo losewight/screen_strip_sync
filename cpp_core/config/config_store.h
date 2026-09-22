@@ -15,10 +15,11 @@ struct RegionBBox {
 // 与 Dart AppConfig  JSON 字段对齐；helper 为唯一写方
 struct HelperConfig {
   float emaAlpha = 1.f; // UI 平滑度 = 1−α；默认 0 → α=1（跟得最快）
-  int nearBlack = 4; // 0..64；越大越忽略黑边（Rec.601 luma）
+  int nearBlack = 4; // 0..64；越大越忽略黑边（亮度算法见 nearBlackLuma）
   int blurStep = 0;
   float saturation = 1.2f; // 0.5..2；1=原色，默认 120%
   char sampleAlgo = 'r';   // 'r'=rms, 'm'=mean；map 采样聚合
+  char nearBlackLuma = '6'; // '6'=Rec.601, 'a'=(R+G+B)/3；近黑亮度
   char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
   char comPort[16] = "COM10";
   // 空 / "auto" = 按主屏再序号 0；否则 DXGI DeviceName（如 \\.\DISPLAY1）
@@ -64,6 +65,7 @@ void config_set_near_black(int v);
 void config_set_blur(int v);
 void config_set_saturation(float v);
 void config_set_sample_algo(char algo); // 'r'|'m'
+void config_set_near_black_luma(char mode); // '6'|'a'
 void config_set_mode(char mode);
 void config_set_com(const char *com); // 已规范化的 COMn
 void config_set_capture_output(const char *name); // 空/"auto"/DeviceName

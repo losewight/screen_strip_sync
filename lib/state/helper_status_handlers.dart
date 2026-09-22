@@ -231,6 +231,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendBlur(int blurStep);
   void sendSaturation(double saturation);
   void sendSampleAlgo(SampleAlgo algo);
+  void sendNearBlackLuma(NearBlackLuma luma);
   void sendMode(ColorMode mode);
   void sendComPort(String port);
   void sendCaptureOutput(String name);

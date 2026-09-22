@@ -31,11 +31,21 @@ static char g_wanted_output[64] = "";
 static std::atomic<int> g_near_black{4}; // 0..64；默认与 HelperConfig 对齐
 static std::atomic<int> g_blur_step{0};  // 0..8
 static std::atomic<char> g_sample_algo{'r'}; // 'r'=rms, 'm'=mean
+// 近黑亮度：'6'=Rec.601（默认），'a'=(R+G+B)/3
+static std::atomic<char> g_near_black_luma{'6'};
 
-// Rec.601 luma，不用 (R+G+B)/3：同等算术平均下绿远亮于蓝，
-// 简单均值会把暗蓝留下、把暗绿误剔。
+// Rec.601 luma：同等算术平均下绿远亮于蓝，简单均值会把暗蓝留下、把暗绿误剔。
 static unsigned rec601_luma(unsigned r, unsigned g, unsigned b) {
   return (299u * r + 587u * g + 114u * b) / 1000u;
+}
+
+static unsigned avg_luma(unsigned r, unsigned g, unsigned b) {
+  return (r + g + b) / 3u;
+}
+
+static unsigned pixel_luma(unsigned r, unsigned g, unsigned b) {
+  return g_near_black_luma.load() == 'a' ? avg_luma(r, g, b)
+                                         : rec601_luma(r, g, b);
 }
 
 // 热路径失败限流窗口（ms）；首条立即打，同 key 重复合并
@@ -82,6 +92,10 @@ void dxgi_set_blur(int v) {
 
 void dxgi_set_sample_algo(char algo) {
   g_sample_algo.store((algo == 'm' || algo == 'M') ? 'm' : 'r');
+}
+
+void dxgi_set_near_black_luma(char mode) {
+  g_near_black_luma.store((mode == 'a' || mode == 'A') ? 'a' : '6');
 }
 
 void dxgi_set_capture_output(const char *wanted) {
@@ -619,7 +633,7 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
     if (rects != nullptr) {
-      // 步进抽点 + Rec.601 丢近黑 + 可选 blur 邻域 + rms/mean
+      // 步进抽点 + 近黑 luma 丢弃 + 可选 blur 邻域 + rms/mean
       const int nearBlack = g_near_black.load();
       const int blur = g_blur_step.load();
       const bool use_rms = g_sample_algo.load() != 'm';
@@ -669,7 +683,7 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
                 const unsigned char *px =
                     p + (UINT)sy * stride + (UINT)sx * (UINT)bpp;
                 const unsigned r = px[2], g = px[1], b = px[0];
-                if (rec601_luma(r, g, b) < (unsigned)nearBlack)
+                if (pixel_luma(r, g, b) < (unsigned)nearBlack)
                   continue;
                 if (use_rms) {
                   acc_r += (unsigned long long)r * r;
@@ -715,7 +729,7 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
             continue;
           const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
           const unsigned r = px[2], g = px[1], b = px[0];
-          if (rec601_luma(r, g, b) < (unsigned)nearBlack)
+          if (pixel_luma(r, g, b) < (unsigned)nearBlack)
             continue;
           if (use_rms) {
             acc_r += (unsigned long long)r * r;

@@ -278,6 +278,28 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set near_black_luma ", 20) == 0) {
+    const char *p = line + 20;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char mode = 0;
+    if (strcmp(p, "rec601") == 0)
+      mode = '6';
+    else if (strcmp(p, "mean") == 0)
+      mode = 'a';
+    if (mode == 0) {
+      printf("bad set near_black_luma: [%s]\n", p);
+    } else {
+      engine_set_near_black_luma(mode);
+      config_set_near_black_luma(mode);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.nearBlackLuma != mode)
+        ipc_push_config_snapshot();
+      printf("cmd=set near_black_luma\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set mode ", 9) == 0) {
     const char *p = line + 9;
     while (*p == ' ' || *p == '\t')

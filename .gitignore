@@ -61,3 +61,7 @@ app.*.map.json
 
 # Personal code-reading notes (local only, not for public git)
 /reading/
+
+# Local planning / analysis notes (not for public git)
+/docs/PLAN_D_rgb_deadzone.md
+/docs/serial_color_analysis_report.md

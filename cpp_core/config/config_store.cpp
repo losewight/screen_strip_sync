@@ -204,6 +204,7 @@ void config_apply() {
   engine_set_blur(c.blurStep);
   engine_set_saturation(c.saturation);
   engine_set_sample_algo(c.sampleAlgo);
+  engine_set_near_black_luma(c.nearBlackLuma);
   engine_set_mode(c.mode);
   engine_set_region_algo(c.regionAlgo);
   engine_set_region_blur(c.regionBlur);
@@ -332,6 +333,15 @@ void config_set_sample_algo(char algo) {
   {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg.sampleAlgo = (algo == 'm' || algo == 'M') ? 'm' : 'r';
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_near_black_luma(char mode) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.nearBlackLuma = (mode == 'a' || mode == 'A') ? 'a' : '6';
     mark_dirty_unlocked();
   }
   ensure_saver_started();

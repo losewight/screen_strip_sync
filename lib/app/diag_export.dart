@@ -72,6 +72,7 @@ abstract final class DiagExporter {
     buf.writeln('blurStep: ${config.blurStep}');
     buf.writeln('saturation: ${config.saturation}');
     buf.writeln('sampleAlgo: ${config.sampleAlgo.name}');
+    buf.writeln('nearBlackLuma: ${config.nearBlackLuma.name}');
     buf.writeln('regionAlgo: ${config.regionAlgo.name}');
     buf.writeln('regionBlur: ${config.regionBlur}');
     buf.writeln('regionSmooth: ${config.regionSmooth}');

@@ -343,6 +343,20 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
+  void sendNearBlackLuma(NearBlackLuma luma) {
+    if (!_client.isConnected) return;
+    try {
+      final word = switch (luma) {
+        NearBlackLuma.rec601 => 'rec601',
+        NearBlackLuma.mean => 'mean',
+      };
+      _sendIpc('set near_black_luma $word');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {
