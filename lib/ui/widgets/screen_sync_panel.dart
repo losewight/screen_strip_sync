@@ -12,6 +12,9 @@ import '../widgets/segment_map_calibrator.dart';
 class ScreenSyncPanel extends ConsumerWidget {
   const ScreenSyncPanel({super.key});
 
+  static const _algoRmsLabel = 'RMS（偏亮，对比色更冲）';
+  static const _algoMeanLabel = '算术平均（更接近光学混合）';
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(helperStateProvider);
@@ -80,6 +83,32 @@ class ScreenSyncPanel extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      DropdownButtonFormField<SampleAlgo>(
+                        key: ValueKey(cfg.sampleAlgo),
+                        initialValue: cfg.sampleAlgo,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: SampleAlgo.rms,
+                            child: Text(_algoRmsLabel),
+                          ),
+                          DropdownMenuItem(
+                            value: SampleAlgo.mean,
+                            child: Text(_algoMeanLabel),
+                          ),
+                        ],
+                        onChanged: canEdit
+                            ? (v) {
+                                if (v == null) return;
+                                config.setSampleAlgo(v);
+                                notifier.sendSampleAlgo(v);
+                              }
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
                       SchemeParamLabel(
                         '时间过渡平滑度: ${smooth.toStringAsFixed(2)}',
                       ),

@@ -42,6 +42,7 @@ void main() {
       expect(cfg.nearBlack, 4);
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.2);
+      expect(cfg.sampleAlgo, SampleAlgo.rms);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
       expect(cfg.captureOutput, 'auto');
@@ -156,6 +157,21 @@ void main() {
         'cfg map default',
       ]);
       expect(cleared.segmentMap, isNull);
+    });
+
+    test('parses sample_algo rms and mean; illegal falls back to rms', () {
+      expect(
+        AppConfig.fromCfgLines(const ['cfg sample_algo mean']).sampleAlgo,
+        SampleAlgo.mean,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg sample_algo rms']).sampleAlgo,
+        SampleAlgo.rms,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg sample_algo xyz']).sampleAlgo,
+        SampleAlgo.rms,
+      );
     });
 
     test('parses region fields and scene region', () {

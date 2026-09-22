@@ -14,6 +14,12 @@ enum ColorMode {
   b,
 }
 
+/// map 采样聚合（与 helper `sample_algo rms|mean` 对齐）。
+enum SampleAlgo {
+  rms,
+  mean,
+}
+
 /// 用户可改参数快照（由 helper `cfg …` 驱动；Flutter 不写盘）。
 ///
 /// 帧长 / 50ms 节流永不进此类。
@@ -23,6 +29,7 @@ class AppConfig {
     this.nearBlack = 4,
     this.blurStep = 0,
     this.saturation = 1.2,
+    this.sampleAlgo = SampleAlgo.rms,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
     this.captureOutput = 'auto',
@@ -47,7 +54,7 @@ class AppConfig {
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
   final double emaAlpha;
 
-  /// 丢近黑阈值（`(R+G+B)/3` 低于此跳过）；0..64。
+  /// 丢近黑阈值（Rec.601 luma 低于此跳过）；0..64。
   final int nearBlack;
 
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
@@ -55,6 +62,9 @@ class AppConfig {
 
   /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2（120%）。
   final double saturation;
+
+  /// map 采样聚合：RMS 偏亮，算术平均更接近光学混合。
+  final SampleAlgo sampleAlgo;
 
   final ColorMode mode;
 
@@ -123,6 +133,7 @@ class AppConfig {
     int? nearBlack,
     int? blurStep,
     double? saturation,
+    SampleAlgo? sampleAlgo,
     ColorMode? mode,
     String? comPort,
     String? captureOutput,
@@ -149,6 +160,7 @@ class AppConfig {
       nearBlack: nearBlack ?? this.nearBlack,
       blurStep: blurStep ?? this.blurStep,
       saturation: saturation ?? this.saturation,
+      sampleAlgo: sampleAlgo ?? this.sampleAlgo,
       mode: mode ?? this.mode,
       comPort: comPort ?? this.comPort,
       captureOutput: captureOutput ?? this.captureOutput,
@@ -179,6 +191,7 @@ class AppConfig {
     var nearBlack = 4;
     var blurStep = 0;
     var saturation = 1.2;
+    var sampleAlgo = SampleAlgo.rms;
     var mode = ColorMode.a;
     var com = 'COM10';
     var capture = 'auto';
@@ -224,6 +237,11 @@ class AppConfig {
         case 'saturation':
           final v = double.tryParse(val);
           if (v != null) saturation = v.clamp(0.5, 2.0);
+        case 'sample_algo':
+          sampleAlgo = switch (val) {
+            'mean' => SampleAlgo.mean,
+            _ => SampleAlgo.rms,
+          };
         case 'mode':
           mode = switch (val) {
             'b' || 'B' => ColorMode.b,
@@ -296,6 +314,7 @@ class AppConfig {
       nearBlack: nearBlack,
       blurStep: blurStep,
       saturation: saturation,
+      sampleAlgo: sampleAlgo,
       mode: mode,
       comPort: com,
       captureOutput: capture,

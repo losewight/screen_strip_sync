@@ -329,6 +329,20 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
+  void sendSampleAlgo(SampleAlgo algo) {
+    if (!_client.isConnected) return;
+    try {
+      final word = switch (algo) {
+        SampleAlgo.rms => 'rms',
+        SampleAlgo.mean => 'mean',
+      };
+      _sendIpc('set sample_algo $word');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {

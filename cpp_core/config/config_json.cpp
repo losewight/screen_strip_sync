@@ -368,6 +368,14 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_number(p, &v))
         return false;
       cfg->saturation = clamp_saturation((float)v);
+    } else if (strcmp(key, "sampleAlgo") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "mean") == 0 || s[0] == 'm' || s[0] == 'M')
+        cfg->sampleAlgo = 'm';
+      else
+        cfg->sampleAlgo = 'r';
     } else if (strcmp(key, "mode") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -560,6 +568,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(num);
   snprintf(num, sizeof(num), "  \"saturation\": %.4g,\n", (double)c.saturation);
   o.append(num);
+  o.append("  \"sampleAlgo\": ");
+  append_escaped(&o, c.sampleAlgo == 'm' ? "mean" : "rms");
+  o.append(",\n");
   o.append("  \"mode\": \"");
   o.push_back(c.mode);
   o.append("\",\n");

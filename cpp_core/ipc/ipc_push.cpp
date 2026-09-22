@@ -143,6 +143,8 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg near_black %d\n", c.nearBlack);
   send_line(client, "cfg blur %d\n", c.blurStep);
   send_line(client, "cfg saturation %.2f\n", (double)c.saturation);
+  send_line(client, "cfg sample_algo %s\n",
+            c.sampleAlgo == 'm' ? "mean" : "rms");
   send_line(client, "cfg mode %c\n", c.mode);
   send_line(client, "cfg com %s\n", c.comPort);
   send_line(client, "cfg capture_output %s\n",

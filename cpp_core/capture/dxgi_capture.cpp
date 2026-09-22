@@ -30,6 +30,13 @@ static char g_wanted_output[64] = "";
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
 static std::atomic<int> g_near_black{4}; // 0..64；默认与 HelperConfig 对齐
 static std::atomic<int> g_blur_step{0};  // 0..8
+static std::atomic<char> g_sample_algo{'r'}; // 'r'=rms, 'm'=mean
+
+// Rec.601 luma，不用 (R+G+B)/3：同等算术平均下绿远亮于蓝，
+// 简单均值会把暗蓝留下、把暗绿误剔。
+static unsigned rec601_luma(unsigned r, unsigned g, unsigned b) {
+  return (299u * r + 587u * g + 114u * b) / 1000u;
+}
 
 // 热路径失败限流窗口（ms）；首条立即打，同 key 重复合并
 static constexpr unsigned kDxgiFailLogPeriodMs = 5000;
@@ -71,6 +78,10 @@ void dxgi_set_blur(int v) {
   if (v > 8)
     v = 8;
   g_blur_step.store(v);
+}
+
+void dxgi_set_sample_algo(char algo) {
+  g_sample_algo.store((algo == 'm' || algo == 'M') ? 'm' : 'r');
 }
 
 void dxgi_set_capture_output(const char *wanted) {
@@ -608,9 +619,10 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
     if (rects != nullptr) {
-      // 步进抽点 + 丢近黑 + 可选 blur 邻域 + RMS
+      // 步进抽点 + Rec.601 丢近黑 + 可选 blur 邻域 + rms/mean
       const int nearBlack = g_near_black.load();
       const int blur = g_blur_step.load();
+      const bool use_rms = g_sample_algo.load() != 'm';
       for (int i = 0; i < kSegmentCount; ++i) {
         int x0 = (int)(rects[i].x0 * (float)desc.Width);
         int y0 = (int)(rects[i].y0 * (float)desc.Height);
@@ -642,7 +654,7 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         if (step_y < 1)
           step_y = 1;
 
-        unsigned long long sum_r2 = 0, sum_g2 = 0, sum_b2 = 0;
+        unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
         int count = 0;
         for (int y = y0; y < y1; y += step_y) {
           for (int x = x0; x < x1; x += step_x) {
@@ -657,11 +669,17 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
                 const unsigned char *px =
                     p + (UINT)sy * stride + (UINT)sx * (UINT)bpp;
                 const unsigned r = px[2], g = px[1], b = px[0];
-                if ((r + g + b) / 3u < (unsigned)nearBlack)
+                if (rec601_luma(r, g, b) < (unsigned)nearBlack)
                   continue;
-                sum_r2 += (unsigned long long)r * r;
-                sum_g2 += (unsigned long long)g * g;
-                sum_b2 += (unsigned long long)b * b;
+                if (use_rms) {
+                  acc_r += (unsigned long long)r * r;
+                  acc_g += (unsigned long long)g * g;
+                  acc_b += (unsigned long long)b * b;
+                } else {
+                  acc_r += r;
+                  acc_g += g;
+                  acc_b += b;
+                }
                 ++count;
               }
             }
@@ -671,20 +689,25 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
           out_rgb[i][0] = 0;
           out_rgb[i][1] = 0;
           out_rgb[i][2] = 0;
-        } else {
+        } else if (use_rms) {
           const float inv = 1.f / (float)count;
-          out_rgb[i][0] = (unsigned char)(sqrtf((float)sum_r2 * inv) + 0.5f);
-          out_rgb[i][1] = (unsigned char)(sqrtf((float)sum_g2 * inv) + 0.5f);
-          out_rgb[i][2] = (unsigned char)(sqrtf((float)sum_b2 * inv) + 0.5f);
+          out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
+          out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
+          out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
+        } else {
+          out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
+          out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
+          out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
         }
       }
     } else {
       const UINT y = desc.Height > 2 ? 2u : 0;
       const int blurStep = g_blur_step.load();
       const int nearBlack = g_near_black.load();
+      const bool use_rms = g_sample_algo.load() != 'm';
       for (int i = 0; i < 10; ++i) {
         const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
-        unsigned sum_r = 0, sum_g = 0, sum_b = 0;
+        unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
         int count = 0;
         for (int dx = -blurStep; dx <= blurStep; ++dx) {
           const int sx = (int)x + dx;
@@ -692,21 +715,32 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
             continue;
           const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
           const unsigned r = px[2], g = px[1], b = px[0];
-          if ((r + g + b) / 3u < (unsigned)nearBlack)
+          if (rec601_luma(r, g, b) < (unsigned)nearBlack)
             continue;
-          sum_r += r;
-          sum_g += g;
-          sum_b += b;
+          if (use_rms) {
+            acc_r += (unsigned long long)r * r;
+            acc_g += (unsigned long long)g * g;
+            acc_b += (unsigned long long)b * b;
+          } else {
+            acc_r += r;
+            acc_g += g;
+            acc_b += b;
+          }
           ++count;
         }
         if (count == 0) {
           out_rgb[i][0] = 0;
           out_rgb[i][1] = 0;
           out_rgb[i][2] = 0;
+        } else if (use_rms) {
+          const float inv = 1.f / (float)count;
+          out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
+          out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
+          out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
         } else {
-          out_rgb[i][0] = (unsigned char)(sum_r / count);
-          out_rgb[i][1] = (unsigned char)(sum_g / count);
-          out_rgb[i][2] = (unsigned char)(sum_b / count);
+          out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
+          out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
+          out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
         }
       }
     }

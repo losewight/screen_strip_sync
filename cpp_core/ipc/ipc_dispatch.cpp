@@ -256,6 +256,28 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set sample_algo ", 16) == 0) {
+    const char *p = line + 16;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char algo = 0;
+    if (strcmp(p, "rms") == 0)
+      algo = 'r';
+    else if (strcmp(p, "mean") == 0)
+      algo = 'm';
+    if (algo == 0) {
+      printf("bad set sample_algo: [%s]\n", p);
+    } else {
+      engine_set_sample_algo(algo);
+      config_set_sample_algo(algo);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.sampleAlgo != algo)
+        ipc_push_config_snapshot();
+      printf("cmd=set sample_algo\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set mode ", 9) == 0) {
     const char *p = line + 9;
     while (*p == ' ' || *p == '\t')
