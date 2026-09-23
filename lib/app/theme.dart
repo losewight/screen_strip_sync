@@ -16,6 +16,15 @@ abstract final class AppTheme {
   static const textPrimary = Color.fromARGB(255, 240, 240, 240);
   static const textSecondary = Color.fromARGB(255, 160, 164, 174);
 
+  /// 全屏蒙版上的次要按钮（取消 / 返回）：淡蓝底，暗罩上更易辨认。
+  static ButtonStyle get maskSecondaryButton => OutlinedButton.styleFrom(
+    foregroundColor: textPrimary,
+    backgroundColor: accent.withValues(alpha: 0.25),
+    disabledForegroundColor: textSecondary.withValues(alpha: 0.5),
+    disabledBackgroundColor: accent.withValues(alpha: 0.10),
+    side: BorderSide(color: accent.withValues(alpha: 0.65)),
+  );
+
   /// 侧栏选中态色变时长（不是内容区翻页）
   static const navDuration = Duration(milliseconds: 220);
   static const navCurve = Curves.easeOutCubic;

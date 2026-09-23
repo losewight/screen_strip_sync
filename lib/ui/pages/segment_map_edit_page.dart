@@ -4,31 +4,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
+import '../../config/segment_map_codec.dart';
 import '../../config/segment_sample.dart';
+import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../widgets/mask_window.dart';
 import '../widgets/screen_mask_select.dart';
 
-/// 只读预览已校准的 10 段采样框；ESC / 关闭退出，不改映射、不关灯。
-class SegmentMapPreviewPage extends ConsumerStatefulWidget {
-  const SegmentMapPreviewPage({super.key, required this.segments});
+/// 一屏同时编辑已校准的 10 段框。
+///
+/// 进页不 soft_off；点选某段后才 [HelperStateNotifier.highlightSegment]。
+/// 保存写回映射；若曾点选过则还原 [preScene]。
+class SegmentMapEditPage extends ConsumerStatefulWidget {
+  const SegmentMapEditPage({
+    super.key,
+    required this.initial,
+    required this.preScene,
+  });
 
-  final List<SegmentSample> segments;
+  final List<SegmentSample> initial;
+  final CalibrationSceneSnapshot preScene;
 
   @override
-  ConsumerState<SegmentMapPreviewPage> createState() =>
-      _SegmentMapPreviewPageState();
+  ConsumerState<SegmentMapEditPage> createState() => _SegmentMapEditPageState();
 }
 
-class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
+class _SegmentMapEditPageState extends ConsumerState<SegmentMapEditPage> {
+  late List<SegmentSample> _drafts;
+  int? _selectedIndex;
+  bool _didHighlight = false;
   bool _exiting = false;
   bool _alignedToCapture = true;
   MaskWindowRestore? _restore;
   final _focusNode = FocusNode();
 
+  HelperStateNotifier get _helper => ref.read(helperStateProvider.notifier);
+  ConfigNotifier get _config => ref.read(configProvider.notifier);
+
   @override
   void initState() {
     super.initState();
+    _drafts = List<SegmentSample>.from(widget.initial);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _enterMaskWindow();
       if (mounted) _focusNode.requestFocus();
@@ -64,19 +80,56 @@ class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
     }
   }
 
-  Future<void> _popClose() async {
+  void _onSelect(int index) {
+    if (index < 0 || index >= _drafts.length) return;
+    if (_selectedIndex == index) return;
+    setState(() => _selectedIndex = index);
+    _helper.highlightSegment(index);
+    _didHighlight = true;
+  }
+
+  void _onRectChanged(SegmentSample rect) {
+    final i = _selectedIndex;
+    if (i == null) return;
+    setState(() {
+      _drafts = List<SegmentSample>.from(_drafts)..[i] = rect;
+    });
+  }
+
+  Future<void> _popCancel() async {
     if (_exiting) return;
     _exiting = true;
     await _leaveMaskWindow();
+    if (_didHighlight) {
+      _helper.restoreAfterCalibrationCancel(widget.preScene);
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _popSave() async {
+    if (_exiting) return;
+    if (_drafts.length != kSegmentCount) return;
+    _exiting = true;
+    _config.setSegmentMap(List<SegmentSample>.unmodifiable(_drafts));
+    _helper.sendSegmentMap(_drafts);
+    await _leaveMaskWindow();
+    if (_didHighlight) {
+      _helper.restoreAfterCalibrationCancel(widget.preScene);
+    }
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final sel = _selectedIndex;
+    final hint = sel == null
+        ? '点击某一矫正框开始编辑\n按 ESC 取消'
+        : '正在编辑第 ${sel + 1}/$kSegmentCount 段：拖框改写\n按 ESC 取消';
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _popClose();
+        if (!didPop) _popCancel();
       },
       child: Focus(
         focusNode: _focusNode,
@@ -84,7 +137,7 @@ class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape) {
-            _popClose();
+            _popCancel();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -94,7 +147,12 @@ class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              ScreenMaskPreviewLayer(segments: widget.segments),
+              ScreenMaskEditLayer(
+                segments: _drafts,
+                selectedIndex: _selectedIndex,
+                onSelect: _onSelect,
+                onRectChanged: _onRectChanged,
+              ),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -103,11 +161,11 @@ class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const IgnorePointer(
+                      IgnorePointer(
                         child: Text(
-                          '当前矫正框预览（只读）\n按 ESC 关闭',
+                          hint,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: AppTheme.fontFamily,
                             color: AppTheme.textPrimary,
                             fontSize: 28,
@@ -137,9 +195,21 @@ class _SegmentMapPreviewPageState extends ConsumerState<SegmentMapPreviewPage> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.section),
-                      FilledButton(
-                        onPressed: _popClose,
-                        child: const Text('关闭'),
+                      Wrap(
+                        spacing: AppSpacing.text,
+                        runSpacing: AppSpacing.text,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          FilledButton(
+                            onPressed: _popSave,
+                            child: const Text('保存'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _popCancel,
+                            style: AppTheme.maskSecondaryButton,
+                            child: const Text('取消'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

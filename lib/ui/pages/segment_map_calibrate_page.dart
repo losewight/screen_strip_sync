@@ -249,14 +249,7 @@ class _SegmentMapCalibratePageState
                         children: [
                           OutlinedButton(
                             onPressed: _seg > 0 ? _goBack : null,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.textPrimary,
-                              side: BorderSide(
-                                color: AppTheme.textSecondary.withValues(
-                                  alpha: 0.7,
-                                ),
-                              ),
-                            ),
+                            style: AppTheme.maskSecondaryButton,
                             child: const Text('返回上一段'),
                           ),
                           FilledButton(
@@ -265,11 +258,9 @@ class _SegmentMapCalibratePageState
                               _seg >= kSegmentCount - 1 ? '完成并保存' : '确认 / 下一段',
                             ),
                           ),
-                          TextButton(
+                          OutlinedButton(
                             onPressed: _popCancel,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.textSecondary,
-                            ),
+                            style: AppTheme.maskSecondaryButton,
                             child: const Text('取消'),
                           ),
                         ],

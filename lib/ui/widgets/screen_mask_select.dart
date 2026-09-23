@@ -144,29 +144,132 @@ class _MaskPainter extends CustomPainter {
       old.committed != committed;
 }
 
-/// 只读预览：画出全部已校准采样框（带段号），不可拖改。
-class ScreenMaskPreviewLayer extends StatelessWidget {
-  const ScreenMaskPreviewLayer({super.key, required this.segments});
+/// 一屏编辑：点选某段后拖框改写；未选中时拖拽不改框。
+class ScreenMaskEditLayer extends StatefulWidget {
+  const ScreenMaskEditLayer({
+    super.key,
+    required this.segments,
+    required this.selectedIndex,
+    required this.onSelect,
+    required this.onRectChanged,
+  });
 
   final List<SegmentSample> segments;
+  final int? selectedIndex;
+  final ValueChanged<int> onSelect;
+  final ValueChanged<SegmentSample> onRectChanged;
+
+  @override
+  State<ScreenMaskEditLayer> createState() => _ScreenMaskEditLayerState();
+}
+
+class _ScreenMaskEditLayerState extends State<ScreenMaskEditLayer> {
+  Offset? _origin;
+  /// 本手势已用于切选，不再进入拖框改写。
+  bool _selectOnlyGesture = false;
+
+  Offset _toNorm(Offset local, Size size) {
+    return Offset(
+      (local.dx / size.width).clamp(0.0, 1.0),
+      (local.dy / size.height).clamp(0.0, 1.0),
+    );
+  }
+
+  Rect _toPixel(SegmentSample s, Size size) {
+    return Rect.fromLTRB(
+      s.x0 * size.width,
+      s.y0 * size.height,
+      s.x1 * size.width,
+      s.y1 * size.height,
+    );
+  }
+
+  /// 重叠时取面积最小，方便点进小框。
+  int? _hitTest(Offset local, Size size) {
+    int? best;
+    var bestArea = double.infinity;
+    for (var i = 0; i < widget.segments.length; i++) {
+      final r = _toPixel(widget.segments[i], size);
+      if (!r.contains(local)) continue;
+      final area = r.width * r.height;
+      if (area < bestArea) {
+        bestArea = area;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  void _emit(Offset a, Offset b) {
+    widget.onRectChanged(
+      SegmentMapCodec.rectFromDisplayDrag(
+        ax: a.dx,
+        ay: a.dy,
+        bx: b.dx,
+        by: b.dy,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return CustomPaint(
-          size: Size(constraints.maxWidth, constraints.maxHeight),
-          painter: _PreviewPainter(segments: segments),
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) {
+            final hit = _hitTest(d.localPosition, size);
+            if (hit != null) widget.onSelect(hit);
+          },
+          onPanStart: (d) {
+            final hit = _hitTest(d.localPosition, size);
+            final selected = widget.selectedIndex;
+            if (hit != null && hit != selected) {
+              widget.onSelect(hit);
+              _selectOnlyGesture = true;
+              _origin = null;
+              return;
+            }
+            if (selected == null) {
+              if (hit != null) widget.onSelect(hit);
+              _selectOnlyGesture = true;
+              _origin = null;
+              return;
+            }
+            _selectOnlyGesture = false;
+            final n = _toNorm(d.localPosition, size);
+            _origin = n;
+            _emit(n, n);
+          },
+          onPanUpdate: (d) {
+            if (_selectOnlyGesture) return;
+            final o = _origin;
+            if (o == null || widget.selectedIndex == null) return;
+            _emit(o, _toNorm(d.localPosition, size));
+          },
+          onPanEnd: (_) {
+            _origin = null;
+            _selectOnlyGesture = false;
+          },
+          child: CustomPaint(
+            size: size,
+            painter: _EditPainter(
+              segments: widget.segments,
+              selectedIndex: widget.selectedIndex,
+            ),
+          ),
         );
       },
     );
   }
 }
 
-class _PreviewPainter extends CustomPainter {
-  _PreviewPainter({required this.segments});
+class _EditPainter extends CustomPainter {
+  _EditPainter({required this.segments, required this.selectedIndex});
 
   final List<SegmentSample> segments;
+  final int? selectedIndex;
 
   Rect _toPixel(SegmentSample s, Size size) {
     return Rect.fromLTRB(
@@ -181,8 +284,13 @@ class _PreviewPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final full = Offset.zero & size;
     final maskPath = Path()..addRect(full);
-    for (final s in segments) {
-      maskPath.addRect(_toPixel(s, size));
+    final sel = selectedIndex;
+    if (sel != null && sel >= 0 && sel < segments.length) {
+      maskPath.addRect(_toPixel(segments[sel], size));
+    } else {
+      for (final s in segments) {
+        maskPath.addRect(_toPixel(s, size));
+      }
     }
     maskPath.fillType = PathFillType.evenOdd;
     canvas.drawPath(
@@ -190,12 +298,10 @@ class _PreviewPainter extends CustomPainter {
       Paint()..color = const Color(0x99000000),
     );
 
-    final stroke = Paint()
-      ..color = const Color(0xFF00B4FF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    const idleStroke = Color(0x66FFFFFF);
+    const activeStroke = Color(0xFF00B4FF);
     final labelStyle = TextStyle(
-      color: const Color(0xFF00B4FF),
+      color: activeStroke,
       fontSize: 14,
       fontWeight: FontWeight.w600,
       shadows: const [Shadow(blurRadius: 4, color: Colors.black87)],
@@ -203,9 +309,21 @@ class _PreviewPainter extends CustomPainter {
 
     for (var i = 0; i < segments.length; i++) {
       final r = _toPixel(segments[i], size);
-      canvas.drawRect(r, stroke);
+      final isSel = i == sel;
+      canvas.drawRect(
+        r,
+        Paint()
+          ..color = isSel ? activeStroke : idleStroke
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = isSel ? 2.5 : 1.5,
+      );
       final tp = TextPainter(
-        text: TextSpan(text: '${i + 1}', style: labelStyle),
+        text: TextSpan(
+          text: '${i + 1}',
+          style: labelStyle.copyWith(
+            color: isSel ? activeStroke : const Color(0xCCFFFFFF),
+          ),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(r.left + 4, r.top + 2));
@@ -213,6 +331,6 @@ class _PreviewPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PreviewPainter old) =>
-      old.segments != segments;
+  bool shouldRepaint(covariant _EditPainter old) =>
+      old.selectedIndex != selectedIndex || old.segments != segments;
 }

@@ -203,11 +203,9 @@ class _RegionBBoxPickPageState extends ConsumerState<RegionBBoxPickPage> {
                             onPressed: _popConfirm,
                             child: const Text('确认'),
                           ),
-                          TextButton(
+                          OutlinedButton(
                             onPressed: _popCancel,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.textSecondary,
-                            ),
+                            style: AppTheme.maskSecondaryButton,
                             child: const Text('取消'),
                           ),
                         ],
