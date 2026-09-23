@@ -1,6 +1,7 @@
 ﻿#include "dxgi_capture.h"
 
 #include "dxgi_mapped.h"
+#include "letterbox_detect.h"
 
 // 屏幕氛围 region 采样：与 map 路径正交；抓帧走 dxgi_map_desktop。
 DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
@@ -55,22 +56,21 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
   const int bpp = frame.bpp;
   const int screen_w = (int)frame.desc.Width;
   const int screen_h = (int)frame.desc.Height;
+
+  letterbox_process_bgra(p, screen_w, screen_h, (int)stride, bpp);
+
   int x0 = (l * screen_w) / 100;
-  int y0 = (t * screen_h) / 100;
   int x1 = ((l + w) * screen_w) / 100;
-  int y1 = ((t + h) * screen_h) / 100;
+  // bbox 竖向百分比按内容窗等比映射（与 map 校准框同语义）
+  int y0 = 0, y1 = 0;
+  letterbox_map_y_range((float)t / 100.f, (float)(t + h) / 100.f, screen_h,
+                        &y0, &y1);
   if (x0 < 0)
     x0 = 0;
-  if (y0 < 0)
-    y0 = 0;
   if (x1 > screen_w)
     x1 = screen_w;
-  if (y1 > screen_h)
-    y1 = screen_h;
   if (x1 <= x0)
     x1 = x0 + 1;
-  if (y1 <= y0)
-    y1 = y0 + 1;
   if (x1 > screen_w)
     x1 = screen_w;
   if (y1 > screen_h)

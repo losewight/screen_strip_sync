@@ -7,6 +7,7 @@ import '../../state/helper_state.dart';
 import '../widgets/info_hint.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/segment_map_calibrator.dart';
+import '../widgets/win11_switch.dart';
 
 /// 屏幕跟色：逐段 map / 顶边均分 + EMA 参数；入口命令 `start`。
 class ScreenSyncPanel extends ConsumerWidget {
@@ -23,6 +24,8 @@ class ScreenSyncPanel extends ConsumerWidget {
     final notifier = ref.read(helperStateProvider.notifier);
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
+    final dzN = ref.watch(deadzoneOffFramesProvider);
+    final dzNCtrl = ref.read(deadzoneOffFramesProvider.notifier);
     final can = ui.canControl;
     final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
     // 与 regionSmooth 同概念、极性相反：UI 平滑度 = 1 − α（α∈[0.05,1] → 平滑∈[0,0.95]）。
@@ -212,6 +215,48 @@ class ScreenSyncPanel extends ConsumerWidget {
                         onChangeEnd: canEdit
                             ? (v) => notifier.sendNearBlack(v.round())
                             : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel(
+                        '灭灯确认帧数: $dzN'
+                        '（越大越不易闪灭；约 ${dzN * 50}ms）',
+                      ),
+                      Slider(
+                        value: dzN.toDouble(),
+                        min: 1,
+                        max: 10,
+                        divisions: 9,
+                        label: '$dzN',
+                        onChanged: canEdit
+                            ? (v) => dzNCtrl.set(v.round())
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendDeadzoneN(v.round())
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: SchemeParamLabel('智能忽略电影黑边'),
+                          ),
+                          const InfoHint(
+                            message:
+                                '自动检测上下黑边，把采样框按竖直方向\n'
+                                '等比映射进有效画面；角标/字幕不驱动抖动。\n'
+                                '与「暗部过滤」无关；校准时自动暂停。',
+                          ),
+                          const SizedBox(width: AppSpacing.compact),
+                          Win11Switch(
+                            value: cfg.letterboxDetect,
+                            onChanged: canEdit
+                                ? (v) {
+                                    config.setLetterboxDetect(v);
+                                    notifier.sendLetterboxDetect(v);
+                                  }
+                                : null,
+                          ),
+                        ],
                       ),
                     ],
                   ),

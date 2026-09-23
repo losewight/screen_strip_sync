@@ -2,6 +2,7 @@
 
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
+#include "letterbox_detect.h"
 #include "serial_port.h"
 #include "wall_comp.h"
 
@@ -338,6 +339,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   g_sync_path.store(path);
   g_ema_inited = false;
   reset_seg_states();
+  letterbox_reset();
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }

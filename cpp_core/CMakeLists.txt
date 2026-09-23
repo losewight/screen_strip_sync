@@ -27,6 +27,7 @@ add_executable(helper WIN32
   ipc/ipc_dispatch.cpp
   capture/dxgi_capture.cpp
   capture/dxgi_region.cpp
+  capture/letterbox_detect.cpp
   shell/tray_icon.cpp
   shell/ui_launcher.cpp
   shell/helper.rc

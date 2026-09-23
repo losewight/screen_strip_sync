@@ -5,6 +5,7 @@
 
 #include "dxgi_mapped.h"
 #include "helper_log.h"
+#include "letterbox_detect.h"
 #include "light_engine.h"
 
 #include <atomic>
@@ -632,6 +633,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
   const UINT stride = frame.stride;
 
   if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
+    letterbox_process_bgra(p, (int)desc.Width, (int)desc.Height, (int)stride,
+                           bpp);
     if (rects != nullptr) {
       // 步进抽点 + 近黑 luma 丢弃 + 可选 blur 邻域 + rms/mean
       const int nearBlack = g_near_black.load();
@@ -639,21 +642,16 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
       const bool use_rms = g_sample_algo.load() != 'm';
       for (int i = 0; i < kSegmentCount; ++i) {
         int x0 = (int)(rects[i].x0 * (float)desc.Width);
-        int y0 = (int)(rects[i].y0 * (float)desc.Height);
         int x1 = (int)(rects[i].x1 * (float)desc.Width);
-        int y1 = (int)(rects[i].y1 * (float)desc.Height);
+        int y0 = 0, y1 = 0;
+        letterbox_map_y_range(rects[i].y0, rects[i].y1, (int)desc.Height, &y0,
+                              &y1);
         if (x0 < 0)
           x0 = 0;
-        if (y0 < 0)
-          y0 = 0;
         if (x1 > (int)desc.Width)
           x1 = (int)desc.Width;
-        if (y1 > (int)desc.Height)
-          y1 = (int)desc.Height;
         if (x1 <= x0)
           x1 = x0 + 1;
-        if (y1 <= y0)
-          y1 = y0 + 1;
         if (x1 > (int)desc.Width)
           x1 = (int)desc.Width;
         if (y1 > (int)desc.Height)
@@ -715,7 +713,10 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         }
       }
     } else {
-      const UINT y = desc.Height > 2 ? 2u : 0;
+      int top = 0, bottom = 0;
+      letterbox_get_inset(&top, &bottom);
+      const UINT y =
+          (UINT)(top + (desc.Height > (UINT)(top + 2) ? 2 : 0));
       const int blurStep = g_blur_step.load();
       const int nearBlack = g_near_black.load();
       const bool use_rms = g_sample_algo.load() != 'm';
@@ -759,20 +760,21 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
       }
     }
   } else if (desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+    // float 路径不跑 letterbox 扫线；仍用已稳定 inset 做 Y 映射
     for (int i = 0; i < 10; ++i) {
       UINT x, y;
       if (rects != nullptr) {
         const float mx = 0.5f * (rects[i].x0 + rects[i].x1);
         const float my = 0.5f * (rects[i].y0 + rects[i].y1);
         x = (UINT)(mx * (float)desc.Width);
-        y = (UINT)(my * (float)desc.Height);
+        y = (UINT)letterbox_map_y(my, (int)desc.Height);
         if (x >= desc.Width)
           x = desc.Width - 1;
-        if (y >= desc.Height)
-          y = desc.Height - 1;
       } else {
+        int top = 0, bottom = 0;
+        letterbox_get_inset(&top, &bottom);
         x = (UINT)((i + 0.5) * desc.Width / 10);
-        y = desc.Height > 2 ? 2u : 0;
+        y = (UINT)(top + (desc.Height > (UINT)(top + 2) ? 2 : 0));
       }
       const unsigned short *h =
           (const unsigned short *)(p + y * stride + x * (UINT)bpp);

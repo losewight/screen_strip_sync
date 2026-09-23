@@ -254,4 +254,9 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendLastCustomSolid(String rrggbb);
   void sendWallComp(bool enabled);
   void sendWallColor(String rrggbb);
+  void sendLetterboxDetect(bool enabled);
+  /// 校准蒙版期间硬关 letterbox；不落盘。
+  void sendLetterboxHold(bool hold);
+  /// D1 调试：灭灯确认帧数；不落盘。
+  void sendDeadzoneN(int n);
 }

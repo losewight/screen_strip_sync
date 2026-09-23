@@ -47,6 +47,8 @@ struct HelperConfig {
   // 墙面色彩补偿：开关 + 墙色；空 wallColor = 未校正（启用也 no-op）
   bool wallCompEnabled = false;
   char wallColor[8] = "";
+  // 智能忽略电影黑边（letterbox）；默认关
+  bool letterboxDetect = false;
 };
 
 bool config_path(char *out, size_t cap);
@@ -80,6 +82,7 @@ bool config_set_last_custom_solid(const char *rrggbb);
 void config_set_wall_comp(bool on);
 // 6 位 hex；非法返回 false；空串清除墙色
 bool config_set_wall_color(const char *rrggbb);
+void config_set_letterbox_detect(bool on);
 void config_set_last_connected_com(const char *com);
 void config_set_serial_configured(bool on);
 void config_clear_map();

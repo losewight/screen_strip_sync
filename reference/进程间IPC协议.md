@@ -54,6 +54,8 @@
 | `set region_bbox L,T,W,H` | 氛围取色框（被抓那块屏的百分比整数 0..100） |
 | `set capture_output <DeviceName\|auto>` | DXGI 抓哪块屏；`auto` = 主屏。热切换不动串口 |
 | `set last_custom_solid RRGGBB` | 记住自定义纯色 |
+| `set letterbox_detect 0\|1` | 智能忽略电影黑边（落盘）；与 `near_black` 正交 |
+| `set letterbox_hold 0\|1` | 校准/高亮期间硬关 letterbox（**不落盘**）；`start`/`start_region` 也会解除 |
 
 `set …` 生效后，helper 会 debounce（约 1 秒）写回 JSON。场景类命令会更新 `lastScene`。数值在 helper 侧夹紧。
 

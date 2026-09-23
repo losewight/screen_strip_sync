@@ -168,6 +168,7 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg last_custom_solid %s\n", c.lastCustomSolid);
   send_line(client, "cfg wall_comp %d\n", c.wallCompEnabled ? 1 : 0);
   send_line(client, "cfg wall_color %s\n", c.wallColor);
+  send_line(client, "cfg letterbox_detect %d\n", c.letterboxDetect ? 1 : 0);
 
   if (!c.hasMap) {
     send_line(client, "cfg map default\n");

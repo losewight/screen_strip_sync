@@ -47,7 +47,10 @@ class _SegmentMapEditPageState extends ConsumerState<SegmentMapEditPage> {
     _drafts = List<SegmentSample>.from(widget.initial);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _enterMaskWindow();
-      if (mounted) _focusNode.requestFocus();
+      if (mounted) {
+        _helper.sendLetterboxHold(true);
+        _focusNode.requestFocus();
+      }
     });
   }
 
@@ -99,6 +102,7 @@ class _SegmentMapEditPageState extends ConsumerState<SegmentMapEditPage> {
   Future<void> _popCancel() async {
     if (_exiting) return;
     _exiting = true;
+    _helper.sendLetterboxHold(false);
     await _leaveMaskWindow();
     if (_didHighlight) {
       _helper.restoreAfterCalibrationCancel(widget.preScene);
@@ -112,6 +116,7 @@ class _SegmentMapEditPageState extends ConsumerState<SegmentMapEditPage> {
     _exiting = true;
     _config.setSegmentMap(List<SegmentSample>.unmodifiable(_drafts));
     _helper.sendSegmentMap(_drafts);
+    _helper.sendLetterboxHold(false);
     await _leaveMaskWindow();
     if (_didHighlight) {
       _helper.restoreAfterCalibrationCancel(widget.preScene);

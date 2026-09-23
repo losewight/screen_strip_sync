@@ -9,6 +9,7 @@
 #include "helper_log.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
+#include "letterbox_detect.h"
 #include "light_engine.h"
 #include "serial_port.h"
 
@@ -131,6 +132,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "start") == 0) {
     if (!require_serial(serial, client, "start"))
       return DispatchResult::Continue;
+    letterbox_set_hard_disable(false);
+    letterbox_reset();
     engine_start(*serial);
     engine_set_intent_engine();
     config_set_last_scene("engine");
@@ -141,6 +144,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
   if (strcmp(line, "start_region") == 0) {
     if (!require_serial(serial, client, "start_region"))
       return DispatchResult::Continue;
+    letterbox_set_hard_disable(false);
+    letterbox_reset();
     engine_start_region(*serial);
     engine_set_intent_region();
     config_set_last_scene("region");
@@ -474,6 +479,7 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     } else {
       printf("cmd=highlight %ld\n", v);
       // 为什么：worker 仍跑时高亮会与 RGB 帧 0ms 连写，校准段会被下一帧冲掉
+      letterbox_set_hard_disable(true);
       engine_stop();
       send_highlight(*serial, (int)v);
     }
@@ -605,6 +611,31 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("cmd=set wall_comp %c\n", *p);
     } else {
       printf("bad set wall_comp: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set letterbox_detect ", 21) == 0) {
+    const char *p = line + 21;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_letterbox_detect(*p == '1');
+      printf("cmd=set letterbox_detect %c\n", *p);
+    } else {
+      printf("bad set letterbox_detect: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  // 校准蒙版期间硬关；不落盘。退出校准后由 start 或 letterbox_hold 0 解除。
+  if (strncmp(line, "set letterbox_hold ", 19) == 0) {
+    const char *p = line + 19;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      letterbox_set_hard_disable(*p == '1');
+      printf("cmd=set letterbox_hold %c\n", *p);
+    } else {
+      printf("bad set letterbox_hold: [%s]\n", p);
     }
     return DispatchResult::Continue;
   }

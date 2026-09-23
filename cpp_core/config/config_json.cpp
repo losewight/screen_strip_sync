@@ -467,6 +467,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_bool(p, &b))
         return false;
       cfg->wallCompEnabled = b;
+    } else if (strcmp(key, "letterboxDetect") == 0) {
+      bool b = false;
+      if (!parse_bool(p, &b))
+        return false;
+      cfg->letterboxDetect = b;
     } else if (strcmp(key, "wallColor") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -620,6 +625,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(",\n");
   o.append("  \"wallCompEnabled\": ");
   o.append(c.wallCompEnabled ? "true" : "false");
+  o.append(",\n");
+  o.append("  \"letterboxDetect\": ");
+  o.append(c.letterboxDetect ? "true" : "false");
   o.append(",\n");
   o.append("  \"wallColor\": ");
   append_escaped(&o, c.wallColor);

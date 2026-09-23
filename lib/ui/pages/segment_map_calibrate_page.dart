@@ -49,6 +49,7 @@ class _SegmentMapCalibratePageState
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _enterMaskWindow();
       if (mounted) {
+        _helper.sendLetterboxHold(true);
         _focusNode.requestFocus();
         _helper.highlightSegment(0);
       }
@@ -87,6 +88,7 @@ class _SegmentMapCalibratePageState
   Future<void> _popCancel() async {
     if (_exiting) return;
     _exiting = true;
+    _helper.sendLetterboxHold(false);
     await _leaveMaskWindow();
     if (!mounted) return;
     _helper.restoreAfterCalibrationCancel(widget.preScene);
@@ -98,6 +100,8 @@ class _SegmentMapCalibratePageState
     _exiting = true;
     _config.setSegmentMap(map);
     _helper.sendSegmentMap(map);
+    // start 侧会解除 hard_disable；仍显式 hold 0 防竞态
+    _helper.sendLetterboxHold(false);
     _helper.send('start');
     await _leaveMaskWindow();
     if (mounted) Navigator.of(context).pop();

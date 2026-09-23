@@ -9,6 +9,7 @@
 #include "helper_lifecycle.h"
 #include "light_engine.h"
 #include "wall_comp.h"
+#include "letterbox_detect.h"
 
 #include <atomic>
 #include <cstdio>
@@ -217,6 +218,7 @@ void config_apply() {
     engine_set_wall_color(c.wallColor);
   else
     engine_clear_wall_color();
+  letterbox_set_enabled(c.letterboxDetect);
   // 为什么：必须在 dxgi_init 之前生效；ACCESS_LOST 重建读的是这份 wanted
   {
     char capture[64];
@@ -509,6 +511,19 @@ void config_set_wall_comp(bool on) {
   engine_set_wall_comp(on);
   ensure_saver_started();
   printf("config_set_wall_comp: %d\n", on ? 1 : 0);
+}
+
+void config_set_letterbox_detect(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (g_cfg.letterboxDetect == on)
+      return;
+    g_cfg.letterboxDetect = on;
+    mark_dirty_unlocked();
+  }
+  // enable/inset 日志在 letterbox_set_enabled
+  letterbox_set_enabled(on);
+  ensure_saver_started();
 }
 
 bool config_set_wall_color(const char *rrggbb) {

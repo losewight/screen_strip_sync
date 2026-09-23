@@ -306,6 +306,18 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
+  /// D1：连续够暗帧数才灭；helper clamp 1..10。不落盘。
+  @override
+  void sendDeadzoneN(int n) {
+    if (!_client.isConnected) return;
+    try {
+      final v = n.clamp(1, 10);
+      _sendIpc('set deadzone_n $v');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
   @override
   void sendBlur(int blurStep) {
     if (!_client.isConnected) return;
@@ -462,6 +474,26 @@ class HelperStateNotifier extends _HelperStateBase
     if (!_client.isConnected) return;
     try {
       _sendIpc('set wall_comp ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendLetterboxDetect(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set letterbox_detect ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendLetterboxHold(bool hold) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set letterbox_hold ${hold ? 1 : 0}');
     } catch (e) {
       _patch(message: '$e');
     }

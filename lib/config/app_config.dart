@@ -59,6 +59,7 @@ class AppConfig {
     this.lastCustomSolid = '',
     this.wallCompEnabled = false,
     this.wallColor = '',
+    this.letterboxDetect = false,
   });
 
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
@@ -135,6 +136,9 @@ class AppConfig {
   /// 墙面底色；6 位小写 hex，空=未校正。
   final String wallColor;
 
+  /// 智能忽略电影黑边（letterbox）；采样 Y 映射进内容窗。
+  final bool letterboxDetect;
+
   bool get hasSegmentMap =>
       segmentMap != null && segmentMap!.length == kSegmentCount;
 
@@ -168,6 +172,7 @@ class AppConfig {
     String? lastCustomSolid,
     bool? wallCompEnabled,
     String? wallColor,
+    bool? letterboxDetect,
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
@@ -195,6 +200,7 @@ class AppConfig {
       lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
       wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
       wallColor: wallColor ?? this.wallColor,
+      letterboxDetect: letterboxDetect ?? this.letterboxDetect,
     );
   }
 
@@ -227,6 +233,7 @@ class AppConfig {
     var lastCustomSolid = '';
     var wallCompEnabled = false;
     var wallColor = '';
+    var letterboxDetect = false;
 
     for (final raw in lines) {
       var line = raw.trim();
@@ -318,6 +325,8 @@ class AppConfig {
           }
         case 'wall_comp':
           if (val == '0' || val == '1') wallCompEnabled = val == '1';
+        case 'letterbox_detect':
+          if (val == '0' || val == '1') letterboxDetect = val == '1';
         case 'wall_color':
           final h = val.trim().toLowerCase();
           if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) {
@@ -356,6 +365,7 @@ class AppConfig {
       lastCustomSolid: lastCustomSolid,
       wallCompEnabled: wallCompEnabled,
       wallColor: wallColor,
+      letterboxDetect: letterboxDetect,
     );
   }
 }

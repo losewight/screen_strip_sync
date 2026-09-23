@@ -59,6 +59,7 @@ void main() {
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
       expect(cfg.hasWallColor, isFalse);
+      expect(cfg.letterboxDetect, isFalse);
     });
 
     test('parses serial_configured 0 and 1', () {
@@ -97,6 +98,21 @@ void main() {
       expect(cfg.wallCompEnabled, isTrue);
       expect(cfg.wallColor, 'ffe6b4');
       expect(cfg.hasWallColor, isTrue);
+    });
+
+    test('parses letterbox_detect', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg letterbox_detect 1',
+        ]).letterboxDetect,
+        isTrue,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg letterbox_detect 0',
+        ]).letterboxDetect,
+        isFalse,
+      );
     });
 
     test('clamps out-of-range numeric fields', () {

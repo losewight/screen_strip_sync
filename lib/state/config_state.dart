@@ -101,6 +101,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(wallCompEnabled: value);
   }
 
+  void setLetterboxDetect(bool value) {
+    state = state.copyWith(letterboxDetect: value);
+  }
+
   void setWallColor(String hex) {
     final h = hex.trim().toLowerCase();
     if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
@@ -164,3 +168,16 @@ final configReadyProvider = Provider<bool>((ref) {
   ref.watch(configProvider);
   return ref.read(configProvider.notifier).hasSnapshot;
 });
+
+/// D1 调试：灭灯确认帧数（连续够暗才真灭）。不进 JSON/cfg，仅本会话 + IPC。
+class DeadzoneOffFramesNotifier extends Notifier<int> {
+  @override
+  int build() => 2;
+
+  void set(int value) => state = value.clamp(1, 10);
+}
+
+final deadzoneOffFramesProvider =
+    NotifierProvider<DeadzoneOffFramesNotifier, int>(
+  DeadzoneOffFramesNotifier.new,
+);
