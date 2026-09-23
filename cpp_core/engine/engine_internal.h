@@ -37,6 +37,18 @@ extern float g_ema_g[10];
 extern float g_ema_b[10];
 extern bool g_ema_inited;
 
+// D1 硬件死区：每段 OFF/ON + 灭灯确认帧（与 g_ema_* 同步启停重置）
+struct SegState {
+  bool on = false;
+  int off_count = 0;
+};
+extern SegState g_seg[10];
+// 默认见 PLAN_D §6：T_on=1 / T_off=0 / N=2；enable 关则旁路方便 A/B
+extern std::atomic<int> g_dz_ton;
+extern std::atomic<int> g_dz_toff;
+extern std::atomic<int> g_dz_off_frames;
+extern std::atomic<bool> g_dz_enable;
+
 extern std::mutex g_intent_mu;
 extern DisplayIntent g_intent;
 

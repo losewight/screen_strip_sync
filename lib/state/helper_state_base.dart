@@ -34,6 +34,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     CaptureOutputInfo? currentCapture,
     bool clearCurrentCapture = false,
   }) {
+    // displayKind 始终跟 _lastDisplay：调用方先改字段再 _patch。
     state = HelperUiState(
       phase: phase ?? state.phase,
       message: message ?? state.message,
@@ -43,6 +44,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
       hasDevice: hasDevice ?? state.hasDevice,
       isScanningPorts: isScanningPorts ?? state.isScanningPorts,
       engineRunning: engineRunning ?? state.engineRunning,
+      displayKind: _lastDisplay,
       snapshotTimedOut: snapshotTimedOut ?? state.snapshotTimedOut,
       captureOutputs: captureOutputs ?? state.captureOutputs,
       currentCapture: clearCurrentCapture

@@ -143,3 +143,76 @@ class _MaskPainter extends CustomPainter {
       old.currentRect != currentRect ||
       old.committed != committed;
 }
+
+/// 只读预览：画出全部已校准采样框（带段号），不可拖改。
+class ScreenMaskPreviewLayer extends StatelessWidget {
+  const ScreenMaskPreviewLayer({super.key, required this.segments});
+
+  final List<SegmentSample> segments;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CustomPaint(
+          size: Size(constraints.maxWidth, constraints.maxHeight),
+          painter: _PreviewPainter(segments: segments),
+        );
+      },
+    );
+  }
+}
+
+class _PreviewPainter extends CustomPainter {
+  _PreviewPainter({required this.segments});
+
+  final List<SegmentSample> segments;
+
+  Rect _toPixel(SegmentSample s, Size size) {
+    return Rect.fromLTRB(
+      s.x0 * size.width,
+      s.y0 * size.height,
+      s.x1 * size.width,
+      s.y1 * size.height,
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final full = Offset.zero & size;
+    final maskPath = Path()..addRect(full);
+    for (final s in segments) {
+      maskPath.addRect(_toPixel(s, size));
+    }
+    maskPath.fillType = PathFillType.evenOdd;
+    canvas.drawPath(
+      maskPath,
+      Paint()..color = const Color(0x99000000),
+    );
+
+    final stroke = Paint()
+      ..color = const Color(0xFF00B4FF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final labelStyle = TextStyle(
+      color: const Color(0xFF00B4FF),
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      shadows: const [Shadow(blurRadius: 4, color: Colors.black87)],
+    );
+
+    for (var i = 0; i < segments.length; i++) {
+      final r = _toPixel(segments[i], size);
+      canvas.drawRect(r, stroke);
+      final tp = TextPainter(
+        text: TextSpan(text: '${i + 1}', style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(r.left + 4, r.top + 2));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PreviewPainter old) =>
+      old.segments != segments;
+}

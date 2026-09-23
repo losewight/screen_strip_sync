@@ -119,6 +119,11 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         state.phase == HelperPhase.failed ||
         state.phase == HelperPhase.disconnected ||
         state.phase == HelperPhase.connecting;
+    // 为什么：引擎停了若仍留 engine/region，方案页「停止」钮会误亮。
+    if (_lastDisplay == HelperDisplayKind.engine ||
+        _lastDisplay == HelperDisplayKind.region) {
+      _lastDisplay = HelperDisplayKind.idle;
+    }
     _patch(
       engineRunning: false,
       message: keepPhase

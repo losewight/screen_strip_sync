@@ -91,9 +91,10 @@ ON  时：非对称 EMA；输出 lum 不得落在 (0, T) 半死区（要么 ≥T
 
 ### D1 — 跃阶起步 + 迟滞 OFF/ON
 
-- `engine_internal.h`：每段 `SegState` + 确认计数  
-- `engine_frame.cpp`：`produce_colors_map` / `produce_colors_region` 插入状态机  
+- `engine_internal.h`：每段 `SegState` + 确认计数；`g_dz_ton/toff/off_frames/enable` 原子量
+- `engine_frame.cpp`：`produce_colors_map` / `produce_colors_region` 插入状态机
 - `engine_start_path` / `engine_stop` 重置段状态（与 `g_ema_inited` 同步清）
+- 调试 IPC：`set deadzone_ton|toff|n|enable`（不进 JSON/cfg）
 
 *验收*：暗场↔微亮不再每帧闪；真黑能灭；过 `T` 后稳定亮。
 
@@ -148,6 +149,22 @@ ON  时：非对称 EMA；输出 lum 不得落在 (0, T) 半死区（要么 ≥T
 - 判定 `T` = **1**（`0x01`，蓝通道）
 - `T_on` = **1** `T_off` = **0** 确认帧数 N = **2**（×50ms；T 已贴底，迟滞只能落在 0/1）
 - **口径备注**：死区宽度仅 1 级；D1 跃阶几乎「非 0 即可见」。若后续等灰 `010101` / 红绿单通道与蓝不一致，以补测改写本表，勿猜大阈值。
+
+---
+
+## 6.1 D1 调试记录
+
+> 代码：`SegState` + 跃阶/迟滞已进 `engine_frame.cpp`（map + region）；默认 `T_on=1` / `T_off=0` / `N=2` / `enable=1`。  
+> 临时 IPC（**不写 JSON / 不推 cfg**）：`set deadzone_ton|toff|n|enable …`
+
+| 命令 | 含义 | 试值 | 观感（填） |
+|------|------|------|------------|
+| （默认） | ton=1 toff=0 n=2 | — | 待实机：暗场↔微亮是否还闪 |
+| `set deadzone_enable 0` | 旁路状态机（旧对称 EMA） | 0 | A/B 对比用 |
+| `set deadzone_n 3` | 灭灯确认更钝 | 3 | |
+| `set deadzone_ton 2` | 抬亮阈（toff 自动 &lt; ton） | 2 | |
+
+*验收清单*：真黑能灭；过 `T` 稳定亮；启停追色后无脏状态闪一下；`enable 0` 可回退。
 
 ---
 

@@ -633,6 +633,7 @@ class HelperStateNotifier extends _HelperStateBase
         );
       } else if (cmd == 'stop') {
         _engineWanted = false;
+        _lastSentSolid = null;
         _lastDisplay = HelperDisplayKind.idle;
         _patch(
           message: '引擎已停止',

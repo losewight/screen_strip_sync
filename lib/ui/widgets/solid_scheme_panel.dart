@@ -122,12 +122,18 @@ class _SolidSchemePanelState extends ConsumerState<SolidSchemePanel> {
                 SchemeCard(
                   title: '纯色',
                   actions: [
-                    FilledButton(
-                      onPressed: can
-                          ? () => _sendSolid(notifier, _activeColor)
-                          : null,
-                      child: const Text('开始使用纯色'),
-                    ),
+                    if (ui.isSolidRunning)
+                      OutlinedButton(
+                        onPressed: can ? () => notifier.send('stop') : null,
+                        child: const Text('停止'),
+                      )
+                    else
+                      FilledButton(
+                        onPressed: can
+                            ? () => _sendSolid(notifier, _activeColor)
+                            : null,
+                        child: const Text('开始使用纯色'),
+                      ),
                     OutlinedButton(
                       onPressed: can ? notifier.softOff : null,
                       child: const Text('关灯'),

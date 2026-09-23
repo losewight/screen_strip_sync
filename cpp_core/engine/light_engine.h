@@ -33,6 +33,12 @@ void engine_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg
 void engine_set_mode(char mode);
 bool engine_set_com(const char *name);
 
+// D1 调试旋钮：硬件死区阈值；不进 JSON/cfg（实机 IPC 临时改）
+void engine_set_deadzone_ton(int v);        // ≥1；抬高则 toff 会被压到 < ton
+void engine_set_deadzone_toff(int v);       // ≥0 且 < ton
+void engine_set_deadzone_off_frames(int v); // 1..10；连续够暗帧数才灭
+void engine_set_deadzone_enable(bool on);   // false=旁路状态机（旧对称 EMA）
+
 // 屏幕氛围参数（与 map 的 alpha/near_black/blur 正交）
 void engine_set_region_algo(char algo); // 'm'|'x'
 void engine_set_region_blur(int v);

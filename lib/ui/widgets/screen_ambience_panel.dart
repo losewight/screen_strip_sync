@@ -57,10 +57,16 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                 SchemeCard(
                   title: '屏幕氛围',
                   actions: [
-                    FilledButton(
-                      onPressed: can ? notifier.startRegion : null,
-                      child: const Text('开始屏幕氛围'),
-                    ),
+                    if (ui.isRegionRunning)
+                      OutlinedButton(
+                        onPressed: can ? () => notifier.send('stop') : null,
+                        child: const Text('停止'),
+                      )
+                    else
+                      FilledButton(
+                        onPressed: can ? notifier.startRegion : null,
+                        child: const Text('开始屏幕氛围'),
+                      ),
                     OutlinedButton(
                       onPressed: can ? notifier.softOff : null,
                       child: const Text('关灯'),

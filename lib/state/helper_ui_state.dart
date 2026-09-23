@@ -1,4 +1,5 @@
-﻿import '../ipc/windows_com_ports.dart';
+﻿import '../ipc/helper_status.dart';
+import '../ipc/windows_com_ports.dart';
 
 /// 校准开始前的灯效场景；取消时按此还原（完成校准仍走 `start`）。
 enum CalibrationSceneKind { engine, region, solid, off }
@@ -85,6 +86,7 @@ class HelperUiState {
     this.hasDevice = false,
     this.isScanningPorts = false,
     this.engineRunning = false,
+    this.displayKind = HelperDisplayKind.idle,
     this.snapshotTimedOut = false,
     this.captureOutputs = const [],
     this.currentCapture,
@@ -109,6 +111,9 @@ class HelperUiState {
   /// helper 追色发帧线程是否在跑（来自 `status engine`）。
   final bool engineRunning;
 
+  /// helper 当前显示意图（`status display` / 本地乐观更新）。
+  final HelperDisplayKind displayKind;
+
   /// 已连上 IPC 但约 2s 内未收到 `cfg end`（主控「连接」可点「重试」）。
   final bool snapshotTimedOut;
 
@@ -117,6 +122,17 @@ class HelperUiState {
 
   /// 当前真正抓的那块（`status capture_output`）；未上报为 null。
   final CaptureOutputInfo? currentCapture;
+
+  /// 流光溢彩（map `start`）是否在应用中；与 region 追色区分。
+  bool get isMapRunning =>
+      engineRunning && displayKind == HelperDisplayKind.engine;
+
+  /// 屏幕氛围（`start_region`）是否在应用中。
+  bool get isRegionRunning =>
+      engineRunning && displayKind == HelperDisplayKind.region;
+
+  /// 纯色模式是否在应用中（引擎不跑，看 display）。
+  bool get isSolidRunning => displayKind == HelperDisplayKind.solid;
 
   /// 换口判断锚点：优先当前打开口，否则用上次成功口。
   String get anchorCom => currentCom.isNotEmpty ? currentCom : lastGoodCom;

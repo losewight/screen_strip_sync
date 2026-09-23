@@ -44,9 +44,49 @@ float g_ema_g[10] = {};
 float g_ema_b[10] = {};
 bool g_ema_inited = false;
 
+// D1：出处 docs/PLAN_D_rgb_deadzone.md §6（蓝通道 T=1）
+SegState g_seg[10] = {};
+std::atomic<int> g_dz_ton{1};
+std::atomic<int> g_dz_toff{0};
+std::atomic<int> g_dz_off_frames{2};
+std::atomic<bool> g_dz_enable{true};
+
 // 为什么：休眠软关会发临时黑帧，意图必须单独存，不能被黑帧冲掉
 std::mutex g_intent_mu;
 DisplayIntent g_intent{};
+
+void engine_set_deadzone_ton(int v) {
+  if (v < 1)
+    v = 1;
+  if (v > 255)
+    v = 255;
+  g_dz_ton.store(v);
+  // 迟滞要求 toff < ton；抬 ton 时顺带压低 toff
+  int toff = g_dz_toff.load();
+  if (toff >= v)
+    g_dz_toff.store(v - 1);
+}
+
+void engine_set_deadzone_toff(int v) {
+  if (v < 0)
+    v = 0;
+  if (v > 254)
+    v = 254;
+  const int ton = g_dz_ton.load();
+  if (v >= ton)
+    v = ton - 1;
+  g_dz_toff.store(v);
+}
+
+void engine_set_deadzone_off_frames(int v) {
+  if (v < 1)
+    v = 1;
+  if (v > 10)
+    v = 10;
+  g_dz_off_frames.store(v);
+}
+
+void engine_set_deadzone_enable(bool on) { g_dz_enable.store(on); }
 
 void engine_set_alpha(float alpha) {
   // 与 Flutter AppConfig 对齐：[0.05, 1.0]

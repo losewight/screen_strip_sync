@@ -43,10 +43,17 @@ class ScreenSyncPanel extends ConsumerWidget {
                 SchemeCard(
                   title: '流光溢彩',
                   actions: [
-                    FilledButton(
-                      onPressed: can ? () => notifier.send('start') : null,
-                      child: const Text('开始流光溢彩'),
-                    ),
+                    // 应用中：Filled → Outlined +「停止」，点按发 stop（与旁侧「关灯」soft_off 区分）。
+                    if (ui.isMapRunning)
+                      OutlinedButton(
+                        onPressed: can ? () => notifier.send('stop') : null,
+                        child: const Text('停止'),
+                      )
+                    else
+                      FilledButton(
+                        onPressed: can ? () => notifier.send('start') : null,
+                        child: const Text('开始流光溢彩'),
+                      ),
                     OutlinedButton(
                       onPressed: can ? notifier.softOff : null,
                       child: const Text('关灯'),

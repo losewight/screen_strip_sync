@@ -5,8 +5,9 @@ import '../../app/spacing.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../pages/segment_map_calibrate_page.dart';
+import '../pages/segment_map_preview_page.dart';
 
-/// 屏幕同步页入口：开始校准 / 恢复默认；框选在全屏蒙版完成。
+/// 屏幕同步页入口：开始 / 重新校准、预览已有矫正框。
 ///
 /// 调用链：
 /// 开始 → 快照 → soft_off → push 全屏蒙版页（罩桌面拖框）
@@ -24,7 +25,6 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
   String? _error;
 
   HelperStateNotifier get _helper => ref.read(helperStateProvider.notifier);
-  ConfigNotifier get _config => ref.read(configProvider.notifier);
 
   Future<void> _start() async {
     final ui = ref.read(helperStateProvider);
@@ -70,20 +70,25 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
     }
   }
 
-  void _restoreDefault() {
-    _config.clearSegmentMap();
-    _helper.clearSegmentMapRemote();
+  Future<void> _preview() async {
+    final map = ref.read(configProvider).segmentMap;
+    if (map == null || map.isEmpty) return;
+    if (_busy) return;
+    setState(() => _error = null);
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder(
+        opaque: true,
+        barrierColor: Colors.transparent,
+        pageBuilder: (_, _, _) => SegmentMapPreviewPage(segments: map),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cfg = ref.watch(configProvider);
     final canAct = ref.watch(helperStateProvider.select((s) => s.canControl));
-    final canEdit =
-        ref.watch(
-          helperStateProvider.select((s) => s.canConfigure),
-        ) &&
-        ref.watch(configReadyProvider);
+    final canPreview = cfg.hasSegmentMap && !_busy;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,12 +107,16 @@ class _SegmentMapCalibratorState extends ConsumerState<SegmentMapCalibrator> {
             FilledButton.icon(
               onPressed: (_busy || !canAct) ? null : _start,
               icon: const Icon(Icons.center_focus_strong, size: 18),
-              label: Text(_busy ? '准备中…' : '开始校准'),
+              label: Text(
+                _busy
+                    ? '准备中…'
+                    : (cfg.hasSegmentMap ? '重新矫正' : '开始校准'),
+              ),
             ),
             OutlinedButton.icon(
-              onPressed: cfg.hasSegmentMap && canEdit ? _restoreDefault : null,
-              icon: const Icon(Icons.restart_alt, size: 18),
-              label: const Text('恢复默认映射'),
+              onPressed: canPreview ? _preview : null,
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('预览现有矫正框'),
             ),
           ],
         ),
