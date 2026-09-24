@@ -43,6 +43,7 @@ float g_ema_r[10] = {};
 float g_ema_g[10] = {};
 float g_ema_b[10] = {};
 bool g_ema_inited = false;
+SegGate g_seg_gate[10] = {};
 
 // 为什么：休眠软关会发临时黑帧，意图必须单独存，不能被黑帧冲掉
 std::mutex g_intent_mu;

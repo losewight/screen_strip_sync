@@ -22,6 +22,7 @@ add_executable(helper WIN32
   engine/engine_frame.cpp
   engine/engine_intent.cpp
   engine/wall_comp.cpp
+  engine/seg_gate.cpp
   ipc/ipc_loop.cpp
   ipc/ipc_push.cpp
   ipc/ipc_dispatch.cpp
@@ -51,6 +52,16 @@ target_compile_options(helper PRIVATE
   "/FI${CMAKE_CURRENT_SOURCE_DIR}/app/helper_log.h"
   /utf-8
 )
+
+# D1 暗门离线回放（控制台；不编入 helper）
+add_executable(seg_gate_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/seg_gate_test/seg_gate_test.cpp
+  engine/seg_gate.cpp
+)
+target_include_directories(seg_gate_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(seg_gate_test PRIVATE /utf-8)
 
 # experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
 # add_executable(interval_limit_test

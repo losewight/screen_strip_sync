@@ -3,12 +3,76 @@
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "letterbox_detect.h"
+#include "seg_gate.h"
 #include "serial_port.h"
 #include "wall_comp.h"
 
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+
+// D1 诊断：原始 0↔非0 跳变 vs 暗门翻转（每 5s 打一次）
+static int g_diag_raw_edge[10] = {};
+static int g_diag_gate_flip[10] = {};
+static bool g_diag_raw_nz[10] = {};
+static bool g_diag_raw_have[10] = {};
+static DWORD g_diag_last_log = 0;
+
+static void reset_seg_gates() {
+  for (int i = 0; i < 10; ++i) {
+    seg_gate_reset(&g_seg_gate[i]);
+    g_diag_raw_edge[i] = 0;
+    g_diag_gate_flip[i] = 0;
+    g_diag_raw_nz[i] = false;
+    g_diag_raw_have[i] = false;
+  }
+  g_diag_last_log = 0;
+}
+
+static void diag_note_raw(int i, float r, float g, float b) {
+  const bool nz = (r > 0.5f) || (g > 0.5f) || (b > 0.5f);
+  if (g_diag_raw_have[i] && nz != g_diag_raw_nz[i])
+    ++g_diag_raw_edge[i];
+  g_diag_raw_nz[i] = nz;
+  g_diag_raw_have[i] = true;
+}
+
+static void diag_maybe_log() {
+  const DWORD now = GetTickCount();
+  if (g_diag_last_log != 0 && now - g_diag_last_log < 5000)
+    return;
+  g_diag_last_log = now;
+  int raw_sum = 0, flip_sum = 0;
+  for (int i = 0; i < 10; ++i) {
+    raw_sum += g_diag_raw_edge[i];
+    flip_sum += g_diag_gate_flip[i];
+    g_diag_raw_edge[i] = 0;
+    g_diag_gate_flip[i] = 0;
+  }
+  printf("seg_gate diag 5s: raw_0nz_edges=%d gate_flips=%d\n", raw_sum,
+         flip_sum);
+}
+
+// 为什么：采样先墙补一份给判定；显示路径 EMA(+sat) 后再墙补，两路同口径。
+static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
+                       float disp_r, float disp_g, float disp_b,
+                       char colors[7]) {
+  diag_note_raw(i, sample_r, sample_g, sample_b);
+
+  float gr = sample_r, gg = sample_g, gb = sample_b;
+  wall_comp_apply(&gr, &gg, &gb);
+
+  float dr = disp_r, dg = disp_g, db = disp_b;
+  wall_comp_apply(&dr, &dg, &db);
+
+  float out[3];
+  seg_gate_step(&g_seg_gate[i], gr, gg, gb, dr, dg, db, out);
+  if (g_seg_gate[i].flipped)
+    ++g_diag_gate_flip[i];
+
+  snprintf(colors, 7, "%02x%02x%02x", (unsigned)(out[0] + 0.5f),
+           (unsigned)(out[1] + 0.5f), (unsigned)(out[2] + 0.5f));
+}
 
 // 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
 // timeout / 其它失败跳过本帧
@@ -69,13 +133,11 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
         ob = 255.f;
     }
 
-    wall_comp_apply(&or_, &og, &ob);
-
-    // 字符串只在组帧前出现一次
-    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
-             (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
+    // 字符串只在组帧前出现一次；暗门在 wall 之后
+    seg_finish(i, r, g, b, or_, og, ob, colors[i]);
   }
   g_ema_inited = true;
+  diag_maybe_log();
 
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
@@ -130,12 +192,10 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
-    wall_comp_apply(&or_, &og, &ob);
-
-    snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
-             (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
+    seg_finish(i, r, g, b, or_, og, ob, colors[i]);
   }
   g_ema_inited = true;
+  diag_maybe_log();
 
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
@@ -248,6 +308,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   if (g_worker.joinable())
     g_worker.join();
   g_ema_inited = false;
+  reset_seg_gates();
   if (helper_is_shutting_down())
     return;
   if (!dxgi_is_ready()) {
@@ -259,6 +320,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   }
   g_sync_path.store(path);
   g_ema_inited = false;
+  reset_seg_gates();
   letterbox_reset();
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
@@ -276,4 +338,5 @@ void engine_stop() {
   if (g_worker.joinable())
     g_worker.join();
   g_ema_inited = false;
+  reset_seg_gates();
 }

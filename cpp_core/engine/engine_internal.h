@@ -3,6 +3,7 @@
 // light_engine 模块内部共享状态；对外仍只暴露 light_engine.h。
 
 #include "light_engine.h"
+#include "seg_gate.h"
 
 #include <atomic>
 #include <mutex>
@@ -36,6 +37,9 @@ extern float g_ema_r[10];
 extern float g_ema_g[10];
 extern float g_ema_b[10];
 extern bool g_ema_inited;
+
+// D1：每段输出端暗门（与 g_ema_* 同步启停重置）
+extern SegGate g_seg_gate[10];
 
 extern std::mutex g_intent_mu;
 extern DisplayIntent g_intent;
