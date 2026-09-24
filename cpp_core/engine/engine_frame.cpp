@@ -6,75 +6,9 @@
 #include "serial_port.h"
 #include "wall_comp.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
-
-static void reset_seg_states() {
-  for (int i = 0; i < 10; ++i) {
-    g_seg[i].on = false;
-    g_seg[i].off_count = 0;
-  }
-}
-
-// 为什么：L 用 max(R,G,B)，与 D0「单通道非 0 即可见」一致；不用 Rec.601
-// 返回 true → 本帧该段强制真黑（跳过 EMA 输出 / sat）
-static bool seg_deadzone_force_black(int i, float r, float g, float b) {
-  if (!g_dz_enable.load())
-    return false;
-
-  const float L = (std::max)(r, (std::max)(g, b));
-  const float ton = (float)g_dz_ton.load();
-  const float toff = (float)g_dz_toff.load();
-  const int n_off = g_dz_off_frames.load();
-  SegState &s = g_seg[i];
-
-  if (!s.on) {
-    if (L >= ton) {
-      // OFF→ON 跃阶：seed EMA；随后对称 EMA 因 old==new 等价本帧直通
-      g_ema_r[i] = r;
-      g_ema_g[i] = g;
-      g_ema_b[i] = b;
-      s.on = true;
-      s.off_count = 0;
-      return false;
-    }
-    g_ema_r[i] = g_ema_g[i] = g_ema_b[i] = 0.f;
-    s.off_count = 0;
-    return true;
-  }
-
-  // ON
-  if (L <= toff) {
-    ++s.off_count;
-    if (s.off_count >= n_off) {
-      s.on = false;
-      s.off_count = 0;
-      g_ema_r[i] = g_ema_g[i] = g_ema_b[i] = 0.f;
-      return true;
-    }
-  } else {
-    s.off_count = 0;
-  }
-  return false;
-}
-
-// 为什么：float EMA 可能落在 (0,T)；硬件仍灭 → 抬到 ≥T_on，禁止半死区假渐变
-static void clamp_half_deadzone(float *r, float *g, float *b) {
-  if (!g_dz_enable.load())
-    return;
-  const float ton = (float)g_dz_ton.load();
-  if (ton <= 0.f)
-    return;
-  const float mx = (std::max)(*r, (std::max)(*g, *b));
-  if (mx > 0.f && mx < ton) {
-    const float scale = ton / mx;
-    *r *= scale;
-    *g *= scale;
-    *b *= scale;
-  }
-}
 
 // 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
 // timeout / 其它失败跳过本帧
@@ -100,11 +34,6 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
     const float r = (float)rgb[i][0];
     const float g = (float)rgb[i][1];
     const float b = (float)rgb[i][2];
-
-    if (seg_deadzone_force_black(i, r, g, b)) {
-      snprintf(colors[i], 7, "000000");
-      continue;
-    }
 
     if (!g_ema_inited) {
       g_ema_r[i] = r;
@@ -141,7 +70,6 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
     }
 
     wall_comp_apply(&or_, &og, &ob);
-    clamp_half_deadzone(&or_, &og, &ob);
 
     // 字符串只在组帧前出现一次
     snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
@@ -189,11 +117,6 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
     const float g = (float)rgb[i][1];
     const float b = (float)rgb[i][2];
 
-    if (seg_deadzone_force_black(i, r, g, b)) {
-      snprintf(colors[i], 7, "000000");
-      continue;
-    }
-
     if (!g_ema_inited) {
       g_ema_r[i] = r;
       g_ema_g[i] = g;
@@ -208,7 +131,6 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
     wall_comp_apply(&or_, &og, &ob);
-    clamp_half_deadzone(&or_, &og, &ob);
 
     snprintf(colors[i], 7, "%02x%02x%02x", (unsigned)(or_ + 0.5f),
              (unsigned)(og + 0.5f), (unsigned)(ob + 0.5f));
@@ -326,7 +248,6 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   if (g_worker.joinable())
     g_worker.join();
   g_ema_inited = false;
-  reset_seg_states();
   if (helper_is_shutting_down())
     return;
   if (!dxgi_is_ready()) {
@@ -338,7 +259,6 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   }
   g_sync_path.store(path);
   g_ema_inited = false;
-  reset_seg_states();
   letterbox_reset();
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
@@ -356,5 +276,4 @@ void engine_stop() {
   if (g_worker.joinable())
     g_worker.join();
   g_ema_inited = false;
-  reset_seg_states();
 }

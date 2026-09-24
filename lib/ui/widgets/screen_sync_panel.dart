@@ -24,12 +24,6 @@ class ScreenSyncPanel extends ConsumerWidget {
     final notifier = ref.read(helperStateProvider.notifier);
     final cfg = ref.watch(configProvider);
     final config = ref.read(configProvider.notifier);
-    final dzTon = ref.watch(deadzoneTonProvider);
-    final dzTonCtrl = ref.read(deadzoneTonProvider.notifier);
-    final dzToff = ref.watch(deadzoneToffProvider);
-    final dzToffCtrl = ref.read(deadzoneToffProvider.notifier);
-    final dzN = ref.watch(deadzoneOffFramesProvider);
-    final dzNCtrl = ref.read(deadzoneOffFramesProvider.notifier);
     final can = ui.canControl;
     final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
     // 与 regionSmooth 同概念、极性相反：UI 平滑度 = 1 − α（α∈[0.05,1] → 平滑∈[0,0.95]）。
@@ -218,78 +212,6 @@ class ScreenSyncPanel extends ConsumerWidget {
                             : null,
                         onChangeEnd: canEdit
                             ? (v) => notifier.sendNearBlack(v.round())
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.control),
-                      SchemeParamLabel(
-                        '灭→亮阈值 T_on: $dzTon'
-                        '（L≥此值跃阶点亮）',
-                      ),
-                      Slider(
-                        value: dzTon.toDouble(),
-                        min: 1,
-                        max: kDeadzoneUiMax.toDouble(),
-                        divisions: kDeadzoneUiMax - 1,
-                        label: '$dzTon',
-                        onChanged: canEdit
-                            ? (v) {
-                                final t = v.round();
-                                dzTonCtrl.set(t);
-                                // 与 helper 一致：toff 必须 < ton
-                                if (dzToff >= t) {
-                                  dzToffCtrl.set(t - 1, ton: t);
-                                }
-                              }
-                            : null,
-                        onChangeEnd: canEdit
-                            ? (v) {
-                                final t = v.round().clamp(1, kDeadzoneUiMax);
-                                notifier.sendDeadzoneTon(t);
-                                final off = ref.read(deadzoneToffProvider);
-                                notifier.sendDeadzoneToff(off);
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.control),
-                      SchemeParamLabel(
-                        '亮→灭阈值 T_off: $dzToff'
-                        '（L≤此值开始计灭灯确认）',
-                      ),
-                      Slider(
-                        // ton=1 时 toff 只能为 0；仍给可拖轨避免 Slider 断言。
-                        value: dzToff.toDouble(),
-                        min: 0,
-                        max: (dzTon - 1).clamp(0, kDeadzoneUiMax - 1).toDouble(),
-                        divisions: dzTon <= 1
-                            ? null
-                            : (dzTon - 1).clamp(1, kDeadzoneUiMax - 1),
-                        label: '$dzToff',
-                        onChanged: canEdit && dzTon > 1
-                            ? (v) =>
-                                dzToffCtrl.set(v.round(), ton: dzTon)
-                            : null,
-                        onChangeEnd: canEdit && dzTon > 1
-                            ? (v) => notifier.sendDeadzoneToff(
-                                  v.round().clamp(0, dzTon - 1),
-                                )
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.control),
-                      SchemeParamLabel(
-                        '灭灯确认帧数: $dzN'
-                        '（越大越不易闪灭；约 ${dzN * 50}ms）',
-                      ),
-                      Slider(
-                        value: dzN.toDouble(),
-                        min: 1,
-                        max: 10,
-                        divisions: 9,
-                        label: '$dzN',
-                        onChanged: canEdit
-                            ? (v) => dzNCtrl.set(v.round())
-                            : null,
-                        onChangeEnd: canEdit
-                            ? (v) => notifier.sendDeadzoneN(v.round())
                             : null,
                       ),
                       const SizedBox(height: AppSpacing.control),

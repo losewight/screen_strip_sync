@@ -257,10 +257,4 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendLetterboxDetect(bool enabled);
   /// 校准蒙版期间硬关 letterbox；不落盘。
   void sendLetterboxHold(bool hold);
-  /// D1 调试：灭→亮阈值 T_on；不落盘。
-  void sendDeadzoneTon(int ton);
-  /// D1 调试：亮→灭阈值 T_off；不落盘。
-  void sendDeadzoneToff(int toff);
-  /// D1 调试：灭灯确认帧数；不落盘。
-  void sendDeadzoneN(int n);
 }

@@ -306,42 +306,6 @@ class HelperStateNotifier extends _HelperStateBase
     }
   }
 
-  /// D1：灭→亮阈值；helper clamp ≥1（抬 ton 时会压 toff）。不落盘。
-  @override
-  void sendDeadzoneTon(int ton) {
-    if (!_client.isConnected) return;
-    try {
-      final v = ton.clamp(1, 255);
-      _sendIpc('set deadzone_ton $v');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  /// D1：亮→灭阈值；helper clamp ≥0 且 < ton。不落盘。
-  @override
-  void sendDeadzoneToff(int toff) {
-    if (!_client.isConnected) return;
-    try {
-      final v = toff.clamp(0, 254);
-      _sendIpc('set deadzone_toff $v');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  /// D1：连续够暗帧数才灭；helper clamp 1..10。不落盘。
-  @override
-  void sendDeadzoneN(int n) {
-    if (!_client.isConnected) return;
-    try {
-      final v = n.clamp(1, 10);
-      _sendIpc('set deadzone_n $v');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
   @override
   void sendBlur(int blurStep) {
     if (!_client.isConnected) return;
