@@ -169,6 +169,35 @@ final configReadyProvider = Provider<bool>((ref) {
   return ref.read(configProvider.notifier).hasSnapshot;
 });
 
+/// D1 调试旋钮上限（与 near_black 同量级；helper 实际允许到 255）。
+const int kDeadzoneUiMax = 32;
+
+/// D1 调试：灭→亮阈值 T_on。不进 JSON/cfg，仅本会话 + IPC。
+class DeadzoneTonNotifier extends Notifier<int> {
+  @override
+  int build() => 1;
+
+  void set(int value) => state = value.clamp(1, kDeadzoneUiMax);
+}
+
+final deadzoneTonProvider =
+    NotifierProvider<DeadzoneTonNotifier, int>(DeadzoneTonNotifier.new);
+
+/// D1 调试：亮→灭阈值 T_off（须 < T_on）。不进 JSON/cfg，仅本会话 + IPC。
+class DeadzoneToffNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  /// [ton] 当前 T_on；toff 钳到 `[0, ton-1]`。
+  void set(int value, {required int ton}) {
+    final maxOff = (ton - 1).clamp(0, kDeadzoneUiMax - 1);
+    state = value.clamp(0, maxOff);
+  }
+}
+
+final deadzoneToffProvider =
+    NotifierProvider<DeadzoneToffNotifier, int>(DeadzoneToffNotifier.new);
+
 /// D1 调试：灭灯确认帧数（连续够暗才真灭）。不进 JSON/cfg，仅本会话 + IPC。
 class DeadzoneOffFramesNotifier extends Notifier<int> {
   @override
