@@ -329,28 +329,14 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
-  void sendSampleAlgo(SampleAlgo algo) {
+  void sendSaturationAlgo(SaturationAlgo algo) {
     if (!_client.isConnected) return;
     try {
-      final word = switch (algo) {
-        SampleAlgo.rms => 'rms',
-        SampleAlgo.mean => 'mean',
+      final token = switch (algo) {
+        SaturationAlgo.luma => 'luma',
+        SaturationAlgo.neutral => 'neutral',
       };
-      _sendIpc('set sample_algo $word');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendNearBlackLuma(NearBlackLuma luma) {
-    if (!_client.isConnected) return;
-    try {
-      final word = switch (luma) {
-        NearBlackLuma.rec601 => 'rec601',
-        NearBlackLuma.mean => 'mean',
-      };
-      _sendIpc('set near_black_luma $word');
+      _sendIpc('set saturation_algo $token');
     } catch (e) {
       _patch(message: '$e');
     }

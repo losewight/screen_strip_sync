@@ -91,6 +91,8 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
   const float alpha = g_alpha.load();
   // 为什么：采样平均易发灰；EMA 后再抬饱和度，避免增益被时间平滑冲掉
   const float sat = g_saturation.load();
+  // 为什么：两种算法共用 sat 滑条，二选一不叠；'n' = 减去中性色
+  const bool sat_neutral = g_saturation_algo.load() == 'n';
   char colors[10][7] = {};
 
   for (int i = 0; i < 10; ++i) {
@@ -113,8 +115,33 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
-    // Rec.601 亮度守恒：C' = L + s*(C-L)；s=1 恒等
-    if (sat != 1.f) {
+    if (sat_neutral) {
+      // k = max(0, sat-1)：100% 原色；200% 全减 min；≤100% 跳过
+      const float k = sat > 1.f ? (sat - 1.f) : 0.f;
+      if (k > 0.f) {
+        float m = or_;
+        if (og < m)
+          m = og;
+        if (ob < m)
+          m = ob;
+        or_ -= k * m;
+        og -= k * m;
+        ob -= k * m;
+        if (or_ < 0.f)
+          or_ = 0.f;
+        else if (or_ > 255.f)
+          or_ = 255.f;
+        if (og < 0.f)
+          og = 0.f;
+        else if (og > 255.f)
+          og = 255.f;
+        if (ob < 0.f)
+          ob = 0.f;
+        else if (ob > 255.f)
+          ob = 255.f;
+      }
+    } else if (sat != 1.f) {
+      // Rec.601 亮度守恒：C' = L + s*(C-L)；s=1 恒等
       const float L = 0.299f * or_ + 0.587f * og + 0.114f * ob;
       or_ = L + sat * (or_ - L);
       og = L + sat * (og - L);

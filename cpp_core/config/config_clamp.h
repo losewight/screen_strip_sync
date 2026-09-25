@@ -30,6 +30,10 @@ inline float clamp_saturation(float v) {
     return 2.f;
   return v;
 }
+// map 饱和度算法：'l'=保持亮度（默认），'n'=减去中性色；非法回 luma
+inline char clamp_saturation_algo(char c) {
+  return (c == 'n' || c == 'N') ? 'n' : 'l';
+}
 inline int clamp_region_blur(int v) {
   if (v < 0)
     return 0;

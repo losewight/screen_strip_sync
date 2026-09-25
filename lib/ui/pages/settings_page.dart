@@ -123,6 +123,45 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SchemeCard(
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '开机软件自启',
+                              style: SchemeCard.titleStyle,
+                            ),
+                            SizedBox(height: AppSpacing.compact),
+                            Text(
+                              '打开后随 Windows 开机静默启动，托盘常驻，'
+                              '并按上次灯效自动亮起',
+                              style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.card),
+                      Win11Switch(
+                        value: cfg.startOnBoot,
+                        onChanged: canEdit
+                            ? (v) {
+                                config.setStartOnBoot(v);
+                                notifier.sendAutostart(v);
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+                // 与下方版本/诊断等区块拉开（内容区块间距）
+                const SizedBox(height: AppSpacing.section),
+                SchemeCard(
                   title: '版本',
                   titleTrailing: hasUpdate
                       ? StripStatusPill(
@@ -192,44 +231,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         onPressed: _openLogDir,
                         icon: const Icon(Icons.folder_open_outlined),
                         label: const Text('打开日志所在文件夹'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.control),
-                SchemeCard(
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '开机软件自启',
-                              style: SchemeCard.titleStyle,
-                            ),
-                            SizedBox(height: AppSpacing.compact),
-                            Text(
-                              '打开后随 Windows 开机静默启动，托盘常驻，'
-                              '并按上次灯效自动亮起',
-                              style: TextStyle(
-                                fontFamily: AppTheme.fontFamily,
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.card),
-                      Win11Switch(
-                        value: cfg.startOnBoot,
-                        onChanged: canEdit
-                            ? (v) {
-                                config.setStartOnBoot(v);
-                                notifier.sendAutostart(v);
-                              }
-                            : null,
                       ),
                     ],
                   ),

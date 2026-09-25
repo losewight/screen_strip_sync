@@ -20,12 +20,21 @@ enum SampleAlgo {
   mean,
 }
 
-/// 近黑亮度算法（与 helper `near_black_luma rec601|mean` 对齐）。
+/// map 饱和度算法（与 helper `saturation_algo luma|neutral` 对齐）。
+enum SaturationAlgo {
+  /// Rec.601 亮度守恒：拉开偏离灰的距离，亮度轴不动。
+  luma,
+
+  /// 减去三通道共有的中性分量；sat>1 时 k=sat-1。
+  neutral,
+}
+
+/// 近黑亮度算法（与 helper 对齐；UI 已撤，固定 Rec.601）。
 enum NearBlackLuma {
   /// Rec.601 加权；绿权重大，暗绿更易被剔、暗蓝更易保留。
   rec601,
 
-  /// (R+G+B)/3；三通道等权。
+  /// (R+G+B)/3；三通道等权（仅旧 JSON 兼容，加载时钳为 rec601）。
   mean,
 }
 
@@ -38,7 +47,8 @@ class AppConfig {
     this.nearBlack = 4,
     this.blurStep = 0,
     this.saturation = 1.2,
-    this.sampleAlgo = SampleAlgo.rms,
+    this.saturationAlgo = SaturationAlgo.luma,
+    this.sampleAlgo = SampleAlgo.mean,
     this.nearBlackLuma = NearBlackLuma.rec601,
     this.mode = ColorMode.a,
     this.comPort = 'COM10',
@@ -65,7 +75,7 @@ class AppConfig {
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
   final double emaAlpha;
 
-  /// 丢近黑像素（亮度低于此跳过）；0..64；亮度算法见 [nearBlackLuma]。
+  /// 丢近黑像素（亮度低于此跳过）；0..64；亮度算法固定 Rec.601。
   final int nearBlack;
 
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
@@ -74,10 +84,13 @@ class AppConfig {
   /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2（120%）。
   final double saturation;
 
-  /// map 采样聚合：RMS 偏亮，算术平均更接近光学混合。
+  /// 饱和度算法：保持亮度 / 减去中性色；共用 [saturation] 滑条。
+  final SaturationAlgo saturationAlgo;
+
+  /// map 采样聚合：固定算术平均（更接近光学混合）；RMS 仅旧 JSON 兼容。
   final SampleAlgo sampleAlgo;
 
-  /// 近黑亮度：Rec.601（默认）或 (R+G+B)/3。
+  /// 近黑亮度：固定 Rec.601；mean 仅旧 JSON 兼容。
   final NearBlackLuma nearBlackLuma;
 
   final ColorMode mode;
@@ -150,6 +163,7 @@ class AppConfig {
     int? nearBlack,
     int? blurStep,
     double? saturation,
+    SaturationAlgo? saturationAlgo,
     SampleAlgo? sampleAlgo,
     NearBlackLuma? nearBlackLuma,
     ColorMode? mode,
@@ -179,6 +193,7 @@ class AppConfig {
       nearBlack: nearBlack ?? this.nearBlack,
       blurStep: blurStep ?? this.blurStep,
       saturation: saturation ?? this.saturation,
+      saturationAlgo: saturationAlgo ?? this.saturationAlgo,
       sampleAlgo: sampleAlgo ?? this.sampleAlgo,
       nearBlackLuma: nearBlackLuma ?? this.nearBlackLuma,
       mode: mode ?? this.mode,
@@ -212,7 +227,8 @@ class AppConfig {
     var nearBlack = 4;
     var blurStep = 0;
     var saturation = 1.2;
-    var sampleAlgo = SampleAlgo.rms;
+    var saturationAlgo = SaturationAlgo.luma;
+    var sampleAlgo = SampleAlgo.mean;
     var nearBlackLuma = NearBlackLuma.rec601;
     var mode = ColorMode.a;
     var com = 'COM10';
@@ -260,16 +276,17 @@ class AppConfig {
         case 'saturation':
           final v = double.tryParse(val);
           if (v != null) saturation = v.clamp(0.5, 2.0);
+        case 'saturation_algo':
+          saturationAlgo = switch (val) {
+            'neutral' => SaturationAlgo.neutral,
+            _ => SaturationAlgo.luma,
+          };
         case 'sample_algo':
-          sampleAlgo = switch (val) {
-            'mean' => SampleAlgo.mean,
-            _ => SampleAlgo.rms,
-          };
+          // UI 已撤；固定算术平均（与 helper 钳制一致）。
+          sampleAlgo = SampleAlgo.mean;
         case 'near_black_luma':
-          nearBlackLuma = switch (val) {
-            'mean' => NearBlackLuma.mean,
-            _ => NearBlackLuma.rec601,
-          };
+          // UI 已撤；固定 Rec.601（与 helper 钳制一致）。
+          nearBlackLuma = NearBlackLuma.rec601;
         case 'mode':
           mode = switch (val) {
             'b' || 'B' => ColorMode.b,
@@ -344,6 +361,7 @@ class AppConfig {
       nearBlack: nearBlack,
       blurStep: blurStep,
       saturation: saturation,
+      saturationAlgo: saturationAlgo,
       sampleAlgo: sampleAlgo,
       nearBlackLuma: nearBlackLuma,
       mode: mode,

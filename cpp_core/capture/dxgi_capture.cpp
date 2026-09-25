@@ -31,7 +31,7 @@ static char g_wanted_output[64] = "";
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
 static std::atomic<int> g_near_black{4}; // 0..64；默认与 HelperConfig 对齐
 static std::atomic<int> g_blur_step{0};  // 0..8
-static std::atomic<char> g_sample_algo{'r'}; // 'r'=rms, 'm'=mean
+static std::atomic<char> g_sample_algo{'m'}; // 固定 mean；'r'=rms 保留接口兼容
 // 近黑亮度：'6'=Rec.601（默认），'a'=(R+G+B)/3
 static std::atomic<char> g_near_black_luma{'6'};
 
@@ -92,11 +92,15 @@ void dxgi_set_blur(int v) {
 }
 
 void dxgi_set_sample_algo(char algo) {
-  g_sample_algo.store((algo == 'm' || algo == 'M') ? 'm' : 'r');
+  (void)algo;
+  // UI 已撤；map 采样固定算术平均。
+  g_sample_algo.store('m');
 }
 
 void dxgi_set_near_black_luma(char mode) {
-  g_near_black_luma.store((mode == 'a' || mode == 'A') ? 'a' : '6');
+  (void)mode;
+  // UI 已撤；近黑亮度固定 Rec.601。
+  g_near_black_luma.store('6');
 }
 
 void dxgi_set_capture_output(const char *wanted) {

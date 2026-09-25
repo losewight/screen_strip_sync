@@ -18,6 +18,8 @@ std::mutex g_engine_mu;
 std::atomic<float> g_alpha{1.f};
 // 为什么：默认 1.2（UI 120%）；IPC/JSON 可改
 std::atomic<float> g_saturation{1.2f};
+// 为什么：'l'=保持亮度（默认），'n'=减去中性色；与 UI 二选一共用 sat 滑条
+std::atomic<char> g_saturation_algo{'l'};
 // 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
 std::atomic<char> g_mode{'a'};
 // 屏幕氛围参数（与 map alpha/near_black/blur 正交）
@@ -72,6 +74,10 @@ void engine_set_saturation(float v) {
   if (v > 2.f)
     v = 2.f;
   g_saturation.store(v);
+}
+
+void engine_set_saturation_algo(char algo) {
+  g_saturation_algo.store(clamp_saturation_algo(algo));
 }
 
 void engine_set_mode(char mode) {

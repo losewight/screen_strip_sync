@@ -28,6 +28,7 @@ void engine_set_alpha(float alpha);
 void engine_set_near_black(int v);
 void engine_set_blur(int v);
 void engine_set_saturation(float v); // 0.5..2；map 路径饱和度增益
+void engine_set_saturation_algo(char algo); // 'l'=保持亮度, 'n'=减去中性色
 void engine_set_sample_algo(char algo); // 'r'=rms, 'm'=mean
 void engine_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg
 void engine_set_mode(char mode);

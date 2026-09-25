@@ -86,7 +86,7 @@ flowchart LR
 | `solid RRGGBB` / `soft_off` / `off` | 纯色 / 软关（黑帧）/ 真下电 |
 | `bye` / `quit` | 断连接（灯保持）/ 关后台服务 |
 | `reconnect` | 重开串口 |
-| `set alpha\|near_black\|near_black_luma\|blur\|saturation\|sample_algo …` | map 参数（clamp；`sample_algo` 为 `rms\|mean`；`near_black_luma` 为 `rec601\|mean`） |
+| `set alpha\|near_black\|near_black_luma\|blur\|saturation\|saturation_algo\|sample_algo …` | map 参数（clamp；`saturation_algo` 为 `luma\|neutral`；`sample_algo` 为 `rms\|mean`；`near_black_luma` 为 `rec601\|mean`） |
 | `set mode a\|b` | **废弃**，仅存盘兼容 |
 | `set com\|sleep_sync\|shutdown_off\|autostart …` | 口/休眠/关机关灯/自启 |
 | `highlight n` / `set map …` | 校准高亮 / 段映射 |
@@ -112,7 +112,7 @@ flowchart LR
 
 ### JSON（`%LocalAppData%\Screen Strip Sync\screen_strip_sync_config.json`）
 
-`emaAlpha` / `nearBlack` / `nearBlackLuma` / `blurStep` / `saturation` / `sampleAlgo` / `mode`(废) / `comPort` / `lastConnectedCom` / `captureOutput` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo|Blur|Smooth|Dark|BBox` / `lastScene` / `lastCustomSolid` / `letterboxDetect`。缺字段回退默认；老文件须能直接读。
+`emaAlpha` / `nearBlack` / `nearBlackLuma` / `blurStep` / `saturation` / `saturationAlgo` / `sampleAlgo` / `mode`(废) / `comPort` / `lastConnectedCom` / `captureOutput` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo|Blur|Smooth|Dark|BBox` / `lastScene` / `lastCustomSolid` / `letterboxDetect`。缺字段回退默认；老文件须能直接读。
 
 ---
 
@@ -144,7 +144,7 @@ H1–H8、F1–F4、A、B4、M、C3（DXGI 自愈）、X3。C1/C2 亮度 A/B **�
 
 | 路径 | 入口 | 要点 |
 |------|------|------|
-| map | `start` | 段映射或顶边；α / near_black / near_black_luma / blur / sat / sample_algo；**+ D** |
+| map | `start` | 段映射或顶边；α / near_black / near_black_luma / blur / sat / saturation_algo / sample_algo；**+ D** |
 | region | `start_region` | bbox；algo/blur/smooth/dark；**+ D** |
 
 ---

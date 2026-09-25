@@ -42,7 +42,8 @@ void main() {
       expect(cfg.nearBlack, 4);
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.2);
-      expect(cfg.sampleAlgo, SampleAlgo.rms);
+      expect(cfg.saturationAlgo, SaturationAlgo.luma);
+      expect(cfg.sampleAlgo, SampleAlgo.mean);
       expect(cfg.nearBlackLuma, NearBlackLuma.rec601);
       expect(cfg.mode, ColorMode.a);
       expect(cfg.comPort, 'COM10');
@@ -176,28 +177,52 @@ void main() {
       expect(cleared.segmentMap, isNull);
     });
 
-    test('parses sample_algo rms and mean; illegal falls back to rms', () {
+    test('sample_algo is fixed to mean (UI removed)', () {
       expect(
         AppConfig.fromCfgLines(const ['cfg sample_algo mean']).sampleAlgo,
         SampleAlgo.mean,
       );
       expect(
         AppConfig.fromCfgLines(const ['cfg sample_algo rms']).sampleAlgo,
-        SampleAlgo.rms,
+        SampleAlgo.mean,
       );
       expect(
         AppConfig.fromCfgLines(const ['cfg sample_algo xyz']).sampleAlgo,
-        SampleAlgo.rms,
+        SampleAlgo.mean,
       );
     });
 
-    test('parses near_black_luma rec601 and mean; illegal falls back to rec601',
-        () {
+    test('saturation_algo defaults to luma; parses neutral; clamps bad', () {
+      expect(
+        AppConfig.fromCfgLines(const []).saturationAlgo,
+        SaturationAlgo.luma,
+      );
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg saturation_algo luma'],
+        ).saturationAlgo,
+        SaturationAlgo.luma,
+      );
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg saturation_algo neutral'],
+        ).saturationAlgo,
+        SaturationAlgo.neutral,
+      );
+      expect(
+        AppConfig.fromCfgLines(
+          const ['cfg saturation_algo xyz'],
+        ).saturationAlgo,
+        SaturationAlgo.luma,
+      );
+    });
+
+    test('near_black_luma is fixed to rec601 (UI removed)', () {
       expect(
         AppConfig.fromCfgLines(
           const ['cfg near_black_luma mean'],
         ).nearBlackLuma,
-        NearBlackLuma.mean,
+        NearBlackLuma.rec601,
       );
       expect(
         AppConfig.fromCfgLines(

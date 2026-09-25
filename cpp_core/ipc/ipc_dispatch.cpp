@@ -261,6 +261,28 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     }
     return DispatchResult::Continue;
   }
+  if (strncmp(line, "set saturation_algo ", 20) == 0) {
+    const char *p = line + 20;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char algo = 0;
+    if (strcmp(p, "luma") == 0)
+      algo = 'l';
+    else if (strcmp(p, "neutral") == 0)
+      algo = 'n';
+    if (algo == 0) {
+      printf("bad set saturation_algo: [%s]\n", p);
+    } else {
+      engine_set_saturation_algo(algo);
+      config_set_saturation_algo(algo);
+      HelperConfig after{};
+      config_copy(&after);
+      if (after.saturationAlgo != algo)
+        ipc_push_config_snapshot();
+      printf("cmd=set saturation_algo\n");
+    }
+    return DispatchResult::Continue;
+  }
   if (strncmp(line, "set sample_algo ", 16) == 0) {
     const char *p = line + 16;
     while (*p == ' ' || *p == '\t')

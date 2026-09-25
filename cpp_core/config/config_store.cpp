@@ -204,6 +204,7 @@ void config_apply() {
   engine_set_near_black(c.nearBlack);
   engine_set_blur(c.blurStep);
   engine_set_saturation(c.saturation);
+  engine_set_saturation_algo(c.saturationAlgo);
   engine_set_sample_algo(c.sampleAlgo);
   engine_set_near_black_luma(c.nearBlackLuma);
   engine_set_mode(c.mode);
@@ -331,19 +332,32 @@ void config_set_saturation(float v) {
   ensure_saver_started();
 }
 
-void config_set_sample_algo(char algo) {
+void config_set_saturation_algo(char algo) {
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg.sampleAlgo = (algo == 'm' || algo == 'M') ? 'm' : 'r';
+    g_cfg.saturationAlgo = clamp_saturation_algo(algo);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_sample_algo(char algo) {
+  (void)algo;
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    // UI 已撤；固定 mean，忽略 IPC/旧调用传入的 rms。
+    g_cfg.sampleAlgo = 'm';
     mark_dirty_unlocked();
   }
   ensure_saver_started();
 }
 
 void config_set_near_black_luma(char mode) {
+  (void)mode;
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg.nearBlackLuma = (mode == 'a' || mode == 'A') ? 'a' : '6';
+    // UI 已撤；固定 Rec.601，忽略 IPC/旧调用传入的 mean。
+    g_cfg.nearBlackLuma = '6';
     mark_dirty_unlocked();
   }
   ensure_saver_started();

@@ -58,12 +58,8 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(saturation: value.clamp(0.5, 2.0));
   }
 
-  void setSampleAlgo(SampleAlgo algo) {
-    state = state.copyWith(sampleAlgo: algo);
-  }
-
-  void setNearBlackLuma(NearBlackLuma luma) {
-    state = state.copyWith(nearBlackLuma: luma);
+  void setSaturationAlgo(SaturationAlgo algo) {
+    state = state.copyWith(saturationAlgo: algo);
   }
 
   void setMode(ColorMode mode) {

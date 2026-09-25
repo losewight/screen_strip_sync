@@ -368,22 +368,25 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_number(p, &v))
         return false;
       cfg->saturation = clamp_saturation((float)v);
+    } else if (strcmp(key, "saturationAlgo") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      // 为什么：缺字段保持默认 'l'；仅 "neutral" 开减法，其余钳回 luma
+      cfg->saturationAlgo =
+          (strcmp(s, "neutral") == 0) ? 'n' : 'l';
     } else if (strcmp(key, "sampleAlgo") == 0) {
+      // 固定算术平均；旧 JSON 的 rms 读入后钳为 mean。
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
         return false;
-      if (strcmp(s, "mean") == 0 || s[0] == 'm' || s[0] == 'M')
-        cfg->sampleAlgo = 'm';
-      else
-        cfg->sampleAlgo = 'r';
+      cfg->sampleAlgo = 'm';
     } else if (strcmp(key, "nearBlackLuma") == 0) {
+      // 固定 Rec.601；旧 JSON 的 mean 读入后钳为 rec601。
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
         return false;
-      if (strcmp(s, "mean") == 0 || s[0] == 'a' || s[0] == 'A')
-        cfg->nearBlackLuma = 'a';
-      else
-        cfg->nearBlackLuma = '6';
+      cfg->nearBlackLuma = '6';
     } else if (strcmp(key, "mode") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -581,6 +584,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(num);
   snprintf(num, sizeof(num), "  \"saturation\": %.4g,\n", (double)c.saturation);
   o.append(num);
+  o.append("  \"saturationAlgo\": ");
+  append_escaped(&o, c.saturationAlgo == 'n' ? "neutral" : "luma");
+  o.append(",\n");
   o.append("  \"sampleAlgo\": ");
   append_escaped(&o, c.sampleAlgo == 'm' ? "mean" : "rms");
   o.append(",\n");

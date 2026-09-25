@@ -13,11 +13,6 @@ import '../widgets/win11_switch.dart';
 class ScreenSyncPanel extends ConsumerWidget {
   const ScreenSyncPanel({super.key});
 
-  static const _algoRmsLabel = 'RMS（偏亮，对比色更冲）';
-  static const _algoMeanLabel = '算术平均（更接近光学混合）';
-  static const _lumaRec601Label = 'Rec.601（绿权重大，暗绿更易剔）';
-  static const _lumaMeanLabel = '(R+G+B)/3（三通道等权）';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(helperStateProvider);
@@ -93,59 +88,6 @@ class ScreenSyncPanel extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      DropdownButtonFormField<SampleAlgo>(
-                        key: ValueKey(cfg.sampleAlgo),
-                        initialValue: cfg.sampleAlgo,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: SampleAlgo.rms,
-                            child: Text(_algoRmsLabel),
-                          ),
-                          DropdownMenuItem(
-                            value: SampleAlgo.mean,
-                            child: Text(_algoMeanLabel),
-                          ),
-                        ],
-                        onChanged: canEdit
-                            ? (v) {
-                                if (v == null) return;
-                                config.setSampleAlgo(v);
-                                notifier.sendSampleAlgo(v);
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.control),
-                      DropdownButtonFormField<NearBlackLuma>(
-                        key: ValueKey(cfg.nearBlackLuma),
-                        initialValue: cfg.nearBlackLuma,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                          labelText: '暗部亮度算法',
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: NearBlackLuma.rec601,
-                            child: Text(_lumaRec601Label),
-                          ),
-                          DropdownMenuItem(
-                            value: NearBlackLuma.mean,
-                            child: Text(_lumaMeanLabel),
-                          ),
-                        ],
-                        onChanged: canEdit
-                            ? (v) {
-                                if (v == null) return;
-                                config.setNearBlackLuma(v);
-                                notifier.sendNearBlackLuma(v);
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.control),
                       SchemeParamLabel(
                         '时间过渡平滑度: ${smooth.toStringAsFixed(2)}',
                       ),
@@ -180,6 +122,29 @@ class ScreenSyncPanel extends ConsumerWidget {
                             : null,
                       ),
                       const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel('饱和度算法'),
+                      SegmentedButton<SaturationAlgo>(
+                        segments: const [
+                          ButtonSegment(
+                            value: SaturationAlgo.luma,
+                            label: Text('保持亮度'),
+                          ),
+                          ButtonSegment(
+                            value: SaturationAlgo.neutral,
+                            label: Text('减去中性色'),
+                          ),
+                        ],
+                        selected: {cfg.saturationAlgo},
+                        onSelectionChanged: canEdit
+                            ? (Set<SaturationAlgo> next) {
+                                if (next.isEmpty) return;
+                                final algo = next.first;
+                                config.setSaturationAlgo(algo);
+                                notifier.sendSaturationAlgo(algo);
+                              }
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.compact),
                       SchemeParamLabel(
                         '色彩饱和度: ${(cfg.saturation * 100).round()}%'
                         '（100%=原色，越高越艳）',

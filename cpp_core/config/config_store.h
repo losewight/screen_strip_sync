@@ -18,8 +18,10 @@ struct HelperConfig {
   int nearBlack = 4; // 0..64；越大越忽略黑边（亮度算法见 nearBlackLuma）
   int blurStep = 0;
   float saturation = 1.2f; // 0.5..2；1=原色，默认 120%
-  char sampleAlgo = 'r';   // 'r'=rms, 'm'=mean；map 采样聚合
-  char nearBlackLuma = '6'; // '6'=Rec.601, 'a'=(R+G+B)/3；近黑亮度
+  // 'l'=保持亮度（Rec.601）；'n'=减去中性色；缺字段 / 非法 → 'l'
+  char saturationAlgo = 'l';
+  char sampleAlgo = 'm';   // 固定 mean；'r'=rms 仅兼容旧 JSON，加载时会被钳为 'm'
+  char nearBlackLuma = '6'; // 固定 Rec.601；'a'=mean 仅兼容旧 JSON，加载时会被钳为 '6'
   char mode = 'a';         // 'a' | 'b'；亮度方案已废弃，仅存盘兼容
   char comPort[16] = "COM10";
   // 空 / "auto" = 按主屏再序号 0；否则 DXGI DeviceName（如 \\.\DISPLAY1）
@@ -66,6 +68,7 @@ void config_set_ema_alpha(float v);
 void config_set_near_black(int v);
 void config_set_blur(int v);
 void config_set_saturation(float v);
+void config_set_saturation_algo(char algo); // 'l'|'n'
 void config_set_sample_algo(char algo); // 'r'|'m'
 void config_set_near_black_luma(char mode); // '6'|'a'
 void config_set_mode(char mode);
