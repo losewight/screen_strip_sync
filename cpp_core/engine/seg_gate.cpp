@@ -64,8 +64,24 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   const int dwell_n = s->dwell_cfg;
   const bool dwell_blocked = (dwell_n > 0) && (s->dwell > 0);
 
+  s->bright_run = (L_raw >= kFastOnLevel) ? s->bright_run + 1 : 0;
+
+  // —— 快速亮灯：持续强信号不等判定爬升 + 确认 + 驻留 ——
+  // 为什么：判定 EMA 从 0 爬到 kGateOn 要 3 帧，叠确认与驻留，暗→亮会拖 200～600ms
+  if (!s->on && s->bright_run >= kFastOnFrames) {
+    s->on = true;
+    s->cnt = 0;
+    s->flipped = true;
+    // 为什么：让判定电平跟上，避免刚开灯就被常规灭灯路径判低
+    s->lvl = (std::max)(s->lvl, kGateCap);
+    if (dwell_n > 0)
+      s->dwell = dwell_n;
+  }
+
   // —— 宽迟滞 + 双向确认 ——
-  if (!s->on) {
+  if (s->flipped) {
+    // 本帧已由快速亮灯翻转
+  } else if (!s->on) {
     if (!dwell_blocked && s->lvl >= kGateOn) {
       ++s->cnt;
       if (s->cnt >= kGateOnFrames) {
@@ -90,6 +106,31 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
       }
     } else {
       s->cnt = 0;
+    }
+  }
+
+  // —— 快速灭灯：持续亮过的段切黑，不走判定衰减 + 确认 + 驻留 ——
+  // 为什么：last_nz 兜底只为暗区噪声；亮段硬切黑若也兜底，会在最低亮度拖约 450ms
+  {
+    const bool disp_zero = (unsigned)(s->hold[0] + 0.5f) == 0 &&
+                           (unsigned)(s->hold[1] + 0.5f) == 0 &&
+                           (unsigned)(s->hold[2] + 0.5f) == 0;
+    // 开灯前的确认帧也计入 lit_run，否则刚开灯就切黑仍会兜底
+    if (!disp_zero) {
+      s->lit_run = (s->zero_run > 0) ? 1 : s->lit_run + 1;
+      s->zero_run = 0;
+    } else {
+      ++s->zero_run;
+      if (!s->flipped && s->on && s->lit_run >= kFastOffLitFrames &&
+          s->zero_run >= kFastOffZeroFrames) {
+        s->on = false;
+        s->cnt = 0;
+        s->lit_run = 0;
+        s->zero_run = 0;
+        s->flipped = true;
+        if (dwell_n > 0)
+          s->dwell = dwell_n;
+      }
     }
   }
 

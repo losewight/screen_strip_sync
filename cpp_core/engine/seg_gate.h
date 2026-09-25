@@ -18,6 +18,15 @@ constexpr int kGateOffFrames = 3;
 constexpr int kMinDwellFrames = 8;
 // HyperHDR LedDevice anti-flicker：0-255 刻度 >0.49 才更新 hold
 constexpr float kAntiFlickerEps = 0.49f;
+// 快速灭灯：ON 且显示色已连续非零 ≥ LitFrames，之后连续 ZeroFrames 帧为 0
+// → 直接 OFF（绕过判定衰减 / 确认 / 驻留）。单帧掉 0 仍走 last_nz 兜底。
+constexpr int kFastOffLitFrames = 4;
+constexpr int kFastOffZeroFrames = 2;
+// 快速亮灯：OFF 时原始 L 连续 FastOnFrames 帧 ≥ FastOnLevel → 直接 ON
+// （绕过判定爬升 / 确认 / 驻留）。要求连续：near_black 悬崖（0↔≥nearBlack
+// 交替）单帧亮不触发。
+constexpr float kFastOnLevel = 16.f;
+constexpr int kFastOnFrames = 2;
 
 struct SegGate {
   float lvl = 0.f;          // 独立判定信号
@@ -29,6 +38,9 @@ struct SegGate {
   int dwell = 0;            // 最短驻留剩余帧；独立块
   // 驻留配置：默认 = kMinDwellFrames；测试可置 0 旁路。以后可能会改常量。
   int dwell_cfg = kMinDwellFrames;
+  int lit_run = 0;          // 最近一段连续非零显示帧数（快速灭灯）
+  int zero_run = 0;         // 连续零显示帧数（快速灭灯）
+  int bright_run = 0;       // 原始 L ≥ kFastOnLevel 连续帧数（快速亮灯）
   bool flipped = false;     // 本步是否发生 ON↔OFF（诊断用）
 };
 
