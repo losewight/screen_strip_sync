@@ -1,6 +1,7 @@
 #pragma once
 
-// D1 输出端暗门：独立判定信号 + 宽迟滞 + 双向确认 + 最短驻留 + 0.49 保持。
+// D1 输出端暗门：独立判定信号 + 宽迟滞 + 双向确认 + 最短驻留 + 0.49 保持
+// + 输出前归一化保色相 + 低亮冻结色相（A + freeze）。
 // 纯函数，不依赖 Windows / 全局变量；helper 与 seg_gate_test 共用。
 // 最短驻留 kMinDwellFrames 已实现默认开启，以后可能会改（见 PLAN_D §6.1）。
 
@@ -27,11 +28,19 @@ constexpr int kFastOffZeroFrames = 2;
 // 交替）单帧亮不触发。
 constexpr float kFastOnLevel = 16.f;
 constexpr int kFastOnFrames = 2;
+// 低亮色相锁（A+freeze）：判定量 = 归一化前 hold 的 max(R,G,B)
+// L≥On：色相可靠，持续更新 locked；L≤Off：冻结输出 locked 直到暗门灭
+// 为什么：硬件忽略亮度、只显示色相；暗尾 uint8 粗档与偏色噪声会被放大成极光
+constexpr float kHueLockOn = 32.f;
+constexpr float kHueLockOff = 12.f;
 
 struct SegGate {
   float lvl = 0.f;          // 独立判定信号
-  float hold[3] = {};       // 0.49 保持后的浮点色（显示路径）
-  float last_nz[3] = {};    // 上一次非零输出色（ON 期间兜底）
+  float hold[3] = {};       // 0.49 保持后的浮点色（显示路径；归一化前）
+  float last_nz[3] = {};    // 上一次非零输出色相（已 max→255；ON 期间兜底）
+  float locked[3] = {};     // 最后可靠色相（已 max→255；freeze 用）
+  bool locked_ok = false;   // locked 是否写过有效色相
+  bool hue_locked = false;  // 迟滞：当前是否在低亮锁区
   bool on = false;
   bool inited = false;
   int cnt = 0;              // 当前方向确认计数（与 dwell 分离）
@@ -48,7 +57,7 @@ void seg_gate_reset(SegGate *s);
 
 // gate_rgb：墙补后的采样（判定 L，与用户 α 正交）
 // disp_rgb：用户 EMA(+sat)+墙补后的显示色（0.49 保持 / 组出）
-// 写出 out[3]；返回当前是否 ON。
+// 写出 out[3]（ON 时已按 max 归一化到 255）；返回当前是否 ON。
 bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
                    float disp_r, float disp_g, float disp_b, float out[3]);
 

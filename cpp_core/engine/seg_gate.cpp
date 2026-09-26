@@ -13,14 +13,15 @@ static float chan_max(float r, float g, float b) {
   return (std::max)(r, (std::max)(g, b));
 }
 
-static void scale_to_min1(float *r, float *g, float *b) {
+// 为什么：硬件忽略亮度、只显示色相（等效 max→255）；暗尾浮点色相
+// 若不先归一化，取整后只剩 max=1~5 的粗档，会跳成极光色。
+static void normalize_hue255(float *r, float *g, float *b) {
   const float mx = chan_max(*r, *g, *b);
   if (mx <= 0.f) {
     *r = *g = *b = 0.f;
     return;
   }
-  // 为什么：硬件 1..0x20 等亮；抬到 max=1 不算死区内假渐变
-  const float scale = 1.f / mx;
+  const float scale = 255.f / mx;
   *r *= scale;
   *g *= scale;
   *b *= scale;
@@ -137,6 +138,23 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   if (dwell_n > 0 && s->dwell > 0)
     --s->dwell;
 
+  // —— 低亮色相锁迟滞（归一化前的 hold L）——
+  const float L_disp = chan_max(s->hold[0], s->hold[1], s->hold[2]);
+  if (!s->hue_locked) {
+    if (L_disp <= kHueLockOff)
+      s->hue_locked = true;
+  } else {
+    if (L_disp >= kHueLockOn)
+      s->hue_locked = false;
+  }
+  if (!s->hue_locked && L_disp > 0.f) {
+    s->locked[0] = s->hold[0];
+    s->locked[1] = s->hold[1];
+    s->locked[2] = s->hold[2];
+    normalize_hue255(&s->locked[0], &s->locked[1], &s->locked[2]);
+    s->locked_ok = true;
+  }
+
   // —— 组出 ——
   if (!s->on) {
     out[0] = out[1] = out[2] = 0.f;
@@ -147,22 +165,29 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   float og = s->hold[1];
   float ob = s->hold[2];
 
+  // freeze：低亮区输出最后可靠色相，直到暗门灭（跳过死区粗档跳色）
+  if (s->hue_locked && s->locked_ok) {
+    or_ = s->locked[0];
+    og = s->locked[1];
+    ob = s->locked[2];
+  }
+
   // 取整后是否非零：用 +0.5 口径与组帧一致
   const unsigned ur = (unsigned)(or_ + 0.5f);
   const unsigned ug = (unsigned)(og + 0.5f);
   const unsigned ub = (unsigned)(ob + 0.5f);
   if (ur == 0 && ug == 0 && ub == 0) {
-    // ON 期间显示色掉到 0：用 last_nz 抬到 max=1，避免 α=1 时亮灭交替
+    // ON 期间显示色掉到 0：用 last_nz 色相兜底（已 max→255，不再抬到 1）
     or_ = s->last_nz[0];
     og = s->last_nz[1];
     ob = s->last_nz[2];
     if (chan_max(or_, og, ob) <= 0.f) {
-      or_ = 1.f;
+      or_ = 255.f;
       og = ob = 0.f;
-    } else {
-      scale_to_min1(&or_, &og, &ob);
     }
   } else {
+    // A：输出前归一化保色相（与 wall_comp 同口径）
+    normalize_hue255(&or_, &og, &ob);
     s->last_nz[0] = or_;
     s->last_nz[1] = og;
     s->last_nz[2] = ob;

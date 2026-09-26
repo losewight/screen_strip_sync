@@ -63,6 +63,16 @@ target_include_directories(seg_gate_test PRIVATE
 )
 target_compile_options(seg_gate_test PRIVATE /utf-8)
 
+# 慢变黑极光色诊断（控制台；不编入 helper）
+add_executable(fade_aurora_diag
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/fade_aurora_diag/fade_aurora_diag.cpp
+  engine/seg_gate.cpp
+)
+target_include_directories(fade_aurora_diag PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(fade_aurora_diag PRIVATE /utf-8)
+
 # experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
 # add_executable(interval_limit_test
 #   ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/frame_interval_limit/interval_limit_test.cpp
