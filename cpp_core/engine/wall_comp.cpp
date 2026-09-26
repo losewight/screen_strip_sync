@@ -68,11 +68,14 @@ void wall_comp_apply(float *r, float *g, float *b) {
   if (!g_wall_comp_on.load() || !g_wall_color_set.load())
     return;
 
-  // 全黑：保持熄灭，不做除法归一
-  if (*r <= 0.f && *g <= 0.f && *b <= 0.f) {
-    *r = 0.f;
-    *g = 0.f;
-    *b = 0.f;
+  // 为什么：取整后已是 0 的近黑残差若再按墙反射率放大，
+  // 会把「该灭」变成很亮，废掉快速灭灯并造成切黑啪亮。
+  // 口径与组帧 / disp_zero 一致：+0.5 取整后三通道皆 0。
+  const unsigned ur = (unsigned)(*r + 0.5f);
+  const unsigned ug = (unsigned)(*g + 0.5f);
+  const unsigned ub = (unsigned)(*b + 0.5f);
+  if (ur == 0 && ug == 0 && ub == 0) {
+    *r = *g = *b = 0.f;
     return;
   }
 
