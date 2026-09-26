@@ -165,6 +165,7 @@ void config_load() {
   }
 
   bool inferred = false;
+  bool map_defaults = false;
   if (parsed) {
     // 为什么：旧 JSON 无 serialConfigured 时，有 lastConnectedCom 视为已配备
     if (!saw_serial) {
@@ -172,6 +173,18 @@ void config_load() {
       inferred = true;
       printf("config_load: serialConfigured inferred=%d from lastCom\n",
              fresh.serialConfigured ? 1 : 0);
+    }
+    // 为什么：1.1.0 跟色推荐默认；只改这几项，COM/map/氛围等不动
+    if (fresh.mapDefaultsRev < 1) {
+      fresh.emaAlpha = 1.f;
+      fresh.blurStep = 0;
+      fresh.nearBlack = 30;
+      fresh.saturation = 1.f;
+      fresh.saturationAlgo = 'n';
+      fresh.letterboxDetect = true;
+      fresh.mapDefaultsRev = 1;
+      map_defaults = true;
+      printf("config_load: mapDefaultsRev bump → nearBlack=30 sat=1 letterbox=1\n");
     }
     printf("config_load: ok com=%s serialConfigured=%d alpha=%.3f capture=%s\n",
            fresh.comPort, fresh.serialConfigured ? 1 : 0,
@@ -186,10 +199,10 @@ void config_load() {
   {
     std::lock_guard<std::mutex> lock(g_mu);
     g_cfg = fresh;
-    if (inferred)
+    if (inferred || map_defaults)
       mark_dirty_unlocked();
   }
-  if (inferred)
+  if (inferred || map_defaults)
     ensure_saver_started();
 }
 
@@ -333,9 +346,11 @@ void config_set_saturation(float v) {
 }
 
 void config_set_saturation_algo(char algo) {
+  (void)algo;
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    g_cfg.saturationAlgo = clamp_saturation_algo(algo);
+    // UI 已撤；固定减去中性色，忽略 IPC/旧调用传入的 luma
+    g_cfg.saturationAlgo = 'n';
     mark_dirty_unlocked();
   }
   ensure_saver_started();

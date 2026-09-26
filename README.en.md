@@ -40,6 +40,10 @@ Optional installer: `packaging/pack.ps1` (requires Inno Setup 6).
 
 Do not paste full screen captures into the diagnostics flow—the export contains config, status, and log tails only.
 
+## Acknowledgments
+
+Some ideas were informed by the open-source project [HyperHDR](https://github.com/awawa-dev/HyperHDR) (e.g. letterbox detection and dark-scene anti-flicker). This software is an independent implementation and is not affiliated with HyperHDR.
+
 ## License
 
 [Apache License 2.0](./LICENSE).

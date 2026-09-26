@@ -329,20 +329,6 @@ class HelperStateNotifier extends _HelperStateBase
   }
 
   @override
-  void sendSaturationAlgo(SaturationAlgo algo) {
-    if (!_client.isConnected) return;
-    try {
-      final token = switch (algo) {
-        SaturationAlgo.luma => 'luma',
-        SaturationAlgo.neutral => 'neutral',
-      };
-      _sendIpc('set saturation_algo $token');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {

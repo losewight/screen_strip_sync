@@ -16,7 +16,7 @@ constexpr float kGateOff = 1.5f;
 constexpr int kGateOnFrames = 2;
 constexpr int kGateOffFrames = 3;
 // 最短驻留：翻转后至少保持 N 帧才允许再翻；0=旁路。以后可能会改。
-constexpr int kMinDwellFrames = 8;
+constexpr int kMinDwellFrames = 6;
 // HyperHDR LedDevice anti-flicker：0-255 刻度 >0.49 才更新 hold
 constexpr float kAntiFlickerEps = 0.49f;
 // 快速灭灯：ON 且显示色已连续非零 ≥ LitFrames，之后连续 ZeroFrames 帧为 0

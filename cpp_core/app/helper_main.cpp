@@ -17,7 +17,7 @@
 #include <shellapi.h>
 
 // 与 helper.rc ProductVersion 对齐；开源诊断横幅用
-static constexpr char kHelperVersion[] = "1.0.2";
+static constexpr char kHelperVersion[] = "1.1.0";
 
 // 供 H5 读取：--autostart / --no-ui 时不拉 Flutter
 static bool g_silent_start = false;

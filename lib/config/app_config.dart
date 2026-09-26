@@ -20,12 +20,12 @@ enum SampleAlgo {
   mean,
 }
 
-/// map 饱和度算法（与 helper `saturation_algo luma|neutral` 对齐）。
+/// map 饱和度算法（UI 已撤；固定减去中性色）。
 enum SaturationAlgo {
-  /// Rec.601 亮度守恒：拉开偏离灰的距离，亮度轴不动。
+  /// 保持亮度：Rec.601 亮度守恒，拉开偏离灰的距离，亮度轴不动（仅旧兼容）。
   luma,
 
-  /// 减去三通道共有的中性分量；sat>1 时 k=sat-1。
+  /// 减去三通道共有的中性分量；sat>1 时 k=sat-1（当前固定）。
   neutral,
 }
 
@@ -44,10 +44,10 @@ enum NearBlackLuma {
 class AppConfig {
   const AppConfig({
     this.emaAlpha = 1.0,
-    this.nearBlack = 4,
+    this.nearBlack = 30,
     this.blurStep = 0,
-    this.saturation = 1.2,
-    this.saturationAlgo = SaturationAlgo.luma,
+    this.saturation = 1.0,
+    this.saturationAlgo = SaturationAlgo.neutral,
     this.sampleAlgo = SampleAlgo.mean,
     this.nearBlackLuma = NearBlackLuma.rec601,
     this.mode = ColorMode.a,
@@ -69,7 +69,7 @@ class AppConfig {
     this.lastCustomSolid = '',
     this.wallCompEnabled = false,
     this.wallColor = '',
-    this.letterboxDetect = false,
+    this.letterboxDetect = true,
   });
 
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
@@ -81,10 +81,10 @@ class AppConfig {
   /// 采样邻域半宽（空间降噪）；0..8，0=不扩邻域。
   final int blurStep;
 
-  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.2（120%）。
+  /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.0（100%）。
   final double saturation;
 
-  /// 饱和度算法：保持亮度 / 减去中性色；共用 [saturation] 滑条。
+  /// 饱和度算法：固定减去中性色；luma 仅旧 cfg 兼容。
   final SaturationAlgo saturationAlgo;
 
   /// map 采样聚合：固定算术平均（更接近光学混合）；RMS 仅旧 JSON 兼容。
@@ -224,10 +224,10 @@ class AppConfig {
   /// 缺字段保留 [AppConfig] 默认值。不以 `cfg end` 为输入（调用方在 end 处组包）。
   factory AppConfig.fromCfgLines(Iterable<String> lines) {
     var alpha = 1.0;
-    var nearBlack = 4;
+    var nearBlack = 30;
     var blurStep = 0;
-    var saturation = 1.2;
-    var saturationAlgo = SaturationAlgo.luma;
+    var saturation = 1.0;
+    var saturationAlgo = SaturationAlgo.neutral;
     var sampleAlgo = SampleAlgo.mean;
     var nearBlackLuma = NearBlackLuma.rec601;
     var mode = ColorMode.a;
@@ -249,7 +249,7 @@ class AppConfig {
     var lastCustomSolid = '';
     var wallCompEnabled = false;
     var wallColor = '';
-    var letterboxDetect = false;
+    var letterboxDetect = true;
 
     for (final raw in lines) {
       var line = raw.trim();
@@ -277,10 +277,8 @@ class AppConfig {
           final v = double.tryParse(val);
           if (v != null) saturation = v.clamp(0.5, 2.0);
         case 'saturation_algo':
-          saturationAlgo = switch (val) {
-            'neutral' => SaturationAlgo.neutral,
-            _ => SaturationAlgo.luma,
-          };
+          // UI 已撤；固定减去中性色（与 helper 钳制一致）。
+          saturationAlgo = SaturationAlgo.neutral;
         case 'sample_algo':
           // UI 已撤；固定算术平均（与 helper 钳制一致）。
           sampleAlgo = SampleAlgo.mean;

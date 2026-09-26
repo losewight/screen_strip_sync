@@ -86,7 +86,7 @@ flowchart LR
 | `solid RRGGBB` / `soft_off` / `off` | 纯色 / 软关（黑帧）/ 真下电 |
 | `bye` / `quit` | 断连接（灯保持）/ 关后台服务 |
 | `reconnect` | 重开串口 |
-| `set alpha\|near_black\|near_black_luma\|blur\|saturation\|saturation_algo\|sample_algo …` | map 参数（clamp；`saturation_algo` 为 `luma\|neutral`；`sample_algo` 为 `rms\|mean`；`near_black_luma` 为 `rec601\|mean`） |
+| `set alpha\|near_black\|near_black_luma\|blur\|saturation\|saturation_algo\|sample_algo …` | map 参数（clamp；`saturation_algo` 固定 `neutral`，`luma` 仅兼容；`sample_algo` 固定 `mean`；`near_black_luma` 固定 `rec601`） |
 | `set mode a\|b` | **废弃**，仅存盘兼容 |
 | `set com\|sleep_sync\|shutdown_off\|autostart …` | 口/休眠/关机关灯/自启 |
 | `highlight n` / `set map …` | 校准高亮 / 段映射 |
@@ -112,7 +112,7 @@ flowchart LR
 
 ### JSON（`%LocalAppData%\Screen Strip Sync\screen_strip_sync_config.json`）
 
-`emaAlpha` / `nearBlack` / `nearBlackLuma` / `blurStep` / `saturation` / `saturationAlgo` / `sampleAlgo` / `mode`(废) / `comPort` / `lastConnectedCom` / `captureOutput` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo|Blur|Smooth|Dark|BBox` / `lastScene` / `lastCustomSolid` / `letterboxDetect`。缺字段回退默认；老文件须能直接读。
+`emaAlpha` / `nearBlack` / `nearBlackLuma` / `blurStep` / `saturation` / `saturationAlgo`(固定 neutral) / `sampleAlgo`(固定 mean) / `mode`(废) / `comPort` / `lastConnectedCom` / `captureOutput` / `autoSleepSync` / `turnOffOnShutdown` / `startOnBoot` / `segmentMap` / `regionAlgo|Blur|Smooth|Dark|BBox` / `lastScene` / `lastCustomSolid` / `letterboxDetect`。缺字段回退默认；老文件须能直接读。
 
 ---
 

@@ -29,7 +29,7 @@ static CaptureOutputInfo g_output_info{};
 static char g_wanted_output[64] = "";
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
-static std::atomic<int> g_near_black{4}; // 0..64；默认与 HelperConfig 对齐
+static std::atomic<int> g_near_black{30}; // 0..64；默认与 HelperConfig 对齐
 static std::atomic<int> g_blur_step{0};  // 0..8
 static std::atomic<char> g_sample_algo{'m'}; // 固定 mean；'r'=rms 保留接口兼容
 // 近黑亮度：'6'=Rec.601（默认），'a'=(R+G+B)/3

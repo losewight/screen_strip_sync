@@ -4,7 +4,7 @@
 ; Flutter 仅支持 x64，本安装包 ArchitecturesAllowed=x64compatible。
 
 #define MyAppName "Screen Strip Sync"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Screen Strip Sync"
 #define MyAppExeName "helper.exe"
 #define MyAppArch "x64"

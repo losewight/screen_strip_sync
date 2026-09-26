@@ -198,6 +198,12 @@ screen_strip_sync/
 
 ---
 
+## 鸣谢
+
+部分思路参考了开源项目 [HyperHDR](https://github.com/awawa-dev/HyperHDR)（电影黑边检测、暗场抗闪等），在此致谢。本软件为独立实现，与 HyperHDR 无隶属关系。
+
+---
+
 ## 许可证
 
 本项目采用 [Apache License 2.0](./LICENSE)。

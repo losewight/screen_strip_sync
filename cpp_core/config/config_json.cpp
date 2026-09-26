@@ -335,6 +335,8 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
     return false;
   ++p;
   skip_ws(p);
+  // 为什么：旧 JSON 无此字段时视为 0，config_load 套用跟色推荐默认一次
+  cfg->mapDefaultsRev = 0;
   if (*p == '}')
     return true;
 
@@ -369,12 +371,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
         return false;
       cfg->saturation = clamp_saturation((float)v);
     } else if (strcmp(key, "saturationAlgo") == 0) {
+      // 固定减去中性色；旧 JSON 的 luma 读入后钳为 neutral
       char s[16];
       if (!parse_string(p, s, sizeof(s)))
         return false;
-      // 为什么：缺字段保持默认 'l'；仅 "neutral" 开减法，其余钳回 luma
-      cfg->saturationAlgo =
-          (strcmp(s, "neutral") == 0) ? 'n' : 'l';
+      cfg->saturationAlgo = 'n';
     } else if (strcmp(key, "sampleAlgo") == 0) {
       // 固定算术平均；旧 JSON 的 rms 读入后钳为 mean。
       char s[16];
@@ -475,6 +476,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_bool(p, &b))
         return false;
       cfg->letterboxDetect = b;
+    } else if (strcmp(key, "mapDefaultsRev") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->mapDefaultsRev = (int)(v + (v >= 0 ? 0.5 : -0.5));
     } else if (strcmp(key, "wallColor") == 0) {
       char s[8];
       if (!parse_string(p, s, sizeof(s)))
@@ -635,6 +641,8 @@ std::string config_format_json(const HelperConfig &c) {
   o.append("  \"letterboxDetect\": ");
   o.append(c.letterboxDetect ? "true" : "false");
   o.append(",\n");
+  snprintf(num, sizeof(num), "  \"mapDefaultsRev\": %d,\n", c.mapDefaultsRev);
+  o.append(num);
   o.append("  \"wallColor\": ");
   append_escaped(&o, c.wallColor);
   o.append(",\n");

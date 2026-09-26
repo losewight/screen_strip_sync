@@ -22,7 +22,7 @@ inline int clamp_blur(int v) {
     return 8;
   return v;
 }
-// 屏幕跟色饱和度增益；1.0=原色，>1 更艳；Rec.601 亮度守恒
+// 屏幕跟色饱和度增益；1.0=原色，>1 更艳（固定减去中性色）
 inline float clamp_saturation(float v) {
   if (v < 0.5f)
     return 0.5f;
@@ -30,9 +30,10 @@ inline float clamp_saturation(float v) {
     return 2.f;
   return v;
 }
-// map 饱和度算法：'l'=保持亮度（默认），'n'=减去中性色；非法回 luma
+// map 饱和度算法：固定 'n'=减去中性色；'l'=保持亮度仅旧兼容，一律钳回 'n'
 inline char clamp_saturation_algo(char c) {
-  return (c == 'n' || c == 'N') ? 'n' : 'l';
+  (void)c;
+  return 'n';
 }
 inline int clamp_region_blur(int v) {
   if (v < 0)

@@ -39,10 +39,10 @@ void main() {
     test('empty lines fall back to defaults', () {
       final cfg = AppConfig.fromCfgLines(const []);
       expect(cfg.emaAlpha, 1.0);
-      expect(cfg.nearBlack, 4);
+      expect(cfg.nearBlack, 30);
       expect(cfg.blurStep, 0);
-      expect(cfg.saturation, 1.2);
-      expect(cfg.saturationAlgo, SaturationAlgo.luma);
+      expect(cfg.saturation, 1.0);
+      expect(cfg.saturationAlgo, SaturationAlgo.neutral);
       expect(cfg.sampleAlgo, SampleAlgo.mean);
       expect(cfg.nearBlackLuma, NearBlackLuma.rec601);
       expect(cfg.mode, ColorMode.a);
@@ -60,7 +60,7 @@ void main() {
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
       expect(cfg.hasWallColor, isFalse);
-      expect(cfg.letterboxDetect, isFalse);
+      expect(cfg.letterboxDetect, isTrue);
     });
 
     test('parses serial_configured 0 and 1', () {
@@ -192,16 +192,16 @@ void main() {
       );
     });
 
-    test('saturation_algo defaults to luma; parses neutral; clamps bad', () {
+    test('saturation_algo is fixed to neutral (UI removed)', () {
       expect(
         AppConfig.fromCfgLines(const []).saturationAlgo,
-        SaturationAlgo.luma,
+        SaturationAlgo.neutral,
       );
       expect(
         AppConfig.fromCfgLines(
           const ['cfg saturation_algo luma'],
         ).saturationAlgo,
-        SaturationAlgo.luma,
+        SaturationAlgo.neutral,
       );
       expect(
         AppConfig.fromCfgLines(
@@ -213,7 +213,7 @@ void main() {
         AppConfig.fromCfgLines(
           const ['cfg saturation_algo xyz'],
         ).saturationAlgo,
-        SaturationAlgo.luma,
+        SaturationAlgo.neutral,
       );
     });
 

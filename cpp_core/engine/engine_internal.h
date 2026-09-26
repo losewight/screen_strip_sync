@@ -15,7 +15,7 @@ extern std::mutex g_engine_mu;
 
 extern std::atomic<float> g_alpha;
 extern std::atomic<float> g_saturation;
-extern std::atomic<char> g_saturation_algo; // 'l'|'n'
+extern std::atomic<char> g_saturation_algo; // 固定 'n'；'l' 仅兼容
 extern std::atomic<char> g_mode;
 
 extern std::atomic<char> g_region_algo;

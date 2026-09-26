@@ -122,29 +122,6 @@ class ScreenSyncPanel extends ConsumerWidget {
                             : null,
                       ),
                       const SizedBox(height: AppSpacing.control),
-                      SchemeParamLabel('饱和度算法'),
-                      SegmentedButton<SaturationAlgo>(
-                        segments: const [
-                          ButtonSegment(
-                            value: SaturationAlgo.luma,
-                            label: Text('保持亮度'),
-                          ),
-                          ButtonSegment(
-                            value: SaturationAlgo.neutral,
-                            label: Text('减去中性色'),
-                          ),
-                        ],
-                        selected: {cfg.saturationAlgo},
-                        onSelectionChanged: canEdit
-                            ? (Set<SaturationAlgo> next) {
-                                if (next.isEmpty) return;
-                                final algo = next.first;
-                                config.setSaturationAlgo(algo);
-                                notifier.sendSaturationAlgo(algo);
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.compact),
                       SchemeParamLabel(
                         '色彩饱和度: ${(cfg.saturation * 100).round()}%'
                         '（100%=原色，越高越艳）',
