@@ -53,6 +53,32 @@ static void diag_maybe_log() {
          flip_sum);
 }
 
+// D2：非对称时间平滑。α≥1（无平滑）旁路；否则亮起更柔 / 变暗更干脆。
+// 报告量级：α=0.25 → α_up=0.15 / α_down=0.35。方向用 max(R,G,B)，三通道同系数。
+static constexpr float kAsymUp = 0.6f;
+static constexpr float kAsymDown = 1.4f;
+
+static inline float channel_max3(float r, float g, float b) {
+  float m = r;
+  if (g > m)
+    m = g;
+  if (b > m)
+    m = b;
+  return m;
+}
+
+static inline float asym_tracking_alpha(float alpha, float L_new, float L_old) {
+  if (alpha >= 1.f)
+    return alpha;
+  const float scaled =
+      (L_new > L_old) ? (alpha * kAsymUp) : (alpha * kAsymDown);
+  if (scaled < 0.f)
+    return 0.f;
+  if (scaled > 1.f)
+    return 1.f;
+  return scaled;
+}
+
 // 为什么：采样先墙补一份给判定；显示路径 EMA(+sat) 后再墙补，两路同口径。
 static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
                        float disp_r, float disp_g, float disp_b,
@@ -105,10 +131,13 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
       g_ema_g[i] = g;
       g_ema_b[i] = b;
     } else {
-      // out = α * new + (1-α) * old
-      g_ema_r[i] = alpha * r + (1.f - alpha) * g_ema_r[i];
-      g_ema_g[i] = alpha * g + (1.f - alpha) * g_ema_g[i];
-      g_ema_b[i] = alpha * b + (1.f - alpha) * g_ema_b[i];
+      // out = α_eff * new + (1-α_eff) * old；α_eff 按亮/暗方向派生
+      const float L_new = channel_max3(r, g, b);
+      const float L_old = channel_max3(g_ema_r[i], g_ema_g[i], g_ema_b[i]);
+      const float a = asym_tracking_alpha(alpha, L_new, L_old);
+      g_ema_r[i] = a * r + (1.f - a) * g_ema_r[i];
+      g_ema_g[i] = a * g + (1.f - a) * g_ema_g[i];
+      g_ema_b[i] = a * b + (1.f - a) * g_ema_b[i];
     }
 
     float or_ = g_ema_r[i];
@@ -196,9 +225,15 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
       g_ema_g[i] = g;
       g_ema_b[i] = b;
     } else {
-      g_ema_r[i] = smooth * g_ema_r[i] + (1.f - smooth) * r;
-      g_ema_g[i] = smooth * g_ema_g[i] + (1.f - smooth) * g;
-      g_ema_b[i] = smooth * g_ema_b[i] + (1.f - smooth) * b;
+      // smooth → α_eq=1-s；套 map 同款非对称后再换回惯性
+      const float alpha_eq = 1.f - smooth;
+      const float L_new = channel_max3(r, g, b);
+      const float L_old = channel_max3(g_ema_r[i], g_ema_g[i], g_ema_b[i]);
+      const float a = asym_tracking_alpha(alpha_eq, L_new, L_old);
+      const float s = 1.f - a;
+      g_ema_r[i] = s * g_ema_r[i] + (1.f - s) * r;
+      g_ema_g[i] = s * g_ema_g[i] + (1.f - s) * g;
+      g_ema_b[i] = s * g_ema_b[i] + (1.f - s) * b;
     }
 
     float or_ = g_ema_r[i];
