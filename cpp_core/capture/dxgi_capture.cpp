@@ -4,9 +4,11 @@
 #include "dxgi_capture.h"
 
 #include "dxgi_mapped.h"
+#include "hdr_convert.h"
 #include "helper_log.h"
 #include "letterbox_detect.h"
 #include "light_engine.h"
+#include "pixel_reader.h"
 
 #include <atomic>
 #include <cmath>
@@ -15,6 +17,8 @@
 #include <cwchar>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <dxgi1_5.h>
+#include <dxgi1_6.h>
 
 static ID3D11Device *g_device = nullptr;
 static ID3D11DeviceContext *g_context = nullptr;
@@ -34,6 +38,14 @@ static std::atomic<int> g_blur_step{0};  // 0..8
 static std::atomic<char> g_sample_algo{'m'}; // 固定 mean；'r'=rms 保留接口兼容
 // 近黑亮度：'6'=Rec.601（默认），'a'=(R+G+B)/3
 static std::atomic<char> g_near_black_luma{'6'};
+
+// E：HDR 诊断 / 转换参数；init 与 2s 轮询写，采样与 IPC 读
+static bool g_hdr_active = false;
+static float g_sdr_white_nits = 80.f;
+static float g_max_luminance = 80.f;
+static DXGI_FORMAT g_dup_format = DXGI_FORMAT_UNKNOWN;
+static DWORD g_last_white_refresh_ms = 0;
+static constexpr DWORD kWhiteRefreshPeriodMs = 2000;
 
 // Rec.601 luma：同等算术平均下绿远亮于蓝，简单均值会把暗蓝留下、把暗绿误剔。
 static unsigned rec601_luma(unsigned r, unsigned g, unsigned b) {
@@ -125,23 +137,111 @@ static int bytes_per_pixel(DXGI_FORMAT fmt) {
   }
 }
 
-// half-float → 0~255，仅用于打印验证（Day20 还不采样发灯）
-static unsigned half_to_u8(unsigned short h) {
-  const unsigned exp = (h >> 10) & 0x1F;
-  const unsigned mant = h & 0x3FF;
-  float f;
-  if (exp == 0)
-    f = 0.f;
-  else if (exp == 31)
-    f = 1.f;
-  else
-    f = ldexpf(1.f + mant / 1024.f, (int)exp - 15);
+// CCD：按 GDI DeviceName 查 SDR 白点（nits）。失败回落 80。
+static float query_sdr_white_nits(const WCHAR *gdi_device) {
+  if (!gdi_device || !gdi_device[0])
+    return 80.f;
+  UINT32 pathCount = 0, modeCount = 0;
+  if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount,
+                                  &modeCount) != ERROR_SUCCESS ||
+      pathCount == 0 || pathCount > 32 || modeCount == 0 || modeCount > 128)
+    return 80.f;
+  DISPLAYCONFIG_PATH_INFO paths[32];
+  DISPLAYCONFIG_MODE_INFO modes[128];
+  UINT32 pc = pathCount;
+  UINT32 mc = modeCount;
+  if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths, &mc, modes,
+                         nullptr) != ERROR_SUCCESS)
+    return 80.f;
+  for (UINT32 i = 0; i < pc; ++i) {
+    DISPLAYCONFIG_SOURCE_DEVICE_NAME src{};
+    src.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+    src.header.size = sizeof(src);
+    src.header.adapterId = paths[i].sourceInfo.adapterId;
+    src.header.id = paths[i].sourceInfo.id;
+    if (DisplayConfigGetDeviceInfo(&src.header) != ERROR_SUCCESS)
+      continue;
+    if (std::wcscmp(src.viewGdiDeviceName, gdi_device) != 0)
+      continue;
 
-  if (f < 0.f)
-    f = 0.f;
-  if (f > 1.f)
-    f = 1.f;
-  return (unsigned)(f * 255.f + 0.5f);
+    DISPLAYCONFIG_SDR_WHITE_LEVEL lvl{};
+    lvl.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+    lvl.header.size = sizeof(lvl);
+    lvl.header.adapterId = paths[i].targetInfo.adapterId;
+    lvl.header.id = paths[i].targetInfo.id;
+    if (DisplayConfigGetDeviceInfo(&lvl.header) != ERROR_SUCCESS)
+      return 80.f;
+    // SDRWhiteLevel：以 1000 为基准的倍率；nits = level/1000 * 80
+    if (lvl.SDRWhiteLevel == 0)
+      return 80.f;
+    return (float)lvl.SDRWhiteLevel / 1000.f * 80.f;
+  }
+  return 80.f;
+}
+
+static const char *color_space_name(DXGI_COLOR_SPACE_TYPE cs) {
+  switch (cs) {
+  case DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709:
+    return "G22_P709";
+  case DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709:
+    return "G10_P709";
+  case DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020:
+    return "G2084_P2020";
+  case DXGI_COLOR_SPACE_RGB_STUDIO_G2084_NONE_P2020:
+    return "G2084_P2020_studio";
+  default:
+    return "other";
+  }
+}
+
+// 读 Output6 描述 + SDR 白点，写入全局并重建 LUT。
+static void refresh_hdr_params(IDXGIOutput1 *output1, const WCHAR *gdi_device,
+                               bool log_line) {
+  float max_nits = 80.f;
+  UINT bits = 0;
+  DXGI_COLOR_SPACE_TYPE cs = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+  bool got_desc1 = false;
+  if (output1) {
+    IDXGIOutput6 *o6 = nullptr;
+    if (SUCCEEDED(output1->QueryInterface(__uuidof(IDXGIOutput6),
+                                          (void **)&o6)) &&
+        o6) {
+      DXGI_OUTPUT_DESC1 d1{};
+      if (SUCCEEDED(o6->GetDesc1(&d1))) {
+        max_nits = d1.MaxLuminance > 0.f ? d1.MaxLuminance : 80.f;
+        bits = d1.BitsPerColor;
+        cs = d1.ColorSpace;
+        got_desc1 = true;
+      }
+      o6->Release();
+    }
+  }
+  const float white = query_sdr_white_nits(gdi_device);
+  g_sdr_white_nits = white;
+  g_max_luminance = max_nits;
+  hdr_convert_set_params(white, max_nits);
+  g_last_white_refresh_ms = GetTickCount();
+  if (log_line) {
+    printf("hdr diag: ColorSpace=%s(%u) BitsPerColor=%u MaxLuminance=%.1f "
+           "SDRWhite=%.1f nits Format=%u%s\n",
+           color_space_name(cs), (unsigned)cs, bits, max_nits, white,
+           (unsigned)g_dup_format, got_desc1 ? "" : " (no Output6)");
+  }
+}
+
+static void maybe_refresh_white_level() {
+  const DWORD now = GetTickCount();
+  if (now - g_last_white_refresh_ms < kWhiteRefreshPeriodMs)
+    return;
+  // 无 output 指针时只刷新白点（峰值沿用 init 时的 MaxLuminance）
+  WCHAR wide[64]{};
+  if (g_output_info.device_name[0]) {
+    MultiByteToWideChar(CP_UTF8, 0, g_output_info.device_name, -1, wide, 64);
+  }
+  const float white = query_sdr_white_nits(wide);
+  g_sdr_white_nits = white;
+  hdr_convert_set_params(white, g_max_luminance);
+  g_last_white_refresh_ms = now;
 }
 
 static void wide_to_utf8(const WCHAR *wide, char *out, int cap) {
@@ -403,17 +503,54 @@ DxgiErr dxgi_init() {
     return sel != DxgiErr::Ok ? sel : DxgiErr::NoOutput;
   }
 
-  // 为什么：DuplicateOutput 要绑定「创建桌面复制的那个 D3D 设备」
-  hr = output1->DuplicateOutput(g_device, &g_duplication);
-  output1->Release();
-  output1 = nullptr;
+  // 为什么：DuplicateOutput1 可要 FP16；失败回落旧 DuplicateOutput（仍可能被系统降成 8 位）
+  IDXGIOutput5 *output5 = nullptr;
+  HRESULT hr5 =
+      output1->QueryInterface(__uuidof(IDXGIOutput5), (void **)&output5);
+  if (SUCCEEDED(hr5) && output5) {
+    const DXGI_FORMAT supported[] = {
+        DXGI_FORMAT_R16G16B16A16_FLOAT,
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+    };
+    hr = output5->DuplicateOutput1(g_device, 0, ARRAYSIZE(supported), supported,
+                                   &g_duplication);
+    output5->Release();
+    output5 = nullptr;
+    if (FAILED(hr) || !g_duplication) {
+      printf("DuplicateOutput1 failed: 0x%08lx, fallback DuplicateOutput\n",
+             (unsigned long)hr);
+      g_duplication = nullptr;
+      hr = output1->DuplicateOutput(g_device, &g_duplication);
+    } else {
+      printf("DuplicateOutput1 ok\n");
+    }
+  } else {
+    printf("IDXGIOutput5 unavailable, fallback DuplicateOutput\n");
+    hr = output1->DuplicateOutput(g_device, &g_duplication);
+  }
+
   if (FAILED(hr) || !g_duplication) {
     printf("DuplicateOutput failed: 0x%08lx\n", (unsigned long)hr);
+    output1->Release();
     dxgi_shutdown();
     return DxgiErr::DuplicateFailed;
   }
 
-  printf("DuplicateOutput ok\n");
+  DXGI_OUTDUPL_DESC dup_desc{};
+  g_duplication->GetDesc(&dup_desc);
+  g_dup_format = dup_desc.ModeDesc.Format;
+  g_hdr_active = (g_dup_format == DXGI_FORMAT_R16G16B16A16_FLOAT);
+
+  WCHAR gdi_wide[64]{};
+  if (g_output_info.device_name[0])
+    MultiByteToWideChar(CP_UTF8, 0, g_output_info.device_name, -1, gdi_wide, 64);
+  refresh_hdr_params(output1, gdi_wide, true);
+
+  output1->Release();
+  output1 = nullptr;
+
+  printf("DuplicateOutput ok Format=%u hdr_active=%d\n", (unsigned)g_dup_format,
+         g_hdr_active ? 1 : 0);
   log_capture_output();
   return DxgiErr::Ok;
 }
@@ -495,8 +632,10 @@ DxgiErr dxgi_grab_one_frame(UINT timeout_ms) {
     printf("pixel0 BGRA=%02x %02x %02x %02x\n", p[0], p[1], p[2], p[3]);
   } else if (desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
     const unsigned short *h = (const unsigned short *)p;
-    printf("pixel0 RGB(from float16)=%02x %02x %02x\n", half_to_u8(h[0]),
-           half_to_u8(h[1]), half_to_u8(h[2]));
+    unsigned char rgb[3];
+    hdr_px_to_rgb8(h, rgb);
+    printf("pixel0 RGB(from float16)=%02x %02x %02x\n", rgb[0], rgb[1],
+           rgb[2]);
   } else {
     printf("pixel0: unsupported format, skip decode\n");
   }
@@ -514,6 +653,8 @@ DxgiErr dxgi_map_desktop(UINT timeout_ms, DxgiMappedFrame *out) {
   *out = DxgiMappedFrame{};
   if (!g_duplication || !g_device || !g_context)
     return DxgiErr::DuplicateFailed;
+
+  maybe_refresh_white_level();
 
   DXGI_OUTDUPL_FRAME_INFO info = {};
   IDXGIResource *resource = nullptr;
@@ -635,160 +776,180 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
   const unsigned char *p = frame.pixels;
   const int bpp = frame.bpp;
   const UINT stride = frame.stride;
+  const unsigned fmt = (unsigned)desc.Format;
 
-  if (desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-    letterbox_process_bgra(p, (int)desc.Width, (int)desc.Height, (int)stride,
-                           bpp);
-    if (rects != nullptr) {
-      // 步进抽点 + 近黑 luma 丢弃 + 可选 blur 邻域 + rms/mean
-      const int nearBlack = g_near_black.load();
-      const int blur = g_blur_step.load();
-      const bool use_rms = g_sample_algo.load() != 'm';
-      for (int i = 0; i < kSegmentCount; ++i) {
-        int x0 = (int)(rects[i].x0 * (float)desc.Width);
-        int x1 = (int)(rects[i].x1 * (float)desc.Width);
-        int y0 = 0, y1 = 0;
-        letterbox_map_y_range(rects[i].y0, rects[i].y1, (int)desc.Height, &y0,
-                              &y1);
-        if (x0 < 0)
-          x0 = 0;
-        if (x1 > (int)desc.Width)
-          x1 = (int)desc.Width;
-        if (x1 <= x0)
-          x1 = x0 + 1;
-        if (x1 > (int)desc.Width)
-          x1 = (int)desc.Width;
-        if (y1 > (int)desc.Height)
-          y1 = (int)desc.Height;
+  if (fmt != (unsigned)DXGI_FORMAT_B8G8R8A8_UNORM &&
+      fmt != (unsigned)DXGI_FORMAT_R16G16B16A16_FLOAT) {
+    dxgi_unmap_desktop();
+    return DxgiErr::AcquireFailed;
+  }
 
-        const int rw = x1 - x0;
-        const int rh = y1 - y0;
-        int step_x = rw > 16 ? rw / 16 : 1;
-        int step_y = rh > 16 ? rh / 16 : 1;
-        if (step_x < 1)
-          step_x = 1;
-        if (step_y < 1)
-          step_y = 1;
+  const LARGE_INTEGER t0 = [] {
+    LARGE_INTEGER v{};
+    QueryPerformanceCounter(&v);
+    return v;
+  }();
 
-        unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
-        int count = 0;
-        for (int y = y0; y < y1; y += step_y) {
-          for (int x = x0; x < x1; x += step_x) {
-            for (int dy = -blur; dy <= blur; ++dy) {
-              const int sy = y + dy;
-              if (sy < 0 || sy >= (int)desc.Height)
+  letterbox_process(p, (int)desc.Width, (int)desc.Height, (int)stride, bpp,
+                    fmt);
+
+  auto sample_rects = [&](auto reader_tag) {
+    using Reader = decltype(reader_tag);
+    const int nearBlack = g_near_black.load();
+    const int blur = g_blur_step.load();
+    const bool use_rms = g_sample_algo.load() != 'm';
+    // FP16 更贵：略降抽点（E4）
+    const int dens = (Reader::kBpp > 4) ? 12 : 16;
+    for (int i = 0; i < kSegmentCount; ++i) {
+      int x0 = (int)(rects[i].x0 * (float)desc.Width);
+      int x1 = (int)(rects[i].x1 * (float)desc.Width);
+      int y0 = 0, y1 = 0;
+      letterbox_map_y_range(rects[i].y0, rects[i].y1, (int)desc.Height, &y0,
+                            &y1);
+      if (x0 < 0)
+        x0 = 0;
+      if (x1 > (int)desc.Width)
+        x1 = (int)desc.Width;
+      if (x1 <= x0)
+        x1 = x0 + 1;
+      if (x1 > (int)desc.Width)
+        x1 = (int)desc.Width;
+      if (y1 > (int)desc.Height)
+        y1 = (int)desc.Height;
+
+      const int rw = x1 - x0;
+      const int rh = y1 - y0;
+      int step_x = rw > dens ? rw / dens : 1;
+      int step_y = rh > dens ? rh / dens : 1;
+      if (step_x < 1)
+        step_x = 1;
+      if (step_y < 1)
+        step_y = 1;
+
+      unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
+      int count = 0;
+      for (int y = y0; y < y1; y += step_y) {
+        for (int x = x0; x < x1; x += step_x) {
+          for (int dy = -blur; dy <= blur; ++dy) {
+            const int sy = y + dy;
+            if (sy < 0 || sy >= (int)desc.Height)
+              continue;
+            for (int dx = -blur; dx <= blur; ++dx) {
+              const int sx = x + dx;
+              if (sx < 0 || sx >= (int)desc.Width)
                 continue;
-              for (int dx = -blur; dx <= blur; ++dx) {
-                const int sx = x + dx;
-                if (sx < 0 || sx >= (int)desc.Width)
-                  continue;
-                const unsigned char *px =
-                    p + (UINT)sy * stride + (UINT)sx * (UINT)bpp;
-                const unsigned r = px[2], g = px[1], b = px[0];
-                if (pixel_luma(r, g, b) < (unsigned)nearBlack)
-                  continue;
-                if (use_rms) {
-                  acc_r += (unsigned long long)r * r;
-                  acc_g += (unsigned long long)g * g;
-                  acc_b += (unsigned long long)b * b;
-                } else {
-                  acc_r += r;
-                  acc_g += g;
-                  acc_b += b;
-                }
-                ++count;
+              const unsigned char *px =
+                  p + (UINT)sy * stride + (UINT)sx * (UINT)bpp;
+              unsigned r = 0, g = 0, b = 0;
+              Reader::read_rgb(px, &r, &g, &b);
+              if (pixel_luma(r, g, b) < (unsigned)nearBlack)
+                continue;
+              if (use_rms) {
+                acc_r += (unsigned long long)r * r;
+                acc_g += (unsigned long long)g * g;
+                acc_b += (unsigned long long)b * b;
+              } else {
+                acc_r += r;
+                acc_g += g;
+                acc_b += b;
               }
+              ++count;
             }
           }
         }
-        if (count == 0) {
-          out_rgb[i][0] = 0;
-          out_rgb[i][1] = 0;
-          out_rgb[i][2] = 0;
-        } else if (use_rms) {
-          const float inv = 1.f / (float)count;
-          out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
-          out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
-          out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
-        } else {
-          out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
-          out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
-          out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
-        }
       }
-    } else {
-      int top = 0, bottom = 0;
-      letterbox_get_inset(&top, &bottom);
-      const UINT y =
-          (UINT)(top + (desc.Height > (UINT)(top + 2) ? 2 : 0));
-      const int blurStep = g_blur_step.load();
-      const int nearBlack = g_near_black.load();
-      const bool use_rms = g_sample_algo.load() != 'm';
-      for (int i = 0; i < 10; ++i) {
-        const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
-        unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
-        int count = 0;
-        for (int dx = -blurStep; dx <= blurStep; ++dx) {
-          const int sx = (int)x + dx;
-          if (sx < 0 || sx >= (int)desc.Width)
-            continue;
-          const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
-          const unsigned r = px[2], g = px[1], b = px[0];
-          if (pixel_luma(r, g, b) < (unsigned)nearBlack)
-            continue;
-          if (use_rms) {
-            acc_r += (unsigned long long)r * r;
-            acc_g += (unsigned long long)g * g;
-            acc_b += (unsigned long long)b * b;
-          } else {
-            acc_r += r;
-            acc_g += g;
-            acc_b += b;
-          }
-          ++count;
-        }
-        if (count == 0) {
-          out_rgb[i][0] = 0;
-          out_rgb[i][1] = 0;
-          out_rgb[i][2] = 0;
-        } else if (use_rms) {
-          const float inv = 1.f / (float)count;
-          out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
-          out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
-          out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
-        } else {
-          out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
-          out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
-          out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
-        }
-      }
-    }
-  } else if (desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
-    // float 路径不跑 letterbox 扫线；仍用已稳定 inset 做 Y 映射
-    for (int i = 0; i < 10; ++i) {
-      UINT x, y;
-      if (rects != nullptr) {
-        const float mx = 0.5f * (rects[i].x0 + rects[i].x1);
-        const float my = 0.5f * (rects[i].y0 + rects[i].y1);
-        x = (UINT)(mx * (float)desc.Width);
-        y = (UINT)letterbox_map_y(my, (int)desc.Height);
-        if (x >= desc.Width)
-          x = desc.Width - 1;
+      if (count == 0) {
+        out_rgb[i][0] = 0;
+        out_rgb[i][1] = 0;
+        out_rgb[i][2] = 0;
+      } else if (use_rms) {
+        const float inv = 1.f / (float)count;
+        out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
+        out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
+        out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
       } else {
-        int top = 0, bottom = 0;
-        letterbox_get_inset(&top, &bottom);
-        x = (UINT)((i + 0.5) * desc.Width / 10);
-        y = (UINT)(top + (desc.Height > (UINT)(top + 2) ? 2 : 0));
+        out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
+        out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
+        out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
       }
-      const unsigned short *h =
-          (const unsigned short *)(p + y * stride + x * (UINT)bpp);
-      out_rgb[i][0] = (unsigned char)half_to_u8(h[0]);
-      out_rgb[i][1] = (unsigned char)half_to_u8(h[1]);
-      out_rgb[i][2] = (unsigned char)half_to_u8(h[2]);
     }
+  };
+
+  auto sample_top = [&](auto reader_tag) {
+    using Reader = decltype(reader_tag);
+    int top = 0, bottom = 0;
+    letterbox_get_inset(&top, &bottom);
+    const UINT y =
+        (UINT)(top + (desc.Height > (UINT)(top + 2) ? 2 : 0));
+    const int blurStep = g_blur_step.load();
+    const int nearBlack = g_near_black.load();
+    const bool use_rms = g_sample_algo.load() != 'm';
+    for (int i = 0; i < 10; ++i) {
+      const UINT x = (UINT)((i + 0.5) * desc.Width / 10);
+      unsigned long long acc_r = 0, acc_g = 0, acc_b = 0;
+      int count = 0;
+      for (int dx = -blurStep; dx <= blurStep; ++dx) {
+        const int sx = (int)x + dx;
+        if (sx < 0 || sx >= (int)desc.Width)
+          continue;
+        const unsigned char *px = p + y * stride + (UINT)sx * (UINT)bpp;
+        unsigned r = 0, g = 0, b = 0;
+        Reader::read_rgb(px, &r, &g, &b);
+        if (pixel_luma(r, g, b) < (unsigned)nearBlack)
+          continue;
+        if (use_rms) {
+          acc_r += (unsigned long long)r * r;
+          acc_g += (unsigned long long)g * g;
+          acc_b += (unsigned long long)b * b;
+        } else {
+          acc_r += r;
+          acc_g += g;
+          acc_b += b;
+        }
+        ++count;
+      }
+      if (count == 0) {
+        out_rgb[i][0] = 0;
+        out_rgb[i][1] = 0;
+        out_rgb[i][2] = 0;
+      } else if (use_rms) {
+        const float inv = 1.f / (float)count;
+        out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
+        out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
+        out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
+      } else {
+        out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)count);
+        out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)count);
+        out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)count);
+      }
+    }
+  };
+
+  if (fmt == (unsigned)DXGI_FORMAT_R16G16B16A16_FLOAT) {
+    if (rects)
+      sample_rects(Fp16Reader{});
+    else
+      sample_top(Fp16Reader{});
   } else {
-    dxgi_unmap_desktop();
-    return DxgiErr::AcquireFailed;
+    if (rects)
+      sample_rects(BgraReader{});
+    else
+      sample_top(BgraReader{});
+  }
+
+  // E4：限流打采样耗时，blur 大时盯 FP16 成本
+  {
+    LARGE_INTEGER t1{}, freq{};
+    QueryPerformanceCounter(&t1);
+    QueryPerformanceFrequency(&freq);
+    const double ms =
+        freq.QuadPart
+            ? (double)(t1.QuadPart - t0.QuadPart) * 1000.0 / (double)freq.QuadPart
+            : 0.0;
+    static const char kKeySampleMs[] = "dxgi.sample.ms";
+    helper_log_rate(kKeySampleMs, 5000,
+                    "sample %.2fms format=%u blur=%d hdr=%d\n", ms,
+                    (unsigned)fmt, g_blur_step.load(), g_hdr_active ? 1 : 0);
   }
 
   dxgi_unmap_desktop();
@@ -813,6 +974,8 @@ void dxgi_shutdown() {
     g_device = nullptr;
   }
   g_output_info = {};
+  g_hdr_active = false;
+  g_dup_format = DXGI_FORMAT_UNKNOWN;
 }
 
 bool dxgi_is_ready() { return g_device != nullptr && g_duplication != nullptr; }

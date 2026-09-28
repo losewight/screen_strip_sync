@@ -1,7 +1,11 @@
 #include "letterbox_detect.h"
 
+#include "pixel_reader.h"
+
 #include <atomic>
 #include <mutex>
+
+#include <dxgi.h>
 
 namespace {
 
@@ -29,18 +33,12 @@ bool g_current_unknown = true;
 unsigned g_consistent = 0;
 unsigned g_inconsistent = 0;
 
-inline bool is_black_bgra(const unsigned char *px) {
-  // BGRA：B=0 G=1 R=2
-  return px[2] < kBlackThreshold && px[1] < kBlackThreshold &&
-         px[0] < kBlackThreshold;
-}
-
 inline const unsigned char *px_at(const unsigned char *base, int stride,
                                   int bpp, int x, int y) {
   return base + (size_t)y * (size_t)stride + (size_t)x * (size_t)bpp;
 }
 
-// 顶：25/50/75；同行 ≥2 非黑才算内容
+template <typename Reader>
 int scan_top(const unsigned char *p, int w, int h, int stride, int bpp) {
   const int x25 = w / 4;
   const int x50 = w / 2;
@@ -48,19 +46,19 @@ int scan_top(const unsigned char *p, int w, int h, int stride, int bpp) {
   const int y_max = h / kMaxScanFraction;
   for (int y = 0; y < y_max; ++y) {
     int non_black = 0;
-    if (!is_black_bgra(px_at(p, stride, bpp, x25, y)))
+    if (!Reader::is_near_black(px_at(p, stride, bpp, x25, y), kBlackThreshold))
       ++non_black;
-    if (!is_black_bgra(px_at(p, stride, bpp, x50, y)))
+    if (!Reader::is_near_black(px_at(p, stride, bpp, x50, y), kBlackThreshold))
       ++non_black;
-    if (!is_black_bgra(px_at(p, stride, bpp, x75, y)))
+    if (!Reader::is_near_black(px_at(p, stride, bpp, x75, y), kBlackThreshold))
       ++non_black;
     if (non_black >= 2)
       return y;
   }
-  return -1; // unknown
+  return -1;
 }
 
-// 底：25/75（躲开字幕中心）；两条都非黑才算（≥2）
+template <typename Reader>
 int scan_bottom(const unsigned char *p, int w, int h, int stride, int bpp) {
   const int x25 = w / 4;
   const int x75 = (w * 3) / 4;
@@ -69,9 +67,9 @@ int scan_bottom(const unsigned char *p, int w, int h, int stride, int bpp) {
   for (int d = 0; d < y_max; ++d) {
     const int y = last - d;
     int non_black = 0;
-    if (!is_black_bgra(px_at(p, stride, bpp, x25, y)))
+    if (!Reader::is_near_black(px_at(p, stride, bpp, x25, y), kBlackThreshold))
       ++non_black;
-    if (!is_black_bgra(px_at(p, stride, bpp, x75, y)))
+    if (!Reader::is_near_black(px_at(p, stride, bpp, x75, y), kBlackThreshold))
       ++non_black;
     if (non_black >= 2)
       return d;
@@ -79,11 +77,11 @@ int scan_bottom(const unsigned char *p, int w, int h, int stride, int bpp) {
   return -1;
 }
 
-// 对称：max(top,bottom)+blur；unknown 若任一侧失败
+template <typename Reader>
 void detect_raw(const unsigned char *p, int w, int h, int stride, int bpp,
                 int *out_inset, bool *out_unknown) {
-  const int top = scan_top(p, w, h, stride, bpp);
-  const int bottom = scan_bottom(p, w, h, stride, bpp);
+  const int top = scan_top<Reader>(p, w, h, stride, bpp);
+  const int bottom = scan_bottom<Reader>(p, w, h, stride, bpp);
   if (top < 0 || bottom < 0) {
     *out_unknown = true;
     *out_inset = 0;
@@ -98,7 +96,6 @@ void detect_raw(const unsigned char *p, int w, int h, int stride, int bpp,
     return;
   }
   inset += kBlurRemovePx;
-  // 内容至少留一点高度
   const int max_inset = (h / 2) - 2;
   if (max_inset < 0) {
     *out_unknown = true;
@@ -132,7 +129,7 @@ void update_hysteresis(int raw_inset, bool raw_unknown) {
   } else {
     ++g_inconsistent;
     if (g_inconsistent <= kMaxInconsistentCnt)
-      return; // 丢弃抖动，保持 previous
+      return; // 丢弃抖动，保留 previous
     g_prev_raw = raw_inset;
     g_prev_unknown = raw_unknown;
     g_consistent = 0;
@@ -185,7 +182,6 @@ void letterbox_set_hard_disable(bool on) {
   const bool prev = g_hard_disable.exchange(on);
   if (prev != on)
     printf("letterbox hard_disable=%d\n", on ? 1 : 0);
-  // 进入/离开 hold 都清状态，避免解除后瞬间用陈旧 inset
   std::lock_guard<std::mutex> lock(g_mu);
   const int old = g_inset;
   g_inset = 0;
@@ -194,7 +190,6 @@ void letterbox_set_hard_disable(bool on) {
   g_prev_raw = 0;
   g_consistent = 0;
   g_inconsistent = 0;
-  // hold 进出清零：仅从非 0 落下时记一条，避免与 enable 日志重复刷
   if (on)
     log_inset_if_changed(old, 0);
 }
@@ -211,20 +206,25 @@ void letterbox_reset() {
   log_inset_if_changed(old, 0);
 }
 
-void letterbox_process_bgra(const unsigned char *pixels, int width, int height,
-                            int stride, int bpp) {
+void letterbox_process(const unsigned char *pixels, int width, int height,
+                       int stride, int bpp, unsigned format) {
   if (!pixels || width < 8 || height < 8 || bpp < 4)
     return;
   if (!g_enabled.load() || g_hard_disable.load()) {
     std::lock_guard<std::mutex> lock(g_mu);
-    // 已在 set_enabled/hard_disable 清过；热路径不再打日志
     g_inset = 0;
     return;
   }
 
   int raw = 0;
   bool unknown = true;
-  detect_raw(pixels, width, height, stride, bpp, &raw, &unknown);
+  if (format == (unsigned)DXGI_FORMAT_B8G8R8A8_UNORM) {
+    detect_raw<BgraReader>(pixels, width, height, stride, bpp, &raw, &unknown);
+  } else if (format == (unsigned)DXGI_FORMAT_R16G16B16A16_FLOAT) {
+    detect_raw<Fp16Reader>(pixels, width, height, stride, bpp, &raw, &unknown);
+  } else {
+    return;
+  }
 
   std::lock_guard<std::mutex> lock(g_mu);
   update_hysteresis(raw, unknown);
@@ -266,7 +266,6 @@ void letterbox_map_y_range(float y0, float y1, int screen_h, int *out_y0,
                            int *out_y1) {
   int a = letterbox_map_y(y0, screen_h);
   int b = letterbox_map_y(y1, screen_h);
-  // map_y 对 y1=1 会落到 content 底；保证至少 1px 高
   if (b <= a)
     b = a + 1;
   if (b > screen_h)

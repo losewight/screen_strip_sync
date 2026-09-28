@@ -29,6 +29,7 @@ add_executable(helper WIN32
   capture/dxgi_capture.cpp
   capture/dxgi_region.cpp
   capture/letterbox_detect.cpp
+  capture/hdr_convert.cpp
   shell/tray_icon.cpp
   shell/ui_launcher.cpp
   shell/helper.rc
@@ -72,6 +73,16 @@ target_include_directories(fade_aurora_diag PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
 target_compile_options(fade_aurora_diag PRIVATE /utf-8)
+
+# E1：HDR half→sRGB8 离线断言（控制台；不编入 helper）
+add_executable(hdr_convert_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/hdr_convert_test/hdr_convert_test.cpp
+  capture/hdr_convert.cpp
+)
+target_include_directories(hdr_convert_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/capture
+)
+target_compile_options(hdr_convert_test PRIVATE /utf-8)
 
 # experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
 # add_executable(interval_limit_test

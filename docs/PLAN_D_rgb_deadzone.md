@@ -1,6 +1,7 @@
 # 阶段 D — RGB 灰度死区适配（计划）
 
-> **权威进度勾选在** `.cursorrules` 第 6 节「阶段 D」（**当前唯一主线**）。  
+> **权威进度勾选在** `.cursorrules` 第 6 节「阶段 D」。  
+> **当前仓库主线是阶段 E（HDR）**；D1/D2 **暂停**，待 E 完成后回来验收。  
 > 本文件是详细背景与落地说明；冲突时以 `.cursorrules` 为准。  
 > 分析来源：`docs/serial_color_analysis_report.md`（对标 HyperHDR，轻量落地）；硬件摘要见 `reference/灯带串口通信协议.md` §5.7。  
 > 日期：2026-09-22  

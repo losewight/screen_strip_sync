@@ -1,4 +1,8 @@
-﻿// helper 入口：无黑窗壳 + 单实例 + 参数；串口属主启动编排交给 ipc_loop。
+﻿#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
+
+// helper 入口：无黑窗壳 + 单实例 + 参数；串口属主启动编排交给 ipc_loop。
 // 关灯 / 休眠软关 / 唤醒恢复见 helper_lifecycle.cpp。
 #include "app_paths.h"
 #include "autostart.h"
@@ -105,6 +109,9 @@ static void parse_cmdline_args() {
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+  // 为什么：DuplicateOutput1 在部分系统上要求 Per-Monitor V2；尽早设置
+  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
   // 为什么：第二个实例不得开串口、不得 bind；只通知首实例开界面后立刻退出
   g_singleton = create_singleton_mutex();
   if (g_singleton == nullptr) {
