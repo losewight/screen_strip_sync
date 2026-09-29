@@ -79,7 +79,9 @@ int scan_bottom(const unsigned char *p, int w, int h, int stride, int bpp) {
 
 template <typename Reader>
 void detect_raw(const unsigned char *p, int w, int h, int stride, int bpp,
-                int *out_inset, bool *out_unknown) {
+                int *out_inset, bool *out_unknown, bool *out_discard) {
+  if (out_discard)
+    *out_discard = false;
   const int top = scan_top<Reader>(p, w, h, stride, bpp);
   const int bottom = scan_bottom<Reader>(p, w, h, stride, bpp);
   if (top < 0 || bottom < 0) {
@@ -87,14 +89,22 @@ void detect_raw(const unsigned char *p, int w, int h, int stride, int bpp,
     *out_inset = 0;
     return;
   }
-  int inset = top > bottom ? top : bottom;
-  // 为什么：先判真实厚度再 +blur。内容贴边时 top=0，若先 +2 会永远卡在 inset=2，
-  // 无黑边也退不回 fullscreen（日志里 32→2 后挂死）。
-  if (inset < 2) {
+  // 为什么：单侧有边、另一侧无 → 忽略本帧，迟滞不动（不锁边也不推全屏）
+  const bool top_bar = top >= 2;
+  const bool bottom_bar = bottom >= 2;
+  if (top_bar != bottom_bar) {
+    if (out_discard)
+      *out_discard = true;
+    return;
+  }
+  // 双侧都无有效黑边
+  if (!top_bar) {
     *out_unknown = false;
     *out_inset = 0;
     return;
   }
+  // 双侧都有边：取较厚侧。先判真实厚度再 +blur，避免贴边 +2 卡死 fullscreen
+  int inset = top > bottom ? top : bottom;
   inset += kBlurRemovePx;
   const int max_inset = (h / 2) - 2;
   if (max_inset < 0) {
@@ -218,13 +228,18 @@ void letterbox_process(const unsigned char *pixels, int width, int height,
 
   int raw = 0;
   bool unknown = true;
+  bool discard = false;
   if (format == (unsigned)DXGI_FORMAT_B8G8R8A8_UNORM) {
-    detect_raw<BgraReader>(pixels, width, height, stride, bpp, &raw, &unknown);
+    detect_raw<BgraReader>(pixels, width, height, stride, bpp, &raw, &unknown,
+                           &discard);
   } else if (format == (unsigned)DXGI_FORMAT_R16G16B16A16_FLOAT) {
-    detect_raw<Fp16Reader>(pixels, width, height, stride, bpp, &raw, &unknown);
+    detect_raw<Fp16Reader>(pixels, width, height, stride, bpp, &raw, &unknown,
+                           &discard);
   } else {
     return;
   }
+  if (discard)
+    return;
 
   std::lock_guard<std::mutex> lock(g_mu);
   update_hysteresis(raw, unknown);
