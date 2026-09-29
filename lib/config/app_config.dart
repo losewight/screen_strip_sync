@@ -70,6 +70,7 @@ class AppConfig {
     this.wallCompEnabled = false,
     this.wallColor = '',
     this.letterboxDetect = true,
+    this.subtitleDetect = true,
   });
 
   /// EMA 平滑系数；取值域约 0.05..1.0（屏幕跟色 map 路径）。
@@ -152,6 +153,9 @@ class AppConfig {
   /// 智能忽略电影黑边（letterbox）；采样 Y 映射进内容窗。
   final bool letterboxDetect;
 
+  /// 智能忽略字幕；map 取色框 y1 上收，避开底部字幕带。
+  final bool subtitleDetect;
+
   bool get hasSegmentMap =>
       segmentMap != null && segmentMap!.length == kSegmentCount;
 
@@ -187,6 +191,7 @@ class AppConfig {
     bool? wallCompEnabled,
     String? wallColor,
     bool? letterboxDetect,
+    bool? subtitleDetect,
   }) {
     return AppConfig(
       emaAlpha: emaAlpha ?? this.emaAlpha,
@@ -216,6 +221,7 @@ class AppConfig {
       wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
       wallColor: wallColor ?? this.wallColor,
       letterboxDetect: letterboxDetect ?? this.letterboxDetect,
+      subtitleDetect: subtitleDetect ?? this.subtitleDetect,
     );
   }
 
@@ -250,6 +256,7 @@ class AppConfig {
     var wallCompEnabled = false;
     var wallColor = '';
     var letterboxDetect = true;
+    var subtitleDetect = true;
 
     for (final raw in lines) {
       var line = raw.trim();
@@ -342,6 +349,8 @@ class AppConfig {
           if (val == '0' || val == '1') wallCompEnabled = val == '1';
         case 'letterbox_detect':
           if (val == '0' || val == '1') letterboxDetect = val == '1';
+        case 'subtitle_detect':
+          if (val == '0' || val == '1') subtitleDetect = val == '1';
         case 'wall_color':
           final h = val.trim().toLowerCase();
           if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) {
@@ -382,6 +391,7 @@ class AppConfig {
       wallCompEnabled: wallCompEnabled,
       wallColor: wallColor,
       letterboxDetect: letterboxDetect,
+      subtitleDetect: subtitleDetect,
     );
   }
 }

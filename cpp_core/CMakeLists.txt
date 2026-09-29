@@ -1,4 +1,4 @@
-# 1. 指定 CMake 的最低版本要求，防止因为语法差异导致构建失败
+﻿# 1. 指定 CMake 的最低版本要求，防止因为语法差异导致构建失败
 cmake_minimum_required(VERSION 3.10)
 
 project(ScreenStripSyncCore)
@@ -29,6 +29,7 @@ add_executable(helper WIN32
   capture/dxgi_capture.cpp
   capture/dxgi_region.cpp
   capture/letterbox_detect.cpp
+  capture/subtitle_detect.cpp
   capture/hdr_convert.cpp
   shell/tray_icon.cpp
   shell/ui_launcher.cpp

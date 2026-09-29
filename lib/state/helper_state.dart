@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -444,6 +444,16 @@ class HelperStateNotifier extends _HelperStateBase
     if (!_client.isConnected) return;
     try {
       _sendIpc('set letterbox_detect ${enabled ? 1 : 0}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendSubtitleDetect(bool enabled) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set subtitle_detect ${enabled ? 1 : 0}');
     } catch (e) {
       _patch(message: '$e');
     }

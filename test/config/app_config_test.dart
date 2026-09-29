@@ -116,6 +116,25 @@ void main() {
       );
     });
 
+    test('parses subtitle_detect', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg subtitle_detect 1',
+        ]).subtitleDetect,
+        isTrue,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg subtitle_detect 0',
+        ]).subtitleDetect,
+        isFalse,
+      );
+      expect(
+        AppConfig.fromCfgLines(const []).subtitleDetect,
+        isTrue,
+      );
+    });
+
     test('clamps out-of-range numeric fields', () {
       expect(
         AppConfig.fromCfgLines(const ['cfg alpha 0.01']).emaAlpha,

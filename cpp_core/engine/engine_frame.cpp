@@ -5,6 +5,7 @@
 #include "letterbox_detect.h"
 #include "seg_gate.h"
 #include "serial_port.h"
+#include "subtitle_detect.h"
 #include "wall_comp.h"
 
 #include <cstdio>
@@ -369,6 +370,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   g_ema_inited = false;
   reset_seg_gates();
   letterbox_reset();
+  subtitle_reset();
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }

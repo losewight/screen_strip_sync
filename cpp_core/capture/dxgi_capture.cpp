@@ -9,6 +9,7 @@
 #include "letterbox_detect.h"
 #include "light_engine.h"
 #include "pixel_reader.h"
+#include "subtitle_detect.h"
 
 #include <atomic>
 #include <cmath>
@@ -792,6 +793,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
 
   letterbox_process(p, (int)desc.Width, (int)desc.Height, (int)stride, bpp,
                     fmt);
+  subtitle_process(p, (int)desc.Width, (int)desc.Height, (int)stride, bpp,
+                   fmt);
 
   auto sample_rects = [&](auto reader_tag) {
     using Reader = decltype(reader_tag);
@@ -800,6 +803,10 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
     const bool use_rms = g_sample_algo.load() != 'm';
     // FP16 更贵：略降抽点（E4）
     const int dens = (Reader::kBpp > 4) ? 12 : 16;
+    int lb_bottom = 0;
+    letterbox_get_inset(nullptr, &lb_bottom);
+    int sub_crop = 0;
+    subtitle_get_bottom_crop(&sub_crop);
     for (int i = 0; i < kSegmentCount; ++i) {
       int x0 = (int)(rects[i].x0 * (float)desc.Width);
       int x1 = (int)(rects[i].x1 * (float)desc.Width);
@@ -816,6 +823,16 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         x1 = (int)desc.Width;
       if (y1 > (int)desc.Height)
         y1 = (int)desc.Height;
+      // 字幕带：内容底再上收；与 letterbox Y 映射串联
+      const int y_limit = (int)desc.Height - lb_bottom - sub_crop;
+      if (y1 > y_limit)
+        y1 = y_limit;
+      if (y1 <= y0) {
+        out_rgb[i][0] = 0;
+        out_rgb[i][1] = 0;
+        out_rgb[i][2] = 0;
+        continue;
+      }
 
       const int rw = x1 - x0;
       const int rh = y1 - y0;

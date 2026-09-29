@@ -1,4 +1,4 @@
-part of 'helper_state.dart';
+﻿part of 'helper_state.dart';
 
 /// helper `status …` 行 → 相位 / COM / 引擎 / 显示意图。
 mixin _HelperStatusHandlers on _HelperStateBase {
@@ -253,6 +253,7 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendWallComp(bool enabled);
   void sendWallColor(String rrggbb);
   void sendLetterboxDetect(bool enabled);
-  /// 校准蒙版期间硬关 letterbox；不落盘。
+  void sendSubtitleDetect(bool enabled);
+  /// 校准蒙版期间硬关 letterbox 与字幕裁切；不落盘。
   void sendLetterboxHold(bool hold);
 }

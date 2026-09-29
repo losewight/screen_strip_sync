@@ -51,6 +51,8 @@ struct HelperConfig {
   char wallColor[8] = "";
   // 智能忽略电影黑边（letterbox）；默认开
   bool letterboxDetect = true;
+  // 智能忽略字幕（map 底部裁切）；默认开
+  bool subtitleDetect = true;
   // 跟色默认档：<1 时 load 套用近黑/饱和度/letterbox 等推荐值一次（COM/map 等不动）
   int mapDefaultsRev = 1;
 };
@@ -88,6 +90,7 @@ void config_set_wall_comp(bool on);
 // 6 位 hex；非法返回 false；空串清除墙色
 bool config_set_wall_color(const char *rrggbb);
 void config_set_letterbox_detect(bool on);
+void config_set_subtitle_detect(bool on);
 void config_set_last_connected_com(const char *com);
 void config_set_serial_configured(bool on);
 void config_clear_map();

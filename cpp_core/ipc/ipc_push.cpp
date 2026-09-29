@@ -1,4 +1,4 @@
-// 必须先于 windows.h
+﻿// 必须先于 windows.h
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -170,6 +170,7 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg wall_comp %d\n", c.wallCompEnabled ? 1 : 0);
   send_line(client, "cfg wall_color %s\n", c.wallColor);
   send_line(client, "cfg letterbox_detect %d\n", c.letterboxDetect ? 1 : 0);
+  send_line(client, "cfg subtitle_detect %d\n", c.subtitleDetect ? 1 : 0);
 
   if (!c.hasMap) {
     send_line(client, "cfg map default\n");

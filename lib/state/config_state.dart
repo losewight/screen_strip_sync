@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -95,6 +95,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
 
   void setLetterboxDetect(bool value) {
     state = state.copyWith(letterboxDetect: value);
+  }
+
+  void setSubtitleDetect(bool value) {
+    state = state.copyWith(subtitleDetect: value);
   }
 
   void setWallColor(String hex) {

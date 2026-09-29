@@ -1,4 +1,4 @@
-#include "config_json.h"
+﻿#include "config_json.h"
 
 #include "config_clamp.h"
 
@@ -476,6 +476,11 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_bool(p, &b))
         return false;
       cfg->letterboxDetect = b;
+    } else if (strcmp(key, "subtitleDetect") == 0) {
+      bool b = false;
+      if (!parse_bool(p, &b))
+        return false;
+      cfg->subtitleDetect = b;
     } else if (strcmp(key, "mapDefaultsRev") == 0) {
       double v = 0;
       if (!parse_number(p, &v))
@@ -640,6 +645,9 @@ std::string config_format_json(const HelperConfig &c) {
   o.append(",\n");
   o.append("  \"letterboxDetect\": ");
   o.append(c.letterboxDetect ? "true" : "false");
+  o.append(",\n");
+  o.append("  \"subtitleDetect\": ");
+  o.append(c.subtitleDetect ? "true" : "false");
   o.append(",\n");
   snprintf(num, sizeof(num), "  \"mapDefaultsRev\": %d,\n", c.mapDefaultsRev);
   o.append(num);

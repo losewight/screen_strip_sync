@@ -165,7 +165,7 @@ class ScreenSyncPanel extends ConsumerWidget {
                           const InfoHint(
                             message:
                                 '自动检测上下黑边，把采样框按竖直方向\n'
-                                '等比映射进有效画面；角标/字幕不驱动抖动。\n'
+                                '等比映射进有效画面。\n'
                                 '与「暗部过滤」无关；校准时自动暂停。',
                           ),
                           const SizedBox(width: AppSpacing.compact),
@@ -175,6 +175,30 @@ class ScreenSyncPanel extends ConsumerWidget {
                                 ? (v) {
                                     config.setLetterboxDetect(v);
                                     notifier.sendLetterboxDetect(v);
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: SchemeParamLabel('智能忽略字幕'),
+                          ),
+                          const InfoHint(
+                            message:
+                                '自动检测内容区底部字幕带，把跟色取色框下沿上收，\n'
+                                '避免白字/半透明条染灯；在黑边映射之后生效。\n'
+                                '仅屏幕跟色；校准时自动暂停。',
+                          ),
+                          const SizedBox(width: AppSpacing.compact),
+                          Win11Switch(
+                            value: cfg.subtitleDetect,
+                            onChanged: canEdit
+                                ? (v) {
+                                    config.setSubtitleDetect(v);
+                                    notifier.sendSubtitleDetect(v);
                                   }
                                 : null,
                           ),

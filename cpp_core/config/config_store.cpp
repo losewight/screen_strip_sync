@@ -1,4 +1,4 @@
-#include "config_store.h"
+﻿#include "config_store.h"
 
 #include "app_paths.h"
 #include "config_clamp.h"
@@ -10,6 +10,7 @@
 #include "light_engine.h"
 #include "wall_comp.h"
 #include "letterbox_detect.h"
+#include "subtitle_detect.h"
 
 #include <atomic>
 #include <cstdio>
@@ -233,6 +234,7 @@ void config_apply() {
   else
     engine_clear_wall_color();
   letterbox_set_enabled(c.letterboxDetect);
+  subtitle_set_enabled(c.subtitleDetect);
   // 为什么：必须在 dxgi_init 之前生效；ACCESS_LOST 重建读的是这份 wanted
   {
     char capture[64];
@@ -552,6 +554,18 @@ void config_set_letterbox_detect(bool on) {
   }
   // enable/inset 日志在 letterbox_set_enabled
   letterbox_set_enabled(on);
+  ensure_saver_started();
+}
+
+void config_set_subtitle_detect(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (g_cfg.subtitleDetect == on)
+      return;
+    g_cfg.subtitleDetect = on;
+    mark_dirty_unlocked();
+  }
+  subtitle_set_enabled(on);
   ensure_saver_started();
 }
 

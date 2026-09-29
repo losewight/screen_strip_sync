@@ -1,4 +1,4 @@
-// 必须先于 windows.h
+﻿// 必须先于 windows.h
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -12,6 +12,7 @@
 #include "letterbox_detect.h"
 #include "light_engine.h"
 #include "serial_port.h"
+#include "subtitle_detect.h"
 
 #include <cmath>
 #include <cstdio>
@@ -134,6 +135,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       return DispatchResult::Continue;
     letterbox_set_hard_disable(false);
     letterbox_reset();
+    subtitle_set_hard_disable(false);
+    subtitle_reset();
     engine_start(*serial);
     engine_set_intent_engine();
     config_set_last_scene("engine");
@@ -146,6 +149,8 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       return DispatchResult::Continue;
     letterbox_set_hard_disable(false);
     letterbox_reset();
+    subtitle_set_hard_disable(false);
+    subtitle_reset();
     engine_start_region(*serial);
     engine_set_intent_region();
     config_set_last_scene("region");
@@ -437,6 +442,7 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       printf("cmd=highlight %ld\n", v);
       // 为什么：worker 仍跑时高亮会与 RGB 帧 0ms 连写，校准段会被下一帧冲掉
       letterbox_set_hard_disable(true);
+      subtitle_set_hard_disable(true);
       engine_stop();
       send_highlight(*serial, (int)v);
     }
@@ -590,9 +596,22 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
       ++p;
     if ((*p == '0' || *p == '1') && p[1] == '\0') {
       letterbox_set_hard_disable(*p == '1');
+      subtitle_set_hard_disable(*p == '1');
       printf("cmd=set letterbox_hold %c\n", *p);
     } else {
       printf("bad set letterbox_hold: [%s]\n", p);
+    }
+    return DispatchResult::Continue;
+  }
+  if (strncmp(line, "set subtitle_detect ", 20) == 0) {
+    const char *p = line + 20;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      config_set_subtitle_detect(*p == '1');
+      printf("cmd=set subtitle_detect %c\n", *p);
+    } else {
+      printf("bad set subtitle_detect: [%s]\n", p);
     }
     return DispatchResult::Continue;
   }
