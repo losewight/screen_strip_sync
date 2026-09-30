@@ -803,8 +803,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
     const bool use_rms = g_sample_algo.load() != 'm';
     // FP16 更贵：略降抽点（E4）
     const int dens = (Reader::kBpp > 4) ? 12 : 16;
-    int lb_bottom = 0;
-    letterbox_get_inset(nullptr, &lb_bottom);
+    int lb_top = 0, lb_bottom = 0;
+    letterbox_get_inset(&lb_top, &lb_bottom);
     int sub_crop = 0;
     subtitle_get_bottom_crop(&sub_crop);
     for (int i = 0; i < kSegmentCount; ++i) {
@@ -825,13 +825,37 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         y1 = (int)desc.Height;
       // 字幕带：内容底再上收；与 letterbox Y 映射串联
       const int y_limit = (int)desc.Height - lb_bottom - sub_crop;
+      const int h_orig = y1 - y0;
       if (y1 > y_limit)
         y1 = y_limit;
       if (y1 <= y0) {
-        out_rgb[i][0] = 0;
-        out_rgb[i][1] = 0;
-        out_rgb[i][2] = 0;
-        continue;
+        // 完全裁切：均分拓回原高；下沿不够的余量补到上沿
+        int cy0 = y_limit;
+        int cy1 = y_limit;
+        int need = h_orig;
+        if (need < 1)
+          need = 1;
+        int down = need / 2;
+        int up = need - down;
+        const int room_down = y_limit - cy1;
+        if (down > room_down) {
+          up += down - room_down;
+          down = room_down;
+        }
+        cy1 += down;
+        cy0 -= up;
+        if (cy0 < lb_top)
+          cy0 = lb_top;
+        y0 = cy0;
+        y1 = cy1;
+        if (y1 > y_limit)
+          y1 = y_limit;
+        if (y1 <= y0) {
+          out_rgb[i][0] = 0;
+          out_rgb[i][1] = 0;
+          out_rgb[i][2] = 0;
+          continue;
+        }
       }
 
       const int rw = x1 - x0;
