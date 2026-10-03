@@ -4,7 +4,7 @@
 ; Flutter 仅支持 x64，本安装包 ArchitecturesAllowed=x64compatible。
 
 #define MyAppName "Screen Strip Sync"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Screen Strip Sync"
 #define MyAppExeName "helper.exe"
 #define MyAppArch "x64"
@@ -64,11 +64,25 @@ Type: filesandordirs; Name: "{app}\data"
 [Code]
 const
   AppMutexName = 'Global\ScreenStripSyncHelper';
+  UiMutexName = 'Local\ScreenStripSyncUi';
+  UiWindowTitle = 'Screen Strip Sync';
   IpcPort = 9527;
+  WM_CLOSE = $0010;
+
+{ lpClassName=0 表示 NULL，按窗口标题查找 }
+function FindWindowW(lpClassName: LongInt; lpWindowName: string): HWND;
+  external 'FindWindowW@user32.dll stdcall';
+function PostMessageW(hWnd: HWND; Msg: UINT; wParam, lParam: LongInt): BOOL;
+  external 'PostMessageW@user32.dll stdcall';
 
 function IsAppRunning: Boolean;
 begin
   Result := CheckForMutexes(AppMutexName);
+end;
+
+function IsUiRunning: Boolean;
+begin
+  Result := CheckForMutexes(UiMutexName);
 end;
 
 function IsSetupOrUninstallSilent(const ForUninstall: Boolean): Boolean;
@@ -77,6 +91,42 @@ begin
     Result := UninstallSilent
   else
     Result := WizardSilent;
+end;
+
+{ 先让 Flutter 走关窗路径（bye + exit），勿先 IPC quit：
+  新连接会踢掉 UI，前端收不到 ui quit 又会把 helper 拉起。IPC 本身不改。 }
+function RequestUiClose: Boolean;
+var
+  Wnd: HWND;
+begin
+  Result := True;
+  if not IsUiRunning then
+    Exit;
+  Wnd := FindWindowW(0, UiWindowTitle);
+  if Wnd = 0 then
+  begin
+    Result := False;
+    Exit;
+  end;
+  Result := PostMessageW(Wnd, WM_CLOSE, 0, 0);
+end;
+
+function WaitUntilUiExits(TimeoutMs: Integer): Boolean;
+var
+  Elapsed: Integer;
+begin
+  Elapsed := 0;
+  while IsUiRunning do
+  begin
+    if Elapsed >= TimeoutMs then
+    begin
+      Result := False;
+      Exit;
+    end;
+    Sleep(100);
+    Elapsed := Elapsed + 100;
+  end;
+  Result := True;
 end;
 
 { 与托盘「退出」相同：向 helper 发 IPC quit，走 helper_shutdown，不强杀 }
@@ -107,7 +157,7 @@ begin
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
-function WaitUntilAppExits(TimeoutMs: Integer): Boolean;
+function WaitUntilHelperExits(TimeoutMs: Integer): Boolean;
 var
   Elapsed: Integer;
 begin
@@ -125,13 +175,13 @@ begin
   Result := True;
 end;
 
-{ 确认后 IPC quit；静默模式直接 quit。失败则请用户手动关，绝不 taskkill。 }
+{ 确认后：先关 UI，再 IPC quit helper。失败则请用户手动关，绝不 taskkill。 }
 function ConfirmAndCloseRunningApp(const ForUninstall: Boolean): Boolean;
 var
   Prompt: String;
 begin
   Result := True;
-  if not IsAppRunning then
+  if (not IsAppRunning) and (not IsUiRunning) then
     Exit;
 
   if not IsSetupOrUninstallSilent(ForUninstall) then
@@ -152,6 +202,31 @@ begin
     end;
   end;
 
+  if IsUiRunning then
+  begin
+    if not RequestUiClose then
+    begin
+      if not IsSetupOrUninstallSilent(ForUninstall) then
+        MsgBox(
+          '无法关闭 Screen Strip Sync 界面。请先关闭窗口或从托盘选择「退出」后重试。',
+          mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    if not WaitUntilUiExits(15000) then
+    begin
+      if not IsSetupOrUninstallSilent(ForUninstall) then
+        MsgBox(
+          'Screen Strip Sync 界面尚未退出。请先关闭窗口或从托盘选择「退出」后重试。',
+          mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+
+  if not IsAppRunning then
+    Exit;
+
   if not SendIpcQuit then
   begin
     if not IsSetupOrUninstallSilent(ForUninstall) then
@@ -162,7 +237,7 @@ begin
     Exit;
   end;
 
-  if not WaitUntilAppExits(15000) then
+  if not WaitUntilHelperExits(15000) then
   begin
     if not IsSetupOrUninstallSilent(ForUninstall) then
       MsgBox(
