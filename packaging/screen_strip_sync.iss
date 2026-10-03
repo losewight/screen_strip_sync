@@ -33,10 +33,10 @@ WizardStyle=modern
 DefaultDialogFontName=Microsoft YaHei UI
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
+; 运行中：确认后走 IPC quit（与托盘退出同路径）；CloseApplications 仅作文件占用兜底，不 force
 CloseApplications=yes
 CloseApplicationsFilter=helper.exe,screen_strip_sync.exe
 SetupLogging=yes
-AppMutex=Global\ScreenStripSyncHelper
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
@@ -62,6 +62,135 @@ Type: files; Name: "{app}\zeeray_crash.log"
 Type: filesandordirs; Name: "{app}\data"
 
 [Code]
+const
+  AppMutexName = 'Global\ScreenStripSyncHelper';
+  IpcPort = 9527;
+
+function IsAppRunning: Boolean;
+begin
+  Result := CheckForMutexes(AppMutexName);
+end;
+
+function IsSetupOrUninstallSilent(const ForUninstall: Boolean): Boolean;
+begin
+  if ForUninstall then
+    Result := UninstallSilent
+  else
+    Result := WizardSilent;
+end;
+
+{ 与托盘「退出」相同：向 helper 发 IPC quit，走 helper_shutdown，不强杀 }
+function SendIpcQuit: Boolean;
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+  Script: String;
+begin
+  ScriptPath := ExpandConstant('{tmp}\sss_ipc_quit.ps1');
+  Script :=
+    '$ErrorActionPreference = ''Stop''' + #13#10 +
+    '$c = New-Object System.Net.Sockets.TcpClient' + #13#10 +
+    '$c.Connect(''127.0.0.1'', ' + IntToStr(IpcPort) + ')' + #13#10 +
+    '$w = New-Object System.IO.StreamWriter($c.GetStream())' + #13#10 +
+    '$w.Write((''quit'' + [char]10))' + #13#10 +
+    '$w.Flush()' + #13#10 +
+    'Start-Sleep -Milliseconds 200' + #13#10 +
+    '$c.Close()' + #13#10;
+  if not SaveStringToFile(ScriptPath, Script, False) then
+  begin
+    Result := False;
+    Exit;
+  end;
+  Result :=
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function WaitUntilAppExits(TimeoutMs: Integer): Boolean;
+var
+  Elapsed: Integer;
+begin
+  Elapsed := 0;
+  while IsAppRunning do
+  begin
+    if Elapsed >= TimeoutMs then
+    begin
+      Result := False;
+      Exit;
+    end;
+    Sleep(100);
+    Elapsed := Elapsed + 100;
+  end;
+  Result := True;
+end;
+
+{ 确认后 IPC quit；静默模式直接 quit。失败则请用户手动关，绝不 taskkill。 }
+function ConfirmAndCloseRunningApp(const ForUninstall: Boolean): Boolean;
+var
+  Prompt: String;
+begin
+  Result := True;
+  if not IsAppRunning then
+    Exit;
+
+  if not IsSetupOrUninstallSilent(ForUninstall) then
+  begin
+    if ForUninstall then
+      Prompt :=
+        '卸载程序检测到 Screen Strip Sync 当前正在运行。' + #13#10#13#10 +
+        '是否确认结束进程并继续卸载？'
+    else
+      Prompt :=
+        '安装程序检测到 Screen Strip Sync 当前正在运行。' + #13#10#13#10 +
+        '是否确认结束进程并继续安装？';
+
+    if MsgBox(Prompt, mbConfirmation, MB_OKCANCEL) <> IDOK then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+
+  if not SendIpcQuit then
+  begin
+    if not IsSetupOrUninstallSilent(ForUninstall) then
+      MsgBox(
+        '无法通知 Screen Strip Sync 退出。请从托盘选择「退出」后重试。',
+        mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+
+  if not WaitUntilAppExits(15000) then
+  begin
+    if not IsSetupOrUninstallSilent(ForUninstall) then
+      MsgBox(
+        'Screen Strip Sync 尚未退出。请从托盘选择「退出」后重试。',
+        mbError, MB_OK);
+    Result := False;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  Result := ConfirmAndCloseRunningApp(False);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  NeedsRestart := False;
+  Result := '';
+  { 向导期间若用户又启动了程序，安装前再确认一次 }
+  if not ConfirmAndCloseRunningApp(False) then
+    Result := '已取消安装：未结束正在运行的程序。';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := ConfirmAndCloseRunningApp(True);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
