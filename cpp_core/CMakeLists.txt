@@ -14,6 +14,8 @@ add_executable(helper WIN32
   app/helper_log.cpp
   app/helper_lifecycle.cpp
   config/config_store.cpp
+  config/config_apply.cpp
+  config/config_persist.cpp
   config/config_json.cpp
   config/autostart.cpp
   engine/serial_port.cpp
@@ -26,7 +28,11 @@ add_executable(helper WIN32
   ipc/ipc_loop.cpp
   ipc/ipc_push.cpp
   ipc/ipc_dispatch.cpp
+  ipc/ipc_dispatch_set.cpp
+  ipc/ipc_dispatch_capture.cpp
   capture/dxgi_capture.cpp
+  capture/dxgi_output.cpp
+  capture/dxgi_map_sample.cpp
   capture/dxgi_region.cpp
   capture/letterbox_detect.cpp
   capture/subtitle_detect.cpp

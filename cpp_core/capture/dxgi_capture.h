@@ -20,7 +20,6 @@ DxgiErr dxgi_init();
 void dxgi_shutdown();
 // 休眠拆资源后为 false；ensure 时据此决定是否再 init
 bool dxgi_is_ready();
-DxgiErr dxgi_grab_one_frame(UINT timeout_ms);
 // out_rgb[i]={R,G,B}。rects 非空：按矩形步进抽点+近黑 luma 丢弃+rms/mean；
 // nullptr：顶边均分 + 近黑 luma 丢弃 + blur；count==0 输出黑。
 DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],

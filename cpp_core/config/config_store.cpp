@@ -1,150 +1,22 @@
-﻿#include "config_store.h"
+﻿#include "config_store_internal.h"
 
-#include "app_paths.h"
 #include "config_clamp.h"
-#include "config_json.h"
 
 #include "autostart.h"
-#include "dxgi_capture.h"
 #include "helper_lifecycle.h"
-#include "light_engine.h"
-#include "wall_comp.h"
 #include "letterbox_detect.h"
+#include "light_engine.h"
 #include "subtitle_detect.h"
+#include "wall_comp.h"
 
-#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
-#include <string>
-#include <thread>
-#include <vector>
 
 #include <windows.h>
 
-static std::mutex g_mu;
-static HelperConfig g_cfg{};
-static std::atomic<bool> g_dirty{false};
-static std::atomic<ULONGLONG> g_last_change_ms{0};
-static std::atomic<bool> g_saver_stop{false};
-static std::atomic<bool> g_saver_started{false};
-static std::thread g_saver;
-
-// ---------------------------------------------------------------------------
-// path
-// ---------------------------------------------------------------------------
-
-bool config_path(char *out, size_t cap) { return config_file_path(out, cap); }
-
-static bool read_config_file(const char *path, HelperConfig *out,
-                             bool *parsed_ok, bool *saw_serial_configured) {
-  *parsed_ok = false;
-  if (saw_serial_configured)
-    *saw_serial_configured = false;
-  FILE *fp = nullptr;
-  if (fopen_s(&fp, path, "rb") != 0 || !fp)
-    return false;
-  if (fseek(fp, 0, SEEK_END) != 0) {
-    fclose(fp);
-    return false;
-  }
-  long sz = ftell(fp);
-  if (sz < 0 || sz > 256 * 1024) {
-    fclose(fp);
-    return false;
-  }
-  rewind(fp);
-  std::vector<char> buf((size_t)sz + 1);
-  size_t rd = fread(buf.data(), 1, (size_t)sz, fp);
-  fclose(fp);
-  buf[rd] = '\0';
-  if (!config_parse_json(buf.data(), out, saw_serial_configured)) {
-    *out = HelperConfig{};
-    if (saw_serial_configured)
-      *saw_serial_configured = false;
-    return true; // 文件在，但解析失败 → 默认
-  }
-  *parsed_ok = true;
-  return true;
-}
-
-static bool write_config_file(const HelperConfig &c) {
-  char path[MAX_PATH];
-  if (!config_path(path, sizeof(path))) {
-    printf("config_path failed\n");
-    return false;
-  }
-  std::string json = config_format_json(c);
-  // 为什么：先写临时文件再替换，避免写到一半崩溃留下半截 JSON
-  char tmp[MAX_PATH];
-  snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-  FILE *fp = nullptr;
-  if (fopen_s(&fp, tmp, "wb") != 0 || !fp) {
-    printf("config write open failed\n");
-    return false;
-  }
-  size_t n = fwrite(json.data(), 1, json.size(), fp);
-  fclose(fp);
-  if (n != json.size()) {
-    DeleteFileA(tmp);
-    printf("config write short\n");
-    return false;
-  }
-  if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) {
-    // 回退：直接覆盖
-    if (fopen_s(&fp, path, "wb") != 0 || !fp) {
-      DeleteFileA(tmp);
-      printf("config replace failed\n");
-      return false;
-    }
-    fwrite(json.data(), 1, json.size(), fp);
-    fclose(fp);
-    DeleteFileA(tmp);
-  }
-  printf("config saved\n");
-  return true;
-}
-
-static void mark_dirty_unlocked() {
-  g_dirty.store(true);
-  g_last_change_ms.store(GetTickCount64());
-}
-
-static void ensure_saver_started() {
-  bool expected = false;
-  if (!g_saver_started.compare_exchange_strong(expected, true))
-    return;
-  g_saver_stop.store(false);
-  g_saver = std::thread([] {
-    while (!g_saver_stop.load()) {
-      Sleep(200);
-      if (!g_dirty.load())
-        continue;
-      ULONGLONG last = g_last_change_ms.load();
-      if (GetTickCount64() - last < 1000)
-        continue;
-      HelperConfig snap;
-      {
-        std::lock_guard<std::mutex> lock(g_mu);
-        if (!g_dirty.load())
-          continue;
-        snap = g_cfg;
-        // 为什么：先清脏再写；失败必须挂回，否则丢盘且不再重试
-        g_dirty.store(false);
-      }
-      if (!write_config_file(snap)) {
-        std::lock_guard<std::mutex> lock(g_mu);
-        g_dirty.store(true);
-        // 为什么：推迟下一轮，避免磁盘满时 200ms 空转打满日志
-        g_last_change_ms.store(GetTickCount64());
-      }
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// public API
-// ---------------------------------------------------------------------------
+std::mutex g_mu;
+HelperConfig g_cfg{};
 
 void config_load() {
   HelperConfig fresh{};
@@ -205,102 +77,6 @@ void config_load() {
   }
   if (inferred || map_defaults)
     ensure_saver_started();
-}
-
-void config_apply() {
-  HelperConfig c;
-  {
-    std::lock_guard<std::mutex> lock(g_mu);
-    c = g_cfg;
-  }
-
-  engine_set_alpha(c.emaAlpha);
-  engine_set_near_black(c.nearBlack);
-  engine_set_blur(c.blurStep);
-  engine_set_saturation(c.saturation);
-  engine_set_saturation_algo(c.saturationAlgo);
-  engine_set_sample_algo(c.sampleAlgo);
-  engine_set_near_black_luma(c.nearBlackLuma);
-  engine_set_mode(c.mode);
-  engine_set_region_algo(c.regionAlgo);
-  engine_set_region_blur(c.regionBlur);
-  engine_set_region_smooth(c.regionSmooth);
-  engine_set_region_dark(c.regionDark);
-  engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
-                         c.regionBBox.h);
-  engine_set_wall_comp(c.wallCompEnabled);
-  if (c.wallColor[0] != '\0')
-    engine_set_wall_color(c.wallColor);
-  else
-    engine_clear_wall_color();
-  letterbox_set_enabled(c.letterboxDetect);
-  subtitle_set_enabled(c.subtitleDetect);
-  // 为什么：必须在 dxgi_init 之前生效；ACCESS_LOST 重建读的是这份 wanted
-  {
-    char capture[64];
-    clamp_capture_output(c.captureOutput, capture, (int)sizeof(capture));
-    dxgi_set_capture_output(capture);
-    std::lock_guard<std::mutex> lock(g_mu);
-    snprintf(g_cfg.captureOutput, sizeof(g_cfg.captureOutput), "%s", capture);
-  }
-  if (!engine_set_com(c.comPort)) {
-    printf("config_apply: bad com [%s], fallback COM10\n", c.comPort);
-    engine_set_com("COM10");
-    std::lock_guard<std::mutex> lock(g_mu);
-    snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "COM10");
-  } else {
-    char norm[16];
-    engine_get_com(norm, sizeof(norm));
-    std::lock_guard<std::mutex> lock(g_mu);
-    snprintf(g_cfg.comPort, sizeof(g_cfg.comPort), "%s", norm);
-  }
-  helper_set_sleep_sync(c.autoSleepSync);
-  helper_set_screen_off_sync(c.screenOffSync);
-
-  if (c.hasMap) {
-    char payload[512];
-    int n = 0;
-    bool map_ok = true;
-    for (int i = 0; i < kSegmentCount; ++i) {
-      int x0 = (int)(c.map[i].x0 * 100.f + 0.5f);
-      int y0 = (int)(c.map[i].y0 * 100.f + 0.5f);
-      int x1 = (int)(c.map[i].x1 * 100.f + 0.5f);
-      int y1 = (int)(c.map[i].y1 * 100.f + 0.5f);
-      if (x0 < 0)
-        x0 = 0;
-      if (y0 < 0)
-        y0 = 0;
-      if (x1 > 100)
-        x1 = 100;
-      if (y1 > 100)
-        y1 = 100;
-      int w = snprintf(payload + n, sizeof(payload) - (size_t)n,
-                       "%s%d,%d,%d,%d", (i == 0 ? "" : ";"), x0, y0, x1, y1);
-      if (w < 0 || n + w >= (int)sizeof(payload)) {
-        printf("config_apply: map payload overflow\n");
-        map_ok = false;
-        break;
-      }
-      n += w;
-    }
-    if (map_ok && !engine_set_map_from_ipc(payload)) {
-      printf("config_apply: map reject, clear\n");
-      map_ok = false;
-    }
-    if (!map_ok) {
-      // 为什么：引擎已回退顶边均分；内存/磁盘若仍 hasMap，会双真相并写回毒表
-      engine_clear_map();
-      {
-        std::lock_guard<std::mutex> lock(g_mu);
-        g_cfg.hasMap = false;
-        mark_dirty_unlocked();
-      }
-      ensure_saver_started();
-    }
-  } else {
-    engine_clear_map();
-  }
-  printf("config_apply done\n");
 }
 
 void config_copy(HelperConfig *out) {
@@ -700,36 +476,4 @@ void config_sync_map_from_engine() {
     mark_dirty_unlocked();
   }
   ensure_saver_started();
-}
-
-void config_request_save() {
-  {
-    std::lock_guard<std::mutex> lock(g_mu);
-    mark_dirty_unlocked();
-  }
-  ensure_saver_started();
-}
-
-void config_flush() {
-  // 调用约定：saver 已停（见 config_shutdown），否则可能与 debounce 写竞态
-  HelperConfig snap;
-  {
-    std::lock_guard<std::mutex> lock(g_mu);
-    snap = g_cfg;
-    g_dirty.store(false);
-  }
-  if (!write_config_file(snap)) {
-    std::lock_guard<std::mutex> lock(g_mu);
-    g_dirty.store(true);
-  }
-}
-
-void config_shutdown() {
-  // 为什么：必须先停 saver 再 flush，否则旧快照可能盖掉最新落盘
-  g_saver_stop.store(true);
-  if (g_saver_started.load() && g_saver.joinable())
-    g_saver.join();
-  g_saver_started.store(false);
-  if (g_dirty.load())
-    config_flush();
 }

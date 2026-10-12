@@ -43,5 +43,11 @@ void push_config_snapshot(SOCKET client);
 
 DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client);
 
+// ipc_dispatch_set.cpp：配置类 set 命令；匹配则处理并返回 true。
+bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client);
+
+// ipc_dispatch_capture.cpp：换屏热切换（停引擎 → 重建 DXGI）。
+void cmd_set_capture_output(const char *wanted, HANDLE *serial, SOCKET client);
+
 void drop_client();
 void close_listen_sock();
