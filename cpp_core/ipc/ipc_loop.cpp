@@ -258,6 +258,12 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
       }
       pending_clear();
       pending_push(leftover, leftover_n);
+      // 为什么：UI 卡死时 send 会永久阻塞托盘/boot；1s 写超时 + send_raw 超时后 shutdown
+      {
+        DWORD snd_ms = 1000;
+        setsockopt(neu, SOL_SOCKET, SO_SNDTIMEO, (const char *)&snd_ms,
+                   sizeof(snd_ms));
+      }
       g_client_sock = neu;
       printf("client connected\n");
       push_config_snapshot(neu);

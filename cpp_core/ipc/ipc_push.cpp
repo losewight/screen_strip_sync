@@ -5,6 +5,7 @@
 #include "config_store.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
+#include "helper_log.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
@@ -12,10 +13,25 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
+
+// 为什么：托盘 / boot / resume / reconnect 与 IPC 主线程可并发 push；串行化防行交错
+static std::mutex g_send_mu;
 
 void send_raw(SOCKET client, const char *buf, int n) {
-  if (n > 0 && client != INVALID_SOCKET)
-    send(client, buf, n, 0);
+  if (n <= 0 || client == INVALID_SOCKET)
+    return;
+  std::lock_guard<std::mutex> lock(g_send_mu);
+  const int sent = send(client, buf, n, 0);
+  if (sent == SOCKET_ERROR) {
+    const int err = WSAGetLastError();
+    if (err == WSAETIMEDOUT) {
+      // 为什么：超时后 socket 状态不定，shutdown 让 recv 侧走 PeerGone / drop_client
+      static const char kKey[] = "ipc.send.timeout";
+      helper_log_rate(kKey, 5000, "ipc send timeout; shutdown socket\n");
+      shutdown(client, SD_BOTH);
+    }
+  }
 }
 
 void send_line(SOCKET client, const char *fmt, ...) {
@@ -287,6 +303,17 @@ bool ipc_push_serial_fail() {
   send_display_status(cs);
   send_capture_status(cs);
   printf("ipc: pushed serial fail\n");
+  return true;
+}
+
+bool ipc_push_reconnect_ok() {
+  SOCKET cs = g_client_sock;
+  if (cs == INVALID_SOCKET)
+    return false;
+  send_status(cs, "reconnect_ok");
+  push_runtime_status(cs, true);
+  push_config_lines(cs);
+  printf("ipc: pushed reconnect ok\n");
   return true;
 }
 

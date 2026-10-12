@@ -152,54 +152,11 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     return DispatchResult::Continue;
   }
   if (strcmp(line, "reconnect") == 0) {
-    // 为什么：启动 boot 线程可能还在 try_serial；并行开口会双开 COM
-    helper_boot_serial_wait();
+    // 为什么：串口重试可堵十几秒；丢到 boot 同槽后台线程，IPC 立即返回
     if (helper_is_shutting_down())
       return DispatchResult::Continue;
-    engine_stop();
     send_status(client, "reconnecting");
-    if (*serial != INVALID_HANDLE_VALUE) {
-      close_com(*serial);
-      *serial = INVALID_HANDLE_VALUE;
-    }
-    // 为什么：休眠 teardown 关过 DXGI；重连后追色要能抓屏
-    engine_ensure_dxgi();
-    HANDLE neu = INVALID_HANDLE_VALUE;
-    bool ok = false;
-    for (int i = 1; i <= 10; ++i) {
-      if (try_serial_ready(&neu)) {
-        ok = true;
-        printf("reconnect try %d ok\n", i);
-        break;
-      }
-      printf("reconnect try %d failed\n", i);
-      Sleep(500);
-    }
-    if (ok) {
-      *serial = neu;
-      helper_note_resources_ready();
-      printf("cmd=reconnect ok\n");
-      char com[16];
-      engine_get_com(com, sizeof(com));
-      config_set_last_connected_com(com);
-      config_set_serial_configured(true);
-      DisplayIntent intent = engine_get_display_intent();
-      if (intent.kind == DisplayIntentKind::Idle) {
-        HelperConfig c{};
-        config_copy(&c);
-        parse_last_scene(c.lastScene, &intent);
-      }
-      apply_display_intent(*serial, intent);
-      send_status(client, "reconnect_ok");
-      push_runtime_status(client, true);
-      ipc_push_config_snapshot();
-    } else {
-      printf("cmd=reconnect failed\n");
-      engine_set_intent_idle();
-      send_status(client, "reconnect_fail");
-      send_engine_status(client);
-      send_display_status(client);
-    }
+    helper_reconnect_serial_async();
     return DispatchResult::Continue;
   }
   printf("unknown cmd: [%s]\n", line);

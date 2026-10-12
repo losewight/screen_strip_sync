@@ -30,10 +30,12 @@ static std::mutex g_resume_thread_mu;
 static std::thread g_resume_worker;
 static std::atomic_bool g_resuming{false};
 
-// 启动期串口 worker：与 resume 对称，shutdown / reconnect 必须 wait/join
+// 启动期串口 worker：与 resume 对称；boot / reconnect 共用同一槽
 static std::mutex g_boot_thread_mu;
 static std::thread g_boot_worker;
 static std::atomic_bool g_boot_busy{false};
+// 为什么：boot/reconnect 进行中再点 reconnect 不能丢；结尾再跑一轮
+static std::atomic_bool g_reconnect_pending{false};
 
 HANDLE *helper_serial() { return &g_serial_handle; }
 
@@ -285,23 +287,139 @@ void helper_resume_from_sleep() {
   g_resume_worker = std::thread(resume_worker_body);
 }
 
-static void boot_worker_body(HelperConfig boot_cfg) {
-  printf("boot: begin serialConfigured=%d\n",
-         boot_cfg.serialConfigured ? 1 : 0);
+// 一次 reconnect：停引擎、关旧口、重开、恢复 intent；可被 shutdown 打断
+static void reconnect_once() {
+  printf("reconnect: begin\n");
 
-  auto finish = []() { g_boot_busy.store(false); };
+  engine_stop();
+  HANDLE *p = helper_serial();
+  if (p != nullptr && *p != INVALID_HANDLE_VALUE) {
+    close_com(*p);
+    *p = INVALID_HANDLE_VALUE;
+  }
+  // 为什么：休眠 teardown 关过 DXGI；重连后追色要能抓屏
+  engine_ensure_dxgi();
 
-  auto abort_owned = [&](HANDLE neu) {
+  HANDLE neu = INVALID_HANDLE_VALUE;
+  bool ok = false;
+  for (int i = 1; i <= 10; ++i) {
+    if (g_shutting_down.load())
+      break;
+    if (try_serial_ready(&neu)) {
+      ok = true;
+      printf("reconnect: try %d ok\n", i);
+      break;
+    }
+    printf("reconnect: try %d failed\n", i);
+    sleep_interruptible_shutdown(500);
+  }
+
+  if (!ok) {
+    printf("reconnect: failed\n");
     if (neu != INVALID_HANDLE_VALUE) {
       power_off(neu);
       close_com(neu);
     }
-    finish();
+    if (!g_shutting_down.load()) {
+      engine_set_intent_idle();
+      if (ipc_has_client())
+        ipc_push_serial_fail();
+    }
+    return;
+  }
+
+  // 为什么：写回前必须再看退出旗标；已 shutdown 则本线程负责灭灯关口，禁止覆盖 INVALID
+  if (g_shutting_down.load()) {
+    printf("reconnect: shutting down, drop new handle\n");
+    if (neu != INVALID_HANDLE_VALUE) {
+      power_off(neu);
+      close_com(neu);
+    }
+    return;
+  }
+
+  if (p != nullptr)
+    *p = neu;
+
+  if (g_shutting_down.load()) {
+    // shutdown 正在 join 我们，随后会 power_off+close；这里不要双关
+    printf("reconnect: wrote handle but shutdown raced; yield to shutdown\n");
+    return;
+  }
+
+  helper_note_resources_ready();
+  char com[16];
+  engine_get_com(com, sizeof(com));
+  config_set_last_connected_com(com);
+  config_set_serial_configured(true);
+
+  DisplayIntent intent = engine_get_display_intent();
+  if (intent.kind == DisplayIntentKind::Idle) {
+    HelperConfig c{};
+    config_copy(&c);
+    parse_last_scene(c.lastScene, &intent);
+  }
+  apply_display_intent(neu, intent);
+
+  if (!g_shutting_down.load() && ipc_has_client())
+    ipc_push_reconnect_ok();
+  printf("reconnect: done\n");
+}
+
+// 为什么：在 g_boot_thread_mu 下清 busy / 看 pending，禁止 worker 内 spawn+join 自己
+// push_boot_ready：boot 成功且无 pending 时推 ready；boot 失败且无 pending 推 fail
+enum class SerialExitPush { None, Ready, Fail };
+
+static void serial_worker_exit(SerialExitPush push) {
+  for (;;) {
+    bool run_reconnect = false;
+    SerialExitPush do_push = SerialExitPush::None;
+    {
+      std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+      if (g_shutting_down.load()) {
+        g_boot_busy.store(false);
+        return;
+      }
+      if (g_reconnect_pending.exchange(false)) {
+        // busy 保持 true；解锁后同线程跑 reconnect
+        run_reconnect = true;
+      } else {
+        g_boot_busy.store(false);
+        do_push = push;
+      }
+    }
+    if (run_reconnect) {
+      reconnect_once();
+      push = SerialExitPush::None; // reconnect 自己推 ok/fail
+      continue;
+    }
+    if (do_push == SerialExitPush::Ready && ipc_has_client())
+      ipc_push_serial_ready();
+    else if (do_push == SerialExitPush::Fail && ipc_has_client())
+      ipc_push_serial_fail();
+    return;
+  }
+}
+
+static void reconnect_worker_body() {
+  reconnect_once();
+  serial_worker_exit(SerialExitPush::None);
+}
+
+static void boot_worker_body(HelperConfig boot_cfg) {
+  printf("boot: begin serialConfigured=%d\n",
+         boot_cfg.serialConfigured ? 1 : 0);
+
+  auto abort_owned = [](HANDLE neu) {
+    if (neu != INVALID_HANDLE_VALUE) {
+      power_off(neu);
+      close_com(neu);
+    }
   };
 
   if (!boot_cfg.serialConfigured) {
     printf("boot: serialConfigured=0; skip auto open\n");
-    finish();
+    serial_worker_exit(SerialExitPush::None);
     return;
   }
 
@@ -323,9 +441,8 @@ static void boot_worker_body(HelperConfig boot_cfg) {
     // 为什么：无灯带也不能退进程；托盘+IPC 已常驻，用户可稍后换口/重连
     printf("boot: give up after 10 tries; stay alive without COM\n");
     abort_owned(neu);
-    // 为什么：连接快照可能已推 reconnecting；失败后须改推 fail，否则 UI 停在连接中
-    if (!g_shutting_down.load() && ipc_has_client())
-      ipc_push_serial_fail();
+    // pending reconnect 会再试并推结果；无 pending 才推 fail
+    serial_worker_exit(SerialExitPush::Fail);
     return;
   }
 
@@ -333,6 +450,7 @@ static void boot_worker_body(HelperConfig boot_cfg) {
   if (g_shutting_down.load()) {
     printf("boot: shutting down, drop new handle\n");
     abort_owned(neu);
+    serial_worker_exit(SerialExitPush::None);
     return;
   }
 
@@ -343,7 +461,7 @@ static void boot_worker_body(HelperConfig boot_cfg) {
   if (g_shutting_down.load()) {
     // shutdown 正在 join 我们，随后会 power_off+close；这里不要双关
     printf("boot: wrote handle but shutdown raced; yield to shutdown\n");
-    finish();
+    serial_worker_exit(SerialExitPush::None);
     return;
   }
 
@@ -360,11 +478,9 @@ static void boot_worker_body(HelperConfig boot_cfg) {
   }
 
   helper_note_resources_ready();
-  // 为什么：先清 busy 再推 ready，避免快照竞态仍读到 busy
-  finish();
-  if (!g_shutting_down.load() && ipc_has_client())
-    ipc_push_serial_ready();
   printf("boot: done\n");
+  // 为什么：先清 busy 再推 ready（serial_worker_exit）；有 pending 则同线程 drain
+  serial_worker_exit(SerialExitPush::Ready);
 }
 
 void helper_boot_serial_async(const HelperConfig &boot_cfg) {
@@ -378,21 +494,80 @@ void helper_boot_serial_async(const HelperConfig &boot_cfg) {
   }
 
   HelperConfig copy = boot_cfg;
+  std::thread to_join;
+  {
+    std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+    if (g_shutting_down.load())
+      return;
+    if (g_boot_worker.joinable())
+      to_join = std::move(g_boot_worker);
+  }
+  // 为什么：锁外 join；worker exit 也要拿同一把锁
+  if (to_join.joinable())
+    to_join.join();
+
   std::lock_guard<std::mutex> lock(g_boot_thread_mu);
   if (g_shutting_down.load())
     return;
-  if (g_boot_worker.joinable())
-    g_boot_worker.join();
+  if (g_boot_busy.load()) {
+    // 竞态：join 后另一条路径又占了槽；boot 只启动一次，挂 reconnect 即可
+    g_reconnect_pending.store(true);
+    printf("boot: serial worker busy after join; pending reconnect\n");
+    return;
+  }
   g_boot_busy.store(true);
   g_boot_worker = std::thread(boot_worker_body, copy);
   printf("boot: async started\n");
 }
 
-void helper_boot_serial_wait() {
-  // 为什么：reconnect 与 shutdown 共用；join 保证开口完全结束后再动 COM
+void helper_reconnect_serial_async() {
+  if (g_shutting_down.load())
+    return;
+
+  std::thread to_join;
+  {
+    std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+    if (g_shutting_down.load())
+      return;
+
+    // 为什么：busy 时只挂 pending，IPC 不 join；worker 在 exit 握手里 drain
+    if (g_boot_busy.load()) {
+      g_reconnect_pending.store(true);
+      printf("reconnect: pending (serial worker busy)\n");
+      return;
+    }
+
+    if (g_boot_worker.joinable())
+      to_join = std::move(g_boot_worker);
+  }
+  if (to_join.joinable())
+    to_join.join();
+
   std::lock_guard<std::mutex> lock(g_boot_thread_mu);
-  if (g_boot_worker.joinable())
-    g_boot_worker.join();
+  if (g_shutting_down.load())
+    return;
+  if (g_boot_busy.load()) {
+    g_reconnect_pending.store(true);
+    printf("reconnect: pending (serial worker busy after join)\n");
+    return;
+  }
+  g_boot_busy.store(true);
+  g_reconnect_pending.store(false);
+  g_boot_worker = std::thread(reconnect_worker_body);
+  printf("reconnect: async started\n");
+}
+
+void helper_boot_serial_wait() {
+  // 为什么：shutdown 等开口完全结束再动 COM；IPC reconnect 不再走这条
+  // 锁外 join，避免与 serial_worker_exit 抢同一把锁死锁
+  std::thread to_join;
+  {
+    std::lock_guard<std::mutex> lock(g_boot_thread_mu);
+    if (g_boot_worker.joinable())
+      to_join = std::move(g_boot_worker);
+  }
+  if (to_join.joinable())
+    to_join.join();
 }
 
 bool helper_boot_serial_busy() { return g_boot_busy.load(); }
@@ -411,11 +586,7 @@ void helper_shutdown(bool turn_off_lights) {
   if (ipc_push_ui_quit())
     Sleep(150);
 
-  {
-    std::lock_guard<std::mutex> lock(g_boot_thread_mu);
-    if (g_boot_worker.joinable())
-      g_boot_worker.join();
-  }
+  helper_boot_serial_wait();
 
   {
     std::lock_guard<std::mutex> lock(g_resume_thread_mu);

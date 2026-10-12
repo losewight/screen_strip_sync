@@ -27,3 +27,5 @@ bool ipc_push_config_snapshot();
 // boot 线程成功 / 放弃：对齐连接快照的 status 相位（ready / reconnect_fail）
 bool ipc_push_serial_ready();
 bool ipc_push_serial_fail();
+// reconnect 后台线程成功：status reconnect_ok + runtime + cfg（与旧同步路径对齐）
+bool ipc_push_reconnect_ok();

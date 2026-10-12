@@ -16,6 +16,9 @@
 #include <dxgi1_2.h>
 #include <dxgi1_5.h>
 #include <dxgi1_6.h>
+#include <mutex>
+
+std::recursive_mutex g_dxgi_life_mu;
 
 static ID3D11Device *g_device = nullptr;
 static ID3D11DeviceContext *g_context = nullptr;
@@ -181,6 +184,7 @@ static void maybe_refresh_white_level() {
 }
 
 DxgiErr dxgi_init() {
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
   // 为什么：失败半截或休眠 teardown 后再 init，必须先清干净再重建
   if (g_device || g_context || g_duplication || g_staging)
     dxgi_shutdown();
@@ -402,6 +406,7 @@ void dxgi_unmap_desktop() {
 }
 
 void dxgi_shutdown() {
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
   if (g_staging) {
     g_staging->Release();
     g_staging = nullptr;

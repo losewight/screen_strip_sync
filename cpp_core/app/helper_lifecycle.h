@@ -32,5 +32,7 @@ void helper_note_resources_ready();
 void helper_boot_serial_async(const HelperConfig &boot_cfg);
 // reconnect / shutdown：等 boot 结束，禁止与开口并行
 void helper_boot_serial_wait();
-// 连接快照：boot 仍在开口时推 reconnecting，勿当失败
+// 连接快照：boot / reconnect 仍在开口时推 reconnecting，勿当失败
 bool helper_boot_serial_busy();
+// IPC `reconnect`：与 boot 共用串口 worker；忙则挂 pending，IPC 线程立即返回
+void helper_reconnect_serial_async();

@@ -10,6 +10,7 @@
 #include <cwchar>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <mutex>
 
 // 当前 duplicate 的那块屏。日志 / IPC 上报 / 校准蒙版对齐共用。
 // DeviceName 转成 UTF-8 窄字符：helper.log 是字节流，项目开了 /utf-8，
@@ -243,6 +244,8 @@ void dxgi_log_capture_output() {
 bool dxgi_current_output(CaptureOutputInfo *out) {
   if (!out)
     return false;
+  // 为什么：与 ACCESS_LOST 路径的 shutdown 竞态；持 life 锁拷贝快照
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
   if (!dxgi_is_ready() || g_output_info.device_name[0] == '\0')
     return false;
   *out = g_output_info;
@@ -250,22 +253,35 @@ bool dxgi_current_output(CaptureOutputInfo *out) {
 }
 
 UINT dxgi_enum_outputs(CaptureOutputInfo *out, UINT cap) {
-  ID3D11Device *device = dxgi_d3d_device();
-  if (!out || cap == 0 || !device)
+  if (!out || cap == 0)
     return 0;
+
+  // 为什么：枚举可能较慢；持锁只 AddRef 设备，解锁后再 EnumOutputs
+  ID3D11Device *device = nullptr;
+  {
+    std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
+    device = dxgi_d3d_device();
+    if (!device)
+      return 0;
+    device->AddRef();
+  }
 
   IDXGIDevice *dxgi_device = nullptr;
   HRESULT hr =
       device->QueryInterface(__uuidof(IDXGIDevice), (void **)&dxgi_device);
-  if (FAILED(hr) || !dxgi_device)
+  if (FAILED(hr) || !dxgi_device) {
+    device->Release();
     return 0;
+  }
 
   IDXGIAdapter *adapter = nullptr;
   hr = dxgi_device->GetParent(__uuidof(IDXGIAdapter), (void **)&adapter);
   dxgi_device->Release();
   dxgi_device = nullptr;
-  if (FAILED(hr) || !adapter)
+  if (FAILED(hr) || !adapter) {
+    device->Release();
     return 0;
+  }
 
   UINT n = 0;
   for (UINT i = 0; n < cap; ++i) {
@@ -283,6 +299,7 @@ UINT dxgi_enum_outputs(CaptureOutputInfo *out, UINT cap) {
     output->Release();
   }
   adapter->Release();
+  device->Release();
 
   for (UINT i = 0; i < n; ++i)
     out[i].total = n;

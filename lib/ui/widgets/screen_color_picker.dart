@@ -2,6 +2,7 @@
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:win32/win32.dart';
 import 'package:window_manager/window_manager.dart';
@@ -69,6 +70,8 @@ class _ScreenColorPickerPageState extends State<_ScreenColorPickerPage> {
   final _focusNode = FocusNode();
   Offset? _cursor;
   Color _preview = const Color(0xFF808080);
+  // 为什么：hover 频率远高于帧率；GetPixel 同步回读容易卡 UI，限每帧一次
+  bool _sampleScheduled = false;
 
   @override
   void initState() {
@@ -118,11 +121,17 @@ class _ScreenColorPickerPageState extends State<_ScreenColorPickerPage> {
 
   void _onHover(Offset local) {
     if (_exiting || !mounted) return;
-    // 镂空孔上 GetPixel 在部分系统可用；点击路径会再藏窗复验
-    final sampled = _sampleDesktopAtCursor();
-    setState(() {
-      _cursor = local;
-      if (sampled != null) _preview = sampled;
+    // 十字准星跟手；取色放到下一帧，避免 GetPixel 风暴卡 UI
+    setState(() => _cursor = local);
+    if (_sampleScheduled) return;
+    _sampleScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _sampleScheduled = false;
+      if (_exiting || !mounted) return;
+      // 镂空孔上 GetPixel 在部分系统可用；点击路径会再藏窗复验
+      final sampled = _sampleDesktopAtCursor();
+      if (sampled == null || sampled == _preview) return;
+      setState(() => _preview = sampled);
     });
   }
 
