@@ -113,7 +113,7 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
     if (algo == 0) {
       printf("bad set saturation_algo: [%s]\n", p);
     } else {
-      engine_set_saturation_algo(algo);
+      // 引擎侧算法已固定为 neutral；仅落盘配置供 UI 回读
       config_set_saturation_algo(algo);
       HelperConfig after{};
       config_copy(&after);
@@ -182,7 +182,7 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
       while (*rest == ' ' || *rest == '\t')
         ++rest;
       if (*rest == '\0') {
-        engine_set_mode(norm);
+        // 亮度方案已废弃；仅落盘防配置丢失，引擎不再读 mode
         config_set_mode(norm);
         printf("cmd=set mode %c\n", norm);
         return true;

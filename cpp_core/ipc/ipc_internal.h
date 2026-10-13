@@ -15,9 +15,12 @@
 
 #include <atomic>
 #include <cstdarg>
+#include <mutex>
 
-extern SOCKET g_listen_sock;
-extern SOCKET g_client_sock;
+// 为什么：托盘/boot 与 IPC 主线程并发 push；同时保护 g_client_sock 写入
+extern std::mutex g_send_mu;
+extern std::atomic<SOCKET> g_listen_sock;
+extern SOCKET g_client_sock; // 读写须持 g_send_mu（IPC 主线程除外的读：先拷贝）
 extern std::atomic_bool g_ipc_quit;
 
 enum class ReadLineResult { Ok, PeerGone, TooLong };

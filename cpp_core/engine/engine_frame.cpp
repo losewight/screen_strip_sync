@@ -389,3 +389,35 @@ void engine_stop() {
   g_ema_inited = false;
   reset_seg_gates();
 }
+
+void engine_stop_and_release_dxgi() {
+  std::lock_guard<std::mutex> lock(g_engine_mu);
+  g_running.store(false);
+  if (g_worker.joinable())
+    g_worker.join();
+  g_ema_inited = false;
+  reset_seg_gates();
+  dxgi_shutdown();
+}
+
+DxgiErr engine_switch_capture_output(const char *name) {
+  std::lock_guard<std::mutex> lock(g_engine_mu);
+  g_running.store(false);
+  if (g_worker.joinable())
+    g_worker.join();
+  g_ema_inited = false;
+  reset_seg_gates();
+
+  // 为什么：停发帧与拆/建 DXGI 同一把锁，避免中间被 start 插队
+  dxgi_set_capture_output(name ? name : "auto");
+  dxgi_shutdown();
+  DxgiErr e = dxgi_init();
+  if (e != DxgiErr::Ok) {
+    printf("engine_switch_capture_output: init failed %d, retry auto\n",
+           (int)e);
+    dxgi_set_capture_output("auto");
+    dxgi_shutdown();
+    e = dxgi_init();
+  }
+  return e;
+}

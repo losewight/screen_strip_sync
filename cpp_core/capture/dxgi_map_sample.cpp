@@ -1,5 +1,6 @@
 #include "dxgi_capture.h"
 
+#include "dxgi_capture_internal.h"
 #include "dxgi_mapped.h"
 #include "helper_log.h"
 #include "letterbox_detect.h"
@@ -9,6 +10,7 @@
 #include <atomic>
 #include <cmath>
 #include <d3d11.h>
+#include <mutex>
 
 // 为什么：IPC 写、采样热路径只 load；与 Flutter AppConfig 对齐
 static std::atomic<int> g_near_black{30}; // 0..64；默认与 HelperConfig 对齐
@@ -61,6 +63,8 @@ void dxgi_set_near_black_luma(char mode) {
 
 DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
                              const SegmentRect *rects) {
+  // 为什么：覆盖 map→采样→unmap；pixels 在 unmap 前指向 staging，须与 shutdown 互斥
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
   DxgiMappedFrame frame{};
   DxgiErr e = dxgi_map_desktop(timeout_ms, &frame);
   if (e != DxgiErr::Ok)

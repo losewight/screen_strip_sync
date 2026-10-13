@@ -428,4 +428,7 @@ void dxgi_shutdown() {
   g_dup_format = DXGI_FORMAT_UNKNOWN;
 }
 
-bool dxgi_is_ready() { return g_device != nullptr && g_duplication != nullptr; }
+bool dxgi_is_ready() {
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
+  return g_device != nullptr && g_duplication != nullptr;
+}

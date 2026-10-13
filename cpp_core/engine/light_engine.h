@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "dxgi_capture.h"
 #include "segment_map.h"
 
 #include <cstddef>
@@ -28,10 +29,8 @@ void engine_set_alpha(float alpha);
 void engine_set_near_black(int v);
 void engine_set_blur(int v);
 void engine_set_saturation(float v); // 0.5..2；map 路径饱和度增益
-void engine_set_saturation_algo(char algo); // 固定 'n'=减去中性色；'l' 忽略
 void engine_set_sample_algo(char algo); // 'r'=rms, 'm'=mean
 void engine_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg
-void engine_set_mode(char mode);
 bool engine_set_com(const char *name);
 
 // 屏幕氛围参数（与 map 的 alpha/near_black/blur 正交）
@@ -62,6 +61,10 @@ void engine_start(HANDLE h);        // SyncPath::Map；lastScene=engine
 void engine_start_region(HANDLE h); // SyncPath::Region；lastScene=region
 void engine_request_stop();
 void engine_stop();
+// 停发帧 + 拆 DXGI 同一把 g_engine_mu，避免 stop 与 shutdown 之间被 start 插队
+void engine_stop_and_release_dxgi();
+// 换屏：停发帧 → set wanted → shutdown → init；失败回退 auto 再试
+DxgiErr engine_switch_capture_output(const char *name);
 bool engine_is_running();
 SyncPath engine_sync_path();
 void engine_get_com(char *buf, size_t cap);

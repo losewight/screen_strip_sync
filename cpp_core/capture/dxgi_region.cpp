@@ -1,14 +1,19 @@
 ﻿#include "dxgi_capture.h"
 
+#include "dxgi_capture_internal.h"
 #include "dxgi_mapped.h"
 #include "hdr_convert.h"
 #include "letterbox_detect.h"
 #include "pixel_reader.h"
 
+#include <mutex>
+
 // 屏幕氛围 region 采样：与 map 路径正交；抓帧走 dxgi_map_desktop。
 DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
                                     char algo, int blur, int dark,
                                     unsigned char out_rgb[10][3]) {
+  // 为什么：覆盖 map→采样→unmap；pixels 在 unmap 前指向 staging，须与 shutdown 互斥
+  std::lock_guard<std::recursive_mutex> life(g_dxgi_life_mu);
   if (l < 0)
     l = 0;
   if (t < 0)

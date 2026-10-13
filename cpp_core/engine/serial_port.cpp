@@ -5,6 +5,47 @@
 
 static std::mutex g_serial_mtx; // 串口互斥锁
 
+// 为什么：保护「仍有效」句柄集合；外部 g_serial_handle 无锁，
+// WriteFile/Close 只信任登记过的值，拒绝已 close 或被系统复用的旧句柄。
+static HANDLE g_live[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE,
+                           INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+
+static bool live_contains_unlocked(HANDLE h) {
+  if (h == INVALID_HANDLE_VALUE || h == nullptr)
+    return false;
+  for (int i = 0; i < 4; ++i) {
+    if (g_live[i] == h)
+      return true;
+  }
+  return false;
+}
+
+static bool live_register_unlocked(HANDLE h) {
+  if (h == INVALID_HANDLE_VALUE || h == nullptr)
+    return false;
+  for (int i = 0; i < 4; ++i) {
+    if (g_live[i] == h)
+      return true;
+  }
+  for (int i = 0; i < 4; ++i) {
+    if (g_live[i] == INVALID_HANDLE_VALUE) {
+      g_live[i] = h;
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool live_unregister_unlocked(HANDLE h) {
+  for (int i = 0; i < 4; ++i) {
+    if (g_live[i] == h) {
+      g_live[i] = INVALID_HANDLE_VALUE;
+      return true;
+    }
+  }
+  return false;
+}
+
 // 打开串口，设置串口参数，返回句柄
 bool open_com(const char *port_name, HANDLE *out_handle) {
   char path[32];
@@ -58,6 +99,15 @@ bool open_com(const char *port_name, HANDLE *out_handle) {
 
   // 清空串口缓冲区
   PurgeComm(h, PURGE_RXCLEAR | PURGE_TXCLEAR);
+
+  {
+    std::lock_guard<std::mutex> lock(g_serial_mtx);
+    if (!live_register_unlocked(h)) {
+      // 表满：正常路径最多 1 个活口；失败则关句柄防泄漏
+      CloseHandle(h);
+      return false;
+    }
+  }
   *out_handle = h;
   return true;
 } // open_com
@@ -70,6 +120,9 @@ bool send_one_frame(HANDLE handle, const char *data, DWORD frame_len) {
       data[frame_len - 1] != '\n')
     return false;
   std::lock_guard<std::mutex> lock(g_serial_mtx);
+  // 为什么：未登记 = 已 close 或从未 open；拒写防旧值复用后写到别的内核对象
+  if (!live_contains_unlocked(handle))
+    return false;
   DWORD written = 0;
   BOOL ok = WriteFile(handle, data, frame_len, &written, nullptr);
   if (!ok || written != frame_len) {
@@ -116,7 +169,8 @@ bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
 // 关闭串口。与 WriteFile 同锁，避免 close 与短写补 CRLF 交错。
 void close_com(HANDLE handle) {
   std::lock_guard<std::mutex> lock(g_serial_mtx);
-  if (handle != INVALID_HANDLE_VALUE) {
-    CloseHandle(handle);
-  }
+  // 未登记：已关过或无效，直接返回防 double-close
+  if (!live_unregister_unlocked(handle))
+    return;
+  CloseHandle(handle);
 }

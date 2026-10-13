@@ -9,8 +9,9 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
-SOCKET g_listen_sock = INVALID_SOCKET;
+std::atomic<SOCKET> g_listen_sock{INVALID_SOCKET};
 SOCKET g_client_sock = INVALID_SOCKET;
 std::atomic_bool g_ipc_quit{false};
 
@@ -144,9 +145,14 @@ ReadLineResult read_line(SOCKET client, char *line, int line_cap) {
 }
 
 void drop_client() {
+  // 为什么：g_pending 仅 IPC 主线程访问；清缓冲与关 socket 分两步，closesocket 在锁外
   pending_clear();
-  SOCKET cs = g_client_sock;
-  g_client_sock = INVALID_SOCKET;
+  SOCKET cs = INVALID_SOCKET;
+  {
+    std::lock_guard<std::mutex> lock(g_send_mu);
+    cs = g_client_sock;
+    g_client_sock = INVALID_SOCKET;
+  }
   if (cs != INVALID_SOCKET) {
     closesocket(cs);
     printf("client dropped (lights stay)\n");
@@ -154,8 +160,7 @@ void drop_client() {
 }
 
 void close_listen_sock() {
-  SOCKET ls = g_listen_sock;
-  g_listen_sock = INVALID_SOCKET;
+  SOCKET ls = g_listen_sock.exchange(INVALID_SOCKET);
   if (ls != INVALID_SOCKET)
     closesocket(ls);
 }
@@ -204,7 +209,7 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
     WSACleanup();
     return false;
   }
-  g_listen_sock = listen_sock;
+  g_listen_sock.store(listen_sock);
   printf("listen ok 127.0.0.1:%u\n", (unsigned)port);
 
   // 为什么：必须在 listen 之后再拉 UI，否则 Flutter 试连失败会误起次实例
@@ -214,7 +219,11 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
     fd_set readfds;
     FD_ZERO(&readfds);
     FD_SET(listen_sock, &readfds);
-    SOCKET client = g_client_sock;
+    SOCKET client = INVALID_SOCKET;
+    {
+      std::lock_guard<std::mutex> lock(g_send_mu);
+      client = g_client_sock;
+    }
     if (client != INVALID_SOCKET)
       FD_SET(client, &readfds);
 
@@ -252,9 +261,19 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
                                    &leftover_n))
         continue;
 
-      if (g_client_sock != INVALID_SOCKET) {
-        printf("kick old client\n");
-        drop_client();
+      {
+        SOCKET old = INVALID_SOCKET;
+        {
+          std::lock_guard<std::mutex> lock(g_send_mu);
+          old = g_client_sock;
+          g_client_sock = INVALID_SOCKET;
+        }
+        if (old != INVALID_SOCKET) {
+          printf("kick old client\n");
+          pending_clear();
+          closesocket(old);
+          printf("client dropped (lights stay)\n");
+        }
       }
       pending_clear();
       pending_push(leftover, leftover_n);
@@ -264,7 +283,10 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
         setsockopt(neu, SOL_SOCKET, SO_SNDTIMEO, (const char *)&snd_ms,
                    sizeof(snd_ms));
       }
-      g_client_sock = neu;
+      {
+        std::lock_guard<std::mutex> lock(g_send_mu);
+        g_client_sock = neu;
+      }
       printf("client connected\n");
       push_config_snapshot(neu);
       // 探测阶段已读的 sync 等必须立刻消化；否则 select 看不到已出队字节
@@ -292,7 +314,10 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
       continue;
     }
 
-    client = g_client_sock;
+    {
+      std::lock_guard<std::mutex> lock(g_send_mu);
+      client = g_client_sock;
+    }
     if (client == INVALID_SOCKET || !FD_ISSET(client, &readfds))
       continue;
 
@@ -324,11 +349,17 @@ bool ipc_run(unsigned short port, HANDLE *serial, bool launch_ui) {
   return true;
 }
 
-// 为什么：从其他线程关掉 socket + 置旗标，打断 select，ipc_run 返回后
-// helper_main 走 helper_shutdown。必须清空全局句柄，避免 ipc_run 尾部
-// double-close。
+// 为什么：从其他线程置旗标 + 关 listen + shutdown client，打断 select/recv。
+// 不碰 g_pending、不 closesocket client——统一由 ipc_run 尾部 drop_client 关，
+// 避免与主线程双关。
 void ipc_cancel() {
   g_ipc_quit.store(true);
   close_listen_sock();
-  drop_client();
+  SOCKET cs = INVALID_SOCKET;
+  {
+    std::lock_guard<std::mutex> lock(g_send_mu);
+    cs = g_client_sock;
+  }
+  if (cs != INVALID_SOCKET)
+    shutdown(cs, SD_BOTH);
 }

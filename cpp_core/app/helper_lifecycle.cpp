@@ -128,7 +128,8 @@ void helper_on_suspend() {
     printf("suspend: snapshot kind=%d for resume\n", (int)g_resume_intent.kind);
   }
 
-  engine_stop();
+  // 为什么：停发帧 + 拆 DXGI 同锁，避免 stop 与 shutdown 之间被 start 插队
+  engine_stop_and_release_dxgi();
   HANDLE *p = helper_serial();
   if (p != nullptr && *p != INVALID_HANDLE_VALUE) {
     // 软关：黑帧，不用 set_power 0（唤醒还要开口）
@@ -137,7 +138,6 @@ void helper_on_suspend() {
     *p = INVALID_HANDLE_VALUE;
   }
   engine_set_intent_idle();
-  dxgi_shutdown();
   ipc_push_runtime_status();
   printf("suspend: resources torn (com/dxgi/engine)\n");
 }
@@ -595,7 +595,8 @@ void helper_shutdown(bool turn_off_lights) {
   }
 
   engine_request_stop();
-  engine_stop(); // join 发帧；必须在 power_off 之前，否则 0ms 连写会把灯重新点亮
+  // join 发帧 + 拆 DXGI；必须在 power_off 之前，否则 0ms 连写会把灯重新点亮
+  engine_stop_and_release_dxgi();
 
   HANDLE *p = helper_serial();
   if (turn_off_lights && p != nullptr && *p != INVALID_HANDLE_VALUE) {
@@ -605,7 +606,6 @@ void helper_shutdown(bool turn_off_lights) {
     close_com(*p);
     *p = INVALID_HANDLE_VALUE;
   }
-  dxgi_shutdown();
   ipc_cancel();
   printf("helper_shutdown done\n");
 }

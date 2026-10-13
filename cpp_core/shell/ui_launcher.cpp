@@ -222,6 +222,7 @@ void ui_notify_running_instance() {
 }
 
 void ui_shutdown() {
+  std::lock_guard<std::mutex> lock(g_open_mu);
   g_shutting.store(true);
   if (g_child) {
     CloseHandle(g_child);

@@ -22,10 +22,8 @@ void config_apply() {
   engine_set_near_black(c.nearBlack);
   engine_set_blur(c.blurStep);
   engine_set_saturation(c.saturation);
-  engine_set_saturation_algo(c.saturationAlgo);
   engine_set_sample_algo(c.sampleAlgo);
   engine_set_near_black_luma(c.nearBlackLuma);
-  engine_set_mode(c.mode);
   engine_set_region_algo(c.regionAlgo);
   engine_set_region_blur(c.regionBlur);
   engine_set_region_smooth(c.regionSmooth);

@@ -1,26 +1,26 @@
 ﻿#include "wall_comp.h"
 
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 
 // 为什么：IPC/配置写、发帧读；热路径只 load
 static std::atomic<bool> g_wall_comp_on{false};
-static std::atomic<bool> g_wall_color_set{false};
-static std::atomic<float> g_wall_ref_r{1.f};
-static std::atomic<float> g_wall_ref_g{1.f};
-static std::atomic<float> g_wall_ref_b{1.f};
+// 打包：bit24=已设置；低 24 位 = R<<16|G<<8|B（原始 0..255 字节）
+// 一次 load 保证三通道 + 标志一致，避免多 atomic 交错读到混色
+static std::atomic<uint32_t> g_wall_rgb{0};
 
 // 近黑通道防除零；1/255 ≈ 单级反射率
 static constexpr float kRefEps = 1.f / 255.f;
 
+static float ref_from_byte(unsigned w) {
+  float r = (float)w / 255.f;
+  return r < kRefEps ? kRefEps : r;
+}
+
 void engine_set_wall_comp(bool on) { g_wall_comp_on.store(on); }
 
-void engine_clear_wall_color() {
-  g_wall_color_set.store(false);
-  g_wall_ref_r.store(1.f);
-  g_wall_ref_g.store(1.f);
-  g_wall_ref_b.store(1.f);
-}
+void engine_clear_wall_color() { g_wall_rgb.store(0); }
 
 bool engine_set_wall_color(const char *rrggbb) {
   if (!rrggbb)
@@ -51,21 +51,19 @@ bool engine_set_wall_color(const char *rrggbb) {
     }
     rgb[c] = v;
   }
-  auto ref = [](unsigned w) -> float {
-    float r = (float)w / 255.f;
-    return r < kRefEps ? kRefEps : r;
-  };
-  g_wall_ref_r.store(ref(rgb[0]));
-  g_wall_ref_g.store(ref(rgb[1]));
-  g_wall_ref_b.store(ref(rgb[2]));
-  g_wall_color_set.store(true);
+  const uint32_t packed = (1u << 24) | ((rgb[0] & 0xffu) << 16) |
+                          ((rgb[1] & 0xffu) << 8) | (rgb[2] & 0xffu);
+  g_wall_rgb.store(packed);
   return true;
 }
 
 void wall_comp_apply(float *r, float *g, float *b) {
   if (!r || !g || !b)
     return;
-  if (!g_wall_comp_on.load() || !g_wall_color_set.load())
+  if (!g_wall_comp_on.load())
+    return;
+  const uint32_t packed = g_wall_rgb.load();
+  if ((packed & (1u << 24)) == 0)
     return;
 
   // 为什么：取整后已是 0 的近黑残差若再按墙反射率放大，
@@ -79,9 +77,12 @@ void wall_comp_apply(float *r, float *g, float *b) {
     return;
   }
 
-  const float tr = *r / g_wall_ref_r.load();
-  const float tg = *g / g_wall_ref_g.load();
-  const float tb = *b / g_wall_ref_b.load();
+  const float ref_r = ref_from_byte((packed >> 16) & 0xffu);
+  const float ref_g = ref_from_byte((packed >> 8) & 0xffu);
+  const float ref_b = ref_from_byte(packed & 0xffu);
+  const float tr = *r / ref_r;
+  const float tg = *g / ref_g;
+  const float tb = *b / ref_b;
   float mx = tr;
   if (tg > mx)
     mx = tg;

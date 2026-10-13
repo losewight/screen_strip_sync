@@ -15,13 +15,16 @@
 #include <cstring>
 #include <mutex>
 
-// 为什么：托盘 / boot / resume / reconnect 与 IPC 主线程可并发 push；串行化防行交错
-static std::mutex g_send_mu;
+// 定义见 ipc_internal.h；保护 send 串行化 + g_client_sock 写入
+std::mutex g_send_mu;
 
 void send_raw(SOCKET client, const char *buf, int n) {
   if (n <= 0 || client == INVALID_SOCKET)
     return;
   std::lock_guard<std::mutex> lock(g_send_mu);
+  // 为什么：drop_client / cancel 后旧拷贝一律不发，避免写已关 socket
+  if (client != g_client_sock)
+    return;
   const int sent = send(client, buf, n, 0);
   if (sent == SOCKET_ERROR) {
     const int err = WSAGetLastError();
@@ -252,12 +255,20 @@ void push_config_snapshot(SOCKET client) {
   }
 }
 
-bool ipc_has_client() { return g_client_sock != INVALID_SOCKET; }
+bool ipc_has_client() {
+  std::lock_guard<std::mutex> lock(g_send_mu);
+  return g_client_sock != INVALID_SOCKET;
+}
 
-// 为什么：托盘线程可能调用；先拷贝句柄再 send，避免与 drop_client
-// 竞态 double-close。非热路径，偶发失败可接受（下次再点）。
+static SOCKET copy_client_sock() {
+  std::lock_guard<std::mutex> lock(g_send_mu);
+  return g_client_sock;
+}
+
+// 为什么：托盘线程可能调用；拷贝后 send_raw 会再校验仍是当前 client。
+// 非热路径，偶发失败可接受（下次再点）。
 bool ipc_push_ui_show() {
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   send_line(cs, "ui show\n");
@@ -266,7 +277,7 @@ bool ipc_push_ui_show() {
 }
 
 bool ipc_push_ui_quit() {
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   send_line(cs, "ui quit\n");
@@ -276,7 +287,7 @@ bool ipc_push_ui_quit() {
 
 bool ipc_push_runtime_status(bool include_com) {
   // 为什么：无 UI 时托盘/电源仍可能调用；先看 socket，再读 intent，避免无谓组包
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   push_runtime_status(cs, include_com);
@@ -285,7 +296,7 @@ bool ipc_push_runtime_status(bool include_com) {
 }
 
 bool ipc_push_serial_ready() {
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   send_status(cs, "ready");
@@ -295,7 +306,7 @@ bool ipc_push_serial_ready() {
 }
 
 bool ipc_push_serial_fail() {
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   send_status(cs, "reconnect_fail");
@@ -307,7 +318,7 @@ bool ipc_push_serial_fail() {
 }
 
 bool ipc_push_reconnect_ok() {
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   send_status(cs, "reconnect_ok");
@@ -319,7 +330,7 @@ bool ipc_push_reconnect_ok() {
 
 bool ipc_push_config_snapshot() {
   // 为什么：只推 cfg，不带 status ready，避免托盘改自启时重置 UI 相位
-  SOCKET cs = g_client_sock;
+  SOCKET cs = copy_client_sock();
   if (cs == INVALID_SOCKET)
     return false;
   push_config_lines(cs);

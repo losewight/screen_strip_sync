@@ -18,10 +18,6 @@ std::mutex g_engine_mu;
 std::atomic<float> g_alpha{1.f};
 // 为什么：默认 1.0（UI 100% 原色）；IPC/JSON 可改
 std::atomic<float> g_saturation{1.f};
-// 固定 'n'=减去中性色；'l'=保持亮度仅旧兼容（加载/IPC 会被钳为 'n'）
-std::atomic<char> g_saturation_algo{'n'};
-// 为什么：'a'|'b'；亮度方案已废弃，仅防配置丢失
-std::atomic<char> g_mode{'a'};
 // 屏幕氛围参数（与 map alpha/near_black/blur 正交）
 std::atomic<char> g_region_algo{'m'};
 std::atomic<int> g_region_blur{3};
@@ -74,17 +70,6 @@ void engine_set_saturation(float v) {
   if (v > 2.f)
     v = 2.f;
   g_saturation.store(v);
-}
-
-void engine_set_saturation_algo(char algo) {
-  (void)algo;
-  // UI 已撤；固定减去中性色，忽略 IPC/旧调用传入的 luma
-  g_saturation_algo.store('n');
-}
-
-void engine_set_mode(char mode) {
-  // 调用前已校验；统一存小写
-  g_mode.store(mode);
 }
 
 void engine_set_region_algo(char algo) {

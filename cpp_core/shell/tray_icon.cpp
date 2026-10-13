@@ -31,13 +31,13 @@ static constexpr UINT kTrayId = 1;
 
 static std::atomic_bool g_started{false};
 static std::atomic_bool g_stop_requested{false};
-static HWND g_hwnd = nullptr;
+static std::atomic<HWND> g_hwnd{nullptr};
 static HPOWERNOTIFY g_suspend_notify = nullptr;
 static HPOWERNOTIFY g_monitor_notify = nullptr;
 static UINT g_taskbar_created = 0;
 static NOTIFYICONDATAW g_nid{};
 static bool g_nid_added = false;
-static DWORD g_tray_tid = 0;
+static std::atomic<DWORD> g_tray_tid{0};
 
 static HANDLE serial_or_invalid() {
   HANDLE *p = helper_serial();
@@ -212,8 +212,9 @@ static void tray_on_exit() {
   printf("tray exit\n");
   helper_shutdown();
   tray_remove_icon();
-  if (g_hwnd)
-    PostMessageW(g_hwnd, WM_QUIT, 0, 0);
+  HWND hwnd = g_hwnd.load();
+  if (hwnd)
+    PostMessageW(hwnd, WM_QUIT, 0, 0);
 }
 
 static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
@@ -329,7 +330,7 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
 }
 
 static void tray_thread_main() {
-  g_tray_tid = GetCurrentThreadId();
+  g_tray_tid.store(GetCurrentThreadId());
   g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
 
   WNDCLASSEXW wc{};
@@ -354,7 +355,7 @@ static void tray_thread_main() {
     printf("tray CreateWindowEx failed: %lu\n", (unsigned long)GetLastError());
     return;
   }
-  g_hwnd = hwnd;
+  g_hwnd.store(hwnd);
   ShowWindow(hwnd, SW_HIDE);
 
   g_suspend_notify =
@@ -389,11 +390,10 @@ static void tray_thread_main() {
     UnregisterSuspendResumeNotification(g_suspend_notify);
     g_suspend_notify = nullptr;
   }
-  if (g_hwnd) {
-    DestroyWindow(g_hwnd);
-    g_hwnd = nullptr;
-  }
-  g_tray_tid = 0;
+  HWND doomed = g_hwnd.exchange(nullptr);
+  if (doomed)
+    DestroyWindow(doomed);
+  g_tray_tid.store(0);
   printf("tray thread exit\n");
 }
 
@@ -408,12 +408,12 @@ void tray_start() {
 
 void tray_stop() {
   g_stop_requested.store(true);
-  HWND hwnd = g_hwnd;
+  HWND hwnd = g_hwnd.load();
   if (hwnd) {
     PostMessageW(hwnd, WM_CLOSE, 0, 0);
   }
   // 短暂等待线程摘图标（进程马上退出时 OS 也会清）
-  for (int i = 0; i < 50 && g_tray_tid != 0; ++i)
+  for (int i = 0; i < 50 && g_tray_tid.load() != 0; ++i)
     Sleep(20);
   tray_remove_icon();
 }

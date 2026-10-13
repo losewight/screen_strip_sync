@@ -18,16 +18,7 @@ void cmd_set_capture_output(const char *wanted, HANDLE *serial, SOCKET client) {
   clamp_capture_output(wanted, clamped, (int)sizeof(clamped));
   printf("cmd=set capture_output [%s]\n", clamped);
 
-  engine_stop();
-  dxgi_set_capture_output(clamped);
-  dxgi_shutdown();
-  DxgiErr e = dxgi_init();
-  if (e != DxgiErr::Ok) {
-    printf("set capture_output: init failed %d, retry auto\n", (int)e);
-    dxgi_set_capture_output("auto");
-    dxgi_shutdown();
-    e = dxgi_init();
-  }
+  DxgiErr e = engine_switch_capture_output(clamped);
 
   if (e != DxgiErr::Ok) {
     printf("set capture_output: auto also failed %d\n", (int)e);
