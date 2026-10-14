@@ -216,6 +216,52 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
   }
 
   @override
+  void sendMusicMirror(MusicMirror mirror) {
+    if (!_client.isConnected) return;
+    try {
+      if (mirror.isUnset) {
+        _sendIpc('set music_mirror clear');
+      } else if (mirror.isValid) {
+        _sendIpc('set music_mirror ${mirror.toIpcPayload()}');
+      }
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendMusicRest(MusicRest rest) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set music_rest ${rest.ipcWord}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendMusicPalette(MusicPalette palette) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set music_palette ${palette.ipcWord}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendMusicColor(String rrggbb) {
+    if (!_client.isConnected) return;
+    final h = rrggbb.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h) || h == '000000') return;
+    try {
+      _sendIpc('set music_color $h');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendLastCustomSolid(String rrggbb) {
     if (!_client.isConnected) return;
     final h = rrggbb.trim().toLowerCase();

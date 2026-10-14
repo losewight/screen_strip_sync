@@ -54,11 +54,16 @@
 | `set region_dark <0..50>` | 氛围暗场阈值 |
 | `set region_bbox L,T,W,H` | 氛围取色框（被抓那块屏的百分比整数 0..100） |
 | `set music_source system\|mic\|both` | 音乐采集来源（系统 loopback / 麦克风 / 两者取 max） |
-| `set music_layout linear\|mirror` | 段序布局；P1 的 `mirror` 回退为 `linear` |
+| `set music_layout linear\|mirror` | 段序布局；`mirror` 需合法 `music_mirror`，否则回退 `linear` |
 | `set music_reverse 0\|1` | 段序是否反向 |
 | `set music_sensitivity <0..100>` | 灵敏度；默认 50 |
 | `set music_decay <0..100>` | 回落速度；默认 50 |
 | `set music_silence off\|min` | 静音表现：全灭 / 保留最低一格 |
+| `set music_mirror l0,l1,r0,r1` | 双条镜像端点（0..9）；相交非法则忽略 |
+| `set music_mirror clear` | 清除镜像端点（回 -1） |
+| `set music_rest off\|peak\|base` | 其余段：始终灭 / 满格闪亮 / 跟随底色 |
+| `set music_palette vu\|rainbow\|fixed\|level\|screen` | 音乐配色；默认 `vu` |
+| `set music_color RRGGBB` | Fixed 自选色；`000000` 非法 |
 | `set capture_output <DeviceName\|auto>` | DXGI 抓哪块屏；`auto` = 主屏。热切换不动串口 |
 | `set last_custom_solid RRGGBB` | 记住自定义纯色 |
 | `set letterbox_detect 0\|1` | 智能忽略电影黑边（落盘）；与 `near_black` 正交 |
@@ -76,6 +81,10 @@
 | `cfg map …` | 当前采样映射 |
 | `cfg scene …` | `engine` / `region` / `music` / `solid RRGGBB` / `off` / `idle` |
 | `cfg music_source\|music_layout\|music_reverse\|music_sensitivity\|music_decay\|music_silence` | 音乐动态参数 |
+| `cfg music_mirror l0,l1,r0,r1\|none` | 双条镜像端点；未设为 `none` |
+| `cfg music_rest off\|peak\|base` | 其余段处理 |
+| `cfg music_palette vu\|rainbow\|fixed\|level\|screen` | 音乐配色 |
+| `cfg music_color RRGGBB` | Fixed 自选色 |
 | `cfg end` | 快照结束；界面收到后才视为配置完整 |
 | `status ready` | 串口已就绪 |
 | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程 |

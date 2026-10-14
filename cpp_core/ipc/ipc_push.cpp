@@ -224,6 +224,27 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg music_decay %d\n", c.musicDecay);
   send_line(client, "cfg music_silence %s\n",
             c.musicSilence == 'm' ? "min" : "off");
+  {
+    const bool none = c.musicMirror[0] < 0 && c.musicMirror[1] < 0 &&
+                      c.musicMirror[2] < 0 && c.musicMirror[3] < 0;
+    if (none) {
+      send_line(client, "cfg music_mirror none\n");
+    } else {
+      send_line(client, "cfg music_mirror %d,%d,%d,%d\n", c.musicMirror[0],
+                c.musicMirror[1], c.musicMirror[2], c.musicMirror[3]);
+    }
+  }
+  send_line(client, "cfg music_rest %s\n",
+            c.musicRest == 'p'   ? "peak"
+            : c.musicRest == 'b' ? "base"
+                                 : "off");
+  send_line(client, "cfg music_palette %s\n",
+            c.musicPalette == 'r'   ? "rainbow"
+            : c.musicPalette == 'f' ? "fixed"
+            : c.musicPalette == 'l' ? "level"
+            : c.musicPalette == 's' ? "screen"
+                                    : "vu");
+  send_line(client, "cfg music_color %s\n", c.musicColor);
   // 空串也推，便于 UI 区分「未设」与缺字段
   send_line(client, "cfg last_custom_solid %s\n", c.lastCustomSolid);
   send_line(client, "cfg wall_comp %d\n", c.wallCompEnabled ? 1 : 0);

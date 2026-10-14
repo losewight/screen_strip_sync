@@ -267,6 +267,10 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendMusicSensitivity(int sensitivity);
   void sendMusicDecay(int decay);
   void sendMusicSilence(MusicSilence silence);
+  void sendMusicMirror(MusicMirror mirror);
+  void sendMusicRest(MusicRest rest);
+  void sendMusicPalette(MusicPalette palette);
+  void sendMusicColor(String rrggbb);
   void sendLastCustomSolid(String rrggbb);
   void sendWallComp(bool enabled);
   void sendWallColor(String rrggbb);

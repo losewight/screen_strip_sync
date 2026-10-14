@@ -47,14 +47,26 @@ void engine_set_music_reverse(bool on);
 void engine_set_music_sensitivity(int v); // 0..100
 void engine_set_music_decay(int v);       // 0..100
 void engine_set_music_silence(char mode); // 'o'|off 'm'|min
+// 镜像端点；非法返回 false。clear 用 engine_clear_music_mirror。
+bool engine_set_music_mirror(const int ends[4]);
+void engine_clear_music_mirror();
+void engine_set_music_rest(char mode); // 'o'|off 'p'|peak 'b'|base
+void engine_set_music_palette(char p); // 'v'|vu 'r'|rainbow 'f'|fixed 'l'|level 's'|screen
+// RRGGBB；非法 / 000000 返回 false
+bool engine_set_music_color(const char *rrggbb);
 
 // 映射与调色正交。payload = "x0,y0,x1,y1;..."（0..100 整数，10 段）
+
 // 非法返回 false（IPC 忽略）；合法替换整表。
 bool engine_set_map_from_ipc(const char *payload);
 void engine_clear_map();
 // 热路径短锁拷贝；*out_custom==false 时走 DXGI 默认顶边
 void engine_copy_map_snapshot(bool *out_custom,
                               SegmentRect out_rects[kSegmentCount]);
+
+// map 共享采样：抓屏 → EMA → 饱和度 → seg_gate → out_rgb[10][3]
+// timeout_ms 传给 DXGI；Music Screen 用 5，map 路径用 50。
+DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]);
 
 // 休眠拆掉 DXGI 后，追色 / 唤醒恢复前必须再 init
 bool engine_ensure_dxgi();

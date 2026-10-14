@@ -48,6 +48,10 @@ struct HelperConfig {
   int musicSensitivity = 50;   // 0..100
   int musicDecay = 50;         // 0..100
   char musicSilence = 'o';     // 'o'=off | 'm'=min
+  int musicMirror[4] = {-1, -1, -1, -1}; // l0,l1,r0,r1；-1=未设
+  char musicRest = 'o';        // 'o'=off | 'p'=peak | 'b'=base
+  char musicPalette = 'v';     // 'v'|vu 'r'|rainbow 'f'|fixed 'l'|level 's'|screen
+  char musicColor[8] = "00aaff"; // Fixed 色；6 位小写 hex
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
   // 合法：engine|region|music|idle|off|solid RRGGBB
   char lastScene[32] = "idle";
@@ -97,6 +101,13 @@ void config_set_music_reverse(bool on);
 void config_set_music_sensitivity(int v); // 0..100
 void config_set_music_decay(int v);       // 0..100
 void config_set_music_silence(char mode); // 'o'|'m'
+// 合法端点或全 -1（清空）；相交 / 越界返回 false
+bool config_set_music_mirror(const int ends[4]);
+void config_clear_music_mirror();
+void config_set_music_rest(char mode); // 'o'|'p'|'b'
+void config_set_music_palette(char p); // 'v'|'r'|'f'|'l'|'s'
+// 6 位 hex；非法 / 000000 返回 false（调用方忽略）
+bool config_set_music_color(const char *rrggbb);
 // 6 位 hex；非法返回 false（调用方忽略）
 bool config_set_last_custom_solid(const char *rrggbb);
 void config_set_wall_comp(bool on);

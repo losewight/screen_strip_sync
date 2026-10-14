@@ -86,7 +86,7 @@ static inline float asym_tracking_alpha(float alpha, float L_new, float L_old) {
 // 为什么：采样先墙补一份给判定；显示路径 EMA(+sat) 后再墙补，两路同口径。
 static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
                        float disp_r, float disp_g, float disp_b,
-                       char colors[7]) {
+                       unsigned char out_rgb[3]) {
   diag_note_raw(i, sample_r, sample_g, sample_b);
 
   float gr = sample_r, gg = sample_g, gb = sample_b;
@@ -100,32 +100,28 @@ static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
   if (g_seg_gate[i].flipped)
     ++g_diag_gate_flip[i];
 
-  snprintf(colors, 7, "%02x%02x%02x", (unsigned)(out[0] + 0.5f),
-           (unsigned)(out[1] + 0.5f), (unsigned)(out[2] + 0.5f));
+  out_rgb[0] = (unsigned char)(out[0] + 0.5f);
+  out_rgb[1] = (unsigned char)(out[1] + 0.5f);
+  out_rgb[2] = (unsigned char)(out[2] + 0.5f);
 }
 
-// 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
-// timeout / 其它失败跳过本帧
-static DxgiErr produce_colors_map(int frame_index, char *out_frame,
-                                  size_t out_cap) {
+// 抓屏 → EMA → 饱和度 → seg_gate；Music Screen 与 map 共用。
+DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]) {
+  if (!out_rgb)
+    return DxgiErr::AcquireFailed;
   unsigned char rgb[10][3] = {};
   bool custom = false;
   SegmentRect rects[kSegmentCount];
   engine_copy_map_snapshot(&custom, rects);
-  // 调用：有自定义表则按矩形采；否则顶边默认
-  DxgiErr e = dxgi_grab_and_sample(50, rgb, custom ? rects : nullptr);
+  DxgiErr e =
+      dxgi_grab_and_sample((UINT)timeout_ms, rgb, custom ? rects : nullptr);
   if (e != DxgiErr::Ok)
     return e;
 
-  // α 越小越拖影；由 IPC set alpha 写入 g_alpha
   const float alpha = g_alpha.load();
-  // 为什么：采样平均易发灰；EMA 后再抬饱和度，避免增益被时间平滑冲掉
   const float sat = g_saturation.load();
-  // 固定「减去中性色」；旧「保持亮度」(Rec.601) 见下方注释，UI 已撤
-  char colors[10][7] = {};
 
   for (int i = 0; i < 10; ++i) {
-    // 为什么：直接用采样字节做 EMA，不再 sscanf 绕 ASCII
     const float r = (float)rgb[i][0];
     const float g = (float)rgb[i][1];
     const float b = (float)rgb[i][2];
@@ -135,7 +131,6 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
       g_ema_g[i] = g;
       g_ema_b[i] = b;
     } else {
-      // out = α_eff * new + (1-α_eff) * old；α_eff 按亮/暗方向派生
       const float L_new = channel_max3(r, g, b);
       const float L_old = channel_max3(g_ema_r[i], g_ema_g[i], g_ema_b[i]);
       const float a = asym_tracking_alpha(alpha, L_new, L_old);
@@ -147,7 +142,6 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
-    // k = max(0, sat-1)：100% 原色；200% 全减 min；≤100% 跳过
     const float k = sat > 1.f ? (sat - 1.f) : 0.f;
     if (k > 0.f) {
       float m = or_;
@@ -171,18 +165,27 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
       else if (ob > 255.f)
         ob = 255.f;
     }
-    // 保持亮度（已撤）：Rec.601 亮度守恒 C' = L + s*(C-L)；s=1 恒等
-    // const float L = 0.299f * or_ + 0.587f * og + 0.114f * ob;
-    // or_ = L + sat * (or_ - L);
-    // og = L + sat * (og - L);
-    // ob = L + sat * (ob - L);
-    // （随后同样 clamp 到 0..255）
 
-    // 字符串只在组帧前出现一次；暗门在 wall 之后
-    seg_finish(i, r, g, b, or_, og, ob, colors[i]);
+    seg_finish(i, r, g, b, or_, og, ob, out_rgb[i]);
   }
   g_ema_inited = true;
   diag_maybe_log();
+  return DxgiErr::Ok;
+}
+
+// 为什么：produce = 抓屏采样；AccessLost 交给 frame_loop 拆再建；
+// timeout / 其它失败跳过本帧
+static DxgiErr produce_colors_map(int frame_index, char *out_frame,
+                                  size_t out_cap) {
+  unsigned char out_rgb[10][3] = {};
+  DxgiErr e = map_sample_step(50, out_rgb);
+  if (e != DxgiErr::Ok)
+    return e;
+
+  char colors[10][7] = {};
+  for (int i = 0; i < 10; ++i)
+    snprintf(colors[i], sizeof(colors[i]), "%02x%02x%02x", out_rgb[i][0],
+             out_rgb[i][1], out_rgb[i][2]);
 
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
@@ -243,7 +246,10 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
-    seg_finish(i, r, g, b, or_, og, ob, colors[i]);
+    unsigned char out_rgb[3];
+    seg_finish(i, r, g, b, or_, og, ob, out_rgb);
+    snprintf(colors[i], sizeof(colors[i]), "%02x%02x%02x", out_rgb[0],
+             out_rgb[1], out_rgb[2]);
   }
   g_ema_inited = true;
   diag_maybe_log();
@@ -372,7 +378,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   stop_worker_locked();
   if (helper_is_shutting_down())
     return;
-  // Music 不依赖 DXGI（P4 screen 配色再加回）
+  // Music 默认不依赖 DXGI；Screen 配色在 produce_colors_music 内 ensure
   if (path != SyncPath::Music && !dxgi_is_ready()) {
     DxgiErr e = dxgi_init();
     if (e != DxgiErr::Ok) {

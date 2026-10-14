@@ -3,6 +3,7 @@
 #include "audio_capture.h"
 #include "config_clamp.h"
 #include "dxgi_capture.h"
+#include "music_layout.h"
 #include "music_params.h"
 
 #include <atomic>
@@ -148,6 +149,33 @@ void engine_set_music_sensitivity(int v) { music_set_sensitivity(v); }
 void engine_set_music_decay(int v) { music_set_decay(v); }
 
 void engine_set_music_silence(char mode) { music_set_silence(mode); }
+
+bool engine_set_music_mirror(const int ends[4]) {
+  if (!ends)
+    return false;
+  const bool clear =
+      ends[0] < 0 && ends[1] < 0 && ends[2] < 0 && ends[3] < 0;
+  if (!clear) {
+    MusicLayout lay{};
+    if (!music_layout_mirror(ends, &lay))
+      return false;
+  }
+  if (clear)
+    music_clear_mirror();
+  else
+    music_set_mirror(ends);
+  return true;
+}
+
+void engine_clear_music_mirror() { music_clear_mirror(); }
+
+void engine_set_music_rest(char mode) { music_set_rest(mode); }
+
+void engine_set_music_palette(char p) { music_set_palette(p); }
+
+bool engine_set_music_color(const char *rrggbb) {
+  return music_set_color(rrggbb);
+}
 
 bool engine_set_com(const char *name) {
   if (name == nullptr)

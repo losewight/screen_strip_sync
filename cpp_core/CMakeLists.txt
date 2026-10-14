@@ -27,6 +27,7 @@ add_executable(helper WIN32
   engine/seg_gate.cpp
   engine/music_level.cpp
   engine/music_layout.cpp
+  engine/music_palette.cpp
   engine/music_params.cpp
   engine/music_frame.cpp
   audio/audio_capture.cpp
@@ -77,11 +78,12 @@ target_include_directories(seg_gate_test PRIVATE
 )
 target_compile_options(seg_gate_test PRIVATE /utf-8)
 
-# Music 电平 / 布局离线断言（控制台；不编入 helper）
+# Music 电平 / 布局 / 配色离线断言（控制台；不编入 helper）
 add_executable(music_level_test
   ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/music_level_test/music_level_test.cpp
   engine/music_level.cpp
   engine/music_layout.cpp
+  engine/music_palette.cpp
 )
 target_include_directories(music_level_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
@@ -118,3 +120,15 @@ target_compile_options(hdr_convert_test PRIVATE /utf-8)
 # )
 # target_link_libraries(interval_limit_test PRIVATE kernel32 winmm)
 # target_compile_options(interval_limit_test PRIVATE /utf-8)
+
+# Phase 5：逐帧改 Brightness 硬件摸底（控制台，不编入 helper）
+# 握手在 probe 内本地实现，只链 serial_port（避免拉入 engine_serial/wall_comp）
+add_executable(brightness_probe
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/music_brightness_probe/brightness_probe.cpp
+  engine/serial_port.cpp
+)
+target_include_directories(brightness_probe PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_link_libraries(brightness_probe PRIVATE kernel32)
+target_compile_options(brightness_probe PRIVATE /utf-8)

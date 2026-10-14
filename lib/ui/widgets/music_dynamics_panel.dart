@@ -6,7 +6,10 @@ import '../../app/theme.dart';
 import '../../ipc/helper_status.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import 'color_swatch_button.dart';
 import 'info_hint.dart';
+import 'music_mirror_calibrator.dart';
+import 'palette_color_picker.dart';
 import 'scheme_card.dart';
 import 'win11_segmented_control.dart';
 import 'win11_switch.dart';
@@ -14,6 +17,28 @@ import 'win11_switch.dart';
 /// 音乐动态面板：开始 / 停止与参数下发走 helper IPC。
 class MusicDynamicsPanel extends ConsumerWidget {
   const MusicDynamicsPanel({super.key});
+
+  static const _defaultMusicColor = Color(0xFF00AAFF);
+
+  Future<void> _pickMusicColor(
+    BuildContext context,
+    AppConfig cfg,
+    ConfigNotifier config,
+    HelperStateNotifier notifier,
+  ) async {
+    final initial =
+        colorFromSolidHex(cfg.musicColor) ?? _defaultMusicColor;
+    final picked = await showPaletteColorPicker(
+      context,
+      initial: initial,
+      title: '自选单色',
+    );
+    if (picked == null || !context.mounted) return;
+    final hex = colorToSolidHex(picked);
+    if (hex == '000000') return;
+    config.setMusicColor(hex);
+    notifier.sendMusicColor(hex);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,9 +48,8 @@ class MusicDynamicsPanel extends ConsumerWidget {
     final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
     final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
-    // P2：尚无镜像校准字段；选双条镜像时视为未矫正，禁用开始。
-    final mirrorNeedsCalibrate =
-        cfg.musicLayout == MusicLightMode.dualMirror;
+    final mirrorNeedsCalibrate = cfg.musicLayout == MusicLightMode.dualMirror &&
+        !cfg.musicMirror.isValid;
     final canStart = can && !mirrorNeedsCalibrate;
 
     return Center(
@@ -166,7 +190,87 @@ class MusicDynamicsPanel extends ConsumerWidget {
                                   ],
                                 ),
                               )
-                            : const _DualMirrorCalibratePanel(),
+                            : const MusicMirrorCalibrator(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.text),
+                SchemeCard(
+                  title: '配色',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<MusicPalette>(
+                        key: ValueKey(cfg.musicPalette),
+                        initialValue: cfg.musicPalette,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final palette in MusicPalette.values)
+                            DropdownMenuItem(
+                              value: palette,
+                              child: Text(palette.label),
+                            ),
+                        ],
+                        onChanged: canEdit
+                            ? (v) {
+                                if (v == null) return;
+                                config.setMusicPalette(v);
+                                notifier.sendMusicPalette(v);
+                              }
+                            : null,
+                      ),
+                      if (cfg.musicPalette == MusicPalette.fixed) ...[
+                        const SizedBox(height: AppSpacing.text),
+                        Row(
+                          children: [
+                            const Expanded(child: SchemeParamLabel('颜色')),
+                            ColorSwatchButton(
+                              color: colorFromSolidHex(cfg.musicColor) ??
+                                  _defaultMusicColor,
+                              enabled: canEdit,
+                              outlined: true,
+                              tooltip: '自选单色',
+                              onPressed: () => _pickMusicColor(
+                                context,
+                                cfg,
+                                config,
+                                notifier,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (cfg.musicPalette == MusicPalette.screen)
+                        const Padding(
+                          padding: EdgeInsets.only(top: AppSpacing.text),
+                          child: Row(
+                            children: [
+                              InfoHint(
+                                message:
+                                    '会同时抓屏，帧率略降；颜色来自流光溢彩的段映射',
+                              ),
+                              SizedBox(width: AppSpacing.compact),
+                              Expanded(
+                                child: Text(
+                                  '会同时抓屏，帧率略降；颜色来自流光溢彩的段映射',
+                                  style: TextStyle(
+                                    fontFamily: AppTheme.fontFamily,
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: AppSpacing.text),
+                      _MusicPalettePreview(
+                        palette: cfg.musicPalette,
+                        fixedHex: cfg.musicColor,
                       ),
                     ],
                   ),
@@ -268,51 +372,39 @@ class MusicDynamicsPanel extends ConsumerWidget {
   }
 }
 
-/// 双条镜像下展开的个人矫正区（P3 再接校准入口）。
-class _DualMirrorCalibratePanel extends StatelessWidget {
-  const _DualMirrorCalibratePanel();
+/// 满电平 10 格静态预览（Screen 用 Vu 占位）。
+class _MusicPalettePreview extends StatelessWidget {
+  const _MusicPalettePreview({
+    required this.palette,
+    required this.fixedHex,
+  });
+
+  final MusicPalette palette;
+  final String fixedHex;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.text),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    final colors = musicPalettePreviewColors(palette, fixedHex: fixedHex);
+    return SizedBox(
+      height: 14,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '未矫正：请先完成个人矫正',
-                style: Theme.of(context).textTheme.bodyMedium,
+          for (var i = 0; i < colors.length; i++) ...[
+            if (i > 0) const SizedBox(width: 2),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(
+                    255,
+                    colors[i].r,
+                    colors[i].g,
+                    colors[i].b,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              const SizedBox(width: 4),
-              const InfoHint(
-                icon: Icons.help_outline,
-                message:
-                    '双条镜像需要知道灯带左右分界，才能对称点亮。\n'
-                    '完成个人矫正后，即可按音量从中间向两侧展开。',
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.text),
-          Wrap(
-            spacing: AppSpacing.text,
-            runSpacing: AppSpacing.text,
-            alignment: WrapAlignment.center,
-            children: [
-              FilledButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.center_focus_strong, size: 18),
-                label: const Text('开始校准'),
-              ),
-              OutlinedButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('编辑现有矫正框'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );

@@ -77,6 +77,60 @@ inline char clamp_music_layout(char c) {
 inline char clamp_music_silence(char c) {
   return (c == 'm' || c == 'M') ? 'm' : 'o';
 }
+inline char clamp_music_rest(char c) {
+  if (c == 'p' || c == 'P')
+    return 'p';
+  if (c == 'b' || c == 'B')
+    return 'b';
+  return 'o';
+}
+inline char clamp_music_palette(char c) {
+  if (c == 'r' || c == 'R')
+    return 'r';
+  if (c == 'f' || c == 'F')
+    return 'f';
+  if (c == 'l' || c == 'L')
+    return 'l';
+  if (c == 's' || c == 'S')
+    return 's';
+  return 'v';
+}
+// 6 位 hex → 小写写入 out[7]；非法 / 000000 返回 false
+inline bool clamp_music_color(const char *in, char *out, int cap) {
+  if (!out || cap < 7 || !in || in[6] != '\0')
+    return false;
+  char norm[7];
+  for (int i = 0; i < 6; ++i) {
+    char c = in[i];
+    bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F');
+    if (!ok)
+      return false;
+    if (c >= 'A' && c <= 'F')
+      c = (char)(c - 'A' + 'a');
+    norm[i] = c;
+  }
+  norm[6] = '\0';
+  if (norm[0] == '0' && norm[1] == '0' && norm[2] == '0' && norm[3] == '0' &&
+      norm[4] == '0' && norm[5] == '0')
+    return false;
+  for (int i = 0; i < 7; ++i)
+    out[i] = norm[i];
+  return true;
+}
+// 校验镜像端点：四值均在 0..9 且两条不相交；全 -1 视为「未设」合法清空。
+inline bool valid_music_mirror(const int ends[4]) {
+  if (!ends)
+    return false;
+  if (ends[0] < 0 && ends[1] < 0 && ends[2] < 0 && ends[3] < 0)
+    return true;
+  // 延迟到 music_layout_mirror；此处只做粗范围，真正相交由调用方 layout 校验
+  for (int i = 0; i < 4; ++i) {
+    if (ends[i] < 0 || ends[i] > 9)
+      return false;
+  }
+  return true;
+}
 inline bool valid_region_bbox(int l, int t, int w, int h) {
   l = clamp_pct(l);
   t = clamp_pct(t);

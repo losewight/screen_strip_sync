@@ -62,6 +62,9 @@ void main() {
       expect(cfg.musicSensitivity, 50);
       expect(cfg.musicDecay, 50);
       expect(cfg.musicSilence, MusicSilence.off);
+      expect(cfg.musicPalette, MusicPalette.vu);
+      expect(cfg.musicColor, '00aaff');
+      expect(cfg.hasMusicColor, isTrue);
       expect(cfg.lastScene, 'idle');
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
@@ -303,6 +306,10 @@ void main() {
         'cfg music_sensitivity 80',
         'cfg music_decay 20',
         'cfg music_silence min',
+        'cfg music_mirror 0,3,9,6',
+        'cfg music_rest peak',
+        'cfg music_palette rainbow',
+        'cfg music_color FF8800',
         'cfg scene music',
       ]);
       expect(cfg.musicSource, MusicPickupSource.microphone);
@@ -311,7 +318,70 @@ void main() {
       expect(cfg.musicSensitivity, 80);
       expect(cfg.musicDecay, 20);
       expect(cfg.musicSilence, MusicSilence.keepMin);
+      expect(cfg.musicMirror, const MusicMirror(l0: 0, l1: 3, r0: 9, r1: 6));
+      expect(cfg.musicRest, MusicRest.peak);
+      expect(cfg.musicPalette, MusicPalette.rainbow);
+      expect(cfg.musicColor, 'ff8800');
+      expect(cfg.hasMusicColor, isTrue);
       expect(cfg.lastScene, 'music');
+    });
+
+    test('parses music_palette and music_color', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_palette fixed',
+        ]).musicPalette,
+        MusicPalette.fixed,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_palette level',
+        ]).musicPalette,
+        MusicPalette.level,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_palette screen',
+        ]).musicPalette,
+        MusicPalette.screen,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_palette vu',
+        ]).musicPalette,
+        MusicPalette.vu,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_color AABBCC',
+        ]).musicColor,
+        'aabbcc',
+      );
+      // 全黑非法，保留默认
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_color 000000',
+        ]).musicColor,
+        '00aaff',
+      );
+      // 非法 hex 保留默认
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_color xyz',
+        ]).musicColor,
+        '00aaff',
+      );
+    });
+
+    test('music_mirror none and illegal fall back', () {
+      expect(
+        AppConfig.fromCfgLines(const ['cfg music_mirror none']).musicMirror,
+        MusicMirror.none,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg music_mirror 0,5,4,9']).musicMirror,
+        MusicMirror.none,
+      );
     });
 
     test('clamps music numeric fields and falls back ipc words', () {
@@ -348,6 +418,12 @@ void main() {
           'cfg music_silence off',
         ]).musicSilence,
         MusicSilence.off,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_palette xyz',
+        ]).musicPalette,
+        MusicPalette.vu,
       );
     });
 

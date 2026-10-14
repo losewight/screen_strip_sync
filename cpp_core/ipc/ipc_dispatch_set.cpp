@@ -557,6 +557,104 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
     }
     return true;
   }
+  if (strncmp(line, "set music_mirror ", 17) == 0) {
+    const char *p = line + 17;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if (strcmp(p, "clear") == 0) {
+      engine_clear_music_mirror();
+      config_clear_music_mirror();
+      printf("cmd=set music_mirror clear\n");
+      return true;
+    }
+    int ends[4] = {-1, -1, -1, -1};
+    char *end = nullptr;
+    bool ok = true;
+    for (int i = 0; i < 4; ++i) {
+      ends[i] = (int)strtol(p, &end, 10);
+      if (end == p) {
+        ok = false;
+        break;
+      }
+      if (i < 3) {
+        if (*end != ',') {
+          ok = false;
+          break;
+        }
+        p = end + 1;
+      } else {
+        while (*end == ' ' || *end == '\t')
+          ++end;
+        if (*end != '\0')
+          ok = false;
+      }
+    }
+    if (!ok || !engine_set_music_mirror(ends)) {
+      printf("bad set music_mirror: [%s]\n", line + 17);
+    } else {
+      (void)config_set_music_mirror(ends);
+      printf("cmd=set music_mirror\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_rest ", 15) == 0) {
+    const char *p = line + 15;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char mode = 0;
+    if (strcmp(p, "off") == 0)
+      mode = 'o';
+    else if (strcmp(p, "peak") == 0)
+      mode = 'p';
+    else if (strcmp(p, "base") == 0)
+      mode = 'b';
+    if (mode == 0) {
+      printf("bad set music_rest: [%s]\n", p);
+    } else {
+      engine_set_music_rest(mode);
+      config_set_music_rest(mode);
+      printf("cmd=set music_rest\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_palette ", 18) == 0) {
+    const char *p = line + 18;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    // 先走 music_params 词表，再按单字符落盘（与 clamp 一致）
+    char pal = 0;
+    if (strcmp(p, "vu") == 0)
+      pal = 'v';
+    else if (strcmp(p, "rainbow") == 0)
+      pal = 'r';
+    else if (strcmp(p, "fixed") == 0)
+      pal = 'f';
+    else if (strcmp(p, "level") == 0)
+      pal = 'l';
+    else if (strcmp(p, "screen") == 0)
+      pal = 's';
+    if (pal == 0) {
+      printf("bad set music_palette: [%s]\n", p);
+    } else {
+      engine_set_music_palette(pal);
+      config_set_music_palette(pal);
+      printf("cmd=set music_palette\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_color ", 16) == 0) {
+    const char *p = line + 16;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if (!is_rrggbb(p)) {
+      printf("bad set music_color: [%s]\n", p);
+    } else if (!engine_set_music_color(p) || !config_set_music_color(p)) {
+      printf("bad set music_color: [%s]\n", p);
+    } else {
+      printf("cmd=set music_color\n");
+    }
+    return true;
+  }
   if (strncmp(line, "set region_bbox ", 16) == 0) {
     const char *p = line + 16;
     int l = 0, t = 0, w = 0, h = 0;

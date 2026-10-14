@@ -6,6 +6,7 @@
 #include "helper_lifecycle.h"
 #include "letterbox_detect.h"
 #include "light_engine.h"
+#include "music_layout.h"
 #include "subtitle_detect.h"
 #include "wall_comp.h"
 
@@ -332,6 +333,65 @@ void config_set_music_silence(char mode) {
     mark_dirty_unlocked();
   }
   ensure_saver_started();
+}
+
+bool config_set_music_mirror(const int ends[4]) {
+  if (!ends)
+    return false;
+  const bool clear =
+      ends[0] < 0 && ends[1] < 0 && ends[2] < 0 && ends[3] < 0;
+  if (!clear) {
+    // 相交 / 越界：与 IPC 一致，拒写
+    MusicLayout lay{};
+    if (!music_layout_mirror(ends, &lay))
+      return false;
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    for (int i = 0; i < 4; ++i)
+      g_cfg.musicMirror[i] = clear ? -1 : ends[i];
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  return true;
+}
+
+void config_clear_music_mirror() {
+  const int cleared[4] = {-1, -1, -1, -1};
+  (void)config_set_music_mirror(cleared);
+}
+
+void config_set_music_rest(char mode) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicRest = clamp_music_rest(mode);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_palette(char p) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicPalette = clamp_music_palette(p);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+bool config_set_music_color(const char *rrggbb) {
+  char norm[8];
+  if (!clamp_music_color(rrggbb, norm, (int)sizeof(norm)))
+    return false;
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    if (strcmp(g_cfg.musicColor, norm) == 0)
+      return true;
+    snprintf(g_cfg.musicColor, sizeof(g_cfg.musicColor), "%s", norm);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+  return true;
 }
 
 bool config_set_last_custom_solid(const char *rrggbb) {

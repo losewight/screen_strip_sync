@@ -73,6 +73,10 @@ class AppConfig {
     this.musicSensitivity = 50,
     this.musicDecay = 50,
     this.musicSilence = MusicSilence.off,
+    this.musicMirror = MusicMirror.none,
+    this.musicRest = MusicRest.off,
+    this.musicPalette = MusicPalette.vu,
+    this.musicColor = '00aaff',
     this.lastScene = 'idle',
     this.lastCustomSolid = '',
     this.wallCompEnabled = false,
@@ -164,6 +168,18 @@ class AppConfig {
   /// 静音时全灭 / 保留最低一格。
   final MusicSilence musicSilence;
 
+  /// 双条镜像端点；[MusicMirror.none] = 未矫正。
+  final MusicMirror musicMirror;
+
+  /// 镜像其余段：始终灭 / 满格闪亮 / 跟随底色。
+  final MusicRest musicRest;
+
+  /// 音乐动态配色方案。
+  final MusicPalette musicPalette;
+
+  /// 自选单色；6 位小写 hex（默认 `00aaff`）。
+  final String musicColor;
+
   /// helper `cfg scene`；含 `engine` / `region` / `music` / …
   final String lastScene;
 
@@ -187,6 +203,10 @@ class AppConfig {
 
   bool get hasWallColor =>
       RegExp(r'^[0-9a-f]{6}$').hasMatch(wallColor.trim().toLowerCase());
+
+  bool get hasMusicColor =>
+      RegExp(r'^[0-9a-f]{6}$').hasMatch(musicColor.trim().toLowerCase()) &&
+      musicColor.trim().toLowerCase() != '000000';
 
   AppConfig copyWith({
     double? emaAlpha,
@@ -218,6 +238,10 @@ class AppConfig {
     int? musicSensitivity,
     int? musicDecay,
     MusicSilence? musicSilence,
+    MusicMirror? musicMirror,
+    MusicRest? musicRest,
+    MusicPalette? musicPalette,
+    String? musicColor,
     String? lastScene,
     String? lastCustomSolid,
     bool? wallCompEnabled,
@@ -254,6 +278,10 @@ class AppConfig {
       musicSensitivity: musicSensitivity ?? this.musicSensitivity,
       musicDecay: musicDecay ?? this.musicDecay,
       musicSilence: musicSilence ?? this.musicSilence,
+      musicMirror: musicMirror ?? this.musicMirror,
+      musicRest: musicRest ?? this.musicRest,
+      musicPalette: musicPalette ?? this.musicPalette,
+      musicColor: musicColor ?? this.musicColor,
       lastScene: lastScene ?? this.lastScene,
       lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
       wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
@@ -295,6 +323,10 @@ class AppConfig {
     var musicSensitivity = 50;
     var musicDecay = 50;
     var musicSilence = MusicSilence.off;
+    var musicMirror = MusicMirror.none;
+    var musicRest = MusicRest.off;
+    var musicPalette = MusicPalette.vu;
+    var musicColor = '00aaff';
     var scene = 'idle';
     var lastCustomSolid = '';
     var wallCompEnabled = false;
@@ -394,6 +426,17 @@ class AppConfig {
           if (v != null) musicDecay = v.clamp(0, 100);
         case 'music_silence':
           musicSilence = MusicSilenceIpc.fromIpcWord(val);
+        case 'music_mirror':
+          musicMirror = MusicMirror.tryParse(val) ?? MusicMirror.none;
+        case 'music_rest':
+          musicRest = MusicRestIpc.fromIpcWord(val);
+        case 'music_palette':
+          musicPalette = MusicPaletteIpc.fromIpcWord(val);
+        case 'music_color':
+          final h = val.trim().toLowerCase();
+          if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h) && h != '000000') {
+            musicColor = h;
+          }
         case 'scene':
           if (val.isNotEmpty) scene = val;
         case 'last_custom_solid':
@@ -450,6 +493,10 @@ class AppConfig {
       musicSensitivity: musicSensitivity,
       musicDecay: musicDecay,
       musicSilence: musicSilence,
+      musicMirror: musicMirror,
+      musicRest: musicRest,
+      musicPalette: musicPalette,
+      musicColor: musicColor,
       lastScene: scene,
       lastCustomSolid: lastCustomSolid,
       wallCompEnabled: wallCompEnabled,

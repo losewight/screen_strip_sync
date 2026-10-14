@@ -84,3 +84,19 @@ int music_lit_count(MusicLevelState *s, float level, int bar_len,
   s->lit = lit;
   return lit;
 }
+
+int music_rest_fill_kind(MusicLevelState *s, float level, char rest_mode) {
+  if (rest_mode == 'b' || rest_mode == 'B')
+    return 2;
+  if (rest_mode == 'p' || rest_mode == 'P') {
+    if (!s)
+      return 0;
+    if (level >= 0.95f)
+      s->peak_hold = 3;
+    if (s->peak_hold <= 0)
+      return 0;
+    --s->peak_hold;
+    return 1;
+  }
+  return 0;
+}

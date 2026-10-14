@@ -107,6 +107,24 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(musicSilence: silence);
   }
 
+  void setMusicMirror(MusicMirror mirror) {
+    state = state.copyWith(musicMirror: mirror);
+  }
+
+  void setMusicRest(MusicRest rest) {
+    state = state.copyWith(musicRest: rest);
+  }
+
+  void setMusicPalette(MusicPalette palette) {
+    state = state.copyWith(musicPalette: palette);
+  }
+
+  void setMusicColor(String hex) {
+    final h = hex.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h) || h == '000000') return;
+    state = state.copyWith(musicColor: h);
+  }
+
   void setLastCustomSolid(String hex) {
     final h = hex.trim().toLowerCase();
     if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
