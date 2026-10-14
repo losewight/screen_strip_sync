@@ -29,6 +29,11 @@ abstract final class AppTheme {
   static const navDuration = Duration(milliseconds: 220);
   static const navCurve = Curves.easeOutCubic;
 
+  /// 内容区页签切换：对齐 WinUI [SlideNavigationTransition]
+  /// （Fluent decelerate ≈ cubic-bezier(0.1, 0.9, 0.2, 1)）。
+  static const pageTransitionDuration = Duration(milliseconds: 250);
+  static const pageTransitionCurve = Cubic(0.1, 0.9, 0.2, 1.0);
+
   static const fontFamily = 'Microsoft YaHei'; // 微软雅黑（系统字体）
 
   /// 弹出菜单 / 下拉列表圆角（与卡片 10 略小，避免过圆）

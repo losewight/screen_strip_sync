@@ -4,9 +4,14 @@ import '../../app/theme.dart';
 
 /// 悬停与点击都能弹出同一条说明（桌面悬停仍走 Tooltip 默认行为）。
 class InfoHint extends StatefulWidget {
-  const InfoHint({super.key, required this.message});
+  const InfoHint({
+    super.key,
+    required this.message,
+    this.icon = Icons.error_outline,
+  });
 
   final String message;
+  final IconData icon;
 
   @override
   State<InfoHint> createState() => _InfoHintState();
@@ -26,10 +31,10 @@ class _InfoHintState extends State<InfoHint> {
       child: InkWell(
         onTap: () => _tooltipKey.currentState?.ensureTooltipVisible(),
         borderRadius: BorderRadius.circular(10),
-        child: const Padding(
-          padding: EdgeInsets.all(2),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
           child: Icon(
-            Icons.error_outline,
+            widget.icon,
             size: 16,
             color: AppTheme.textSecondary,
           ),

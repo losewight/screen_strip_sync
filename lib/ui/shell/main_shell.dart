@@ -14,6 +14,7 @@ import '../widgets/store_sidebar.dart';
 import '../widgets/store_title_bar.dart';
 import '../widgets/strip_progress_bar.dart';
 import '../widgets/strip_status_bar.dart';
+import '../widgets/win_ui_slide_switcher.dart';
 
 /// 顶栏 + 侧栏 + 内容区。进度条单实例挂壳层，切页不重建。
 ///
@@ -112,18 +113,10 @@ class _MainShellState extends ConsumerState<MainShell> {
                         ),
                       ),
                       Expanded(
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            for (var i = 0; i < _pages.length; i++)
-                              Offstage(
-                                offstage: _index != i,
-                                child: TickerMode(
-                                  enabled: _index == i,
-                                  child: _pages[i],
-                                ),
-                              ),
-                          ],
+                        child: WinUiSlideIndexedStack(
+                          index: _index,
+                          axis: Axis.vertical,
+                          children: _pages,
                         ),
                       ),
                     ],

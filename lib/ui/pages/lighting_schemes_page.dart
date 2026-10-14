@@ -7,6 +7,7 @@ import '../widgets/music_dynamics_panel.dart';
 import '../widgets/screen_ambience_panel.dart';
 import '../widgets/screen_sync_panel.dart';
 import '../widgets/solid_scheme_panel.dart';
+import '../widgets/win_ui_slide_switcher.dart';
 
 /// 灯光方案页签（壳层 [ModeTabBar] 与正文共用）。
 const lightingSchemeTabs = <ModeTabItem>[
@@ -40,12 +41,18 @@ class LightingSchemesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = ref.watch(lightingSchemeTabProvider);
 
-    return switch (tab) {
-      0 => const ScreenSyncPanel(),
-      1 => const ScreenAmbiencePanel(),
-      2 => const MusicDynamicsPanel(),
-      3 => const SolidSchemePanel(),
-      _ => const SizedBox.shrink(),
-    };
+    return WinUiSlideSwitcher(
+      index: tab,
+      child: KeyedSubtree(
+        key: ValueKey(tab),
+        child: switch (tab) {
+          0 => const ScreenSyncPanel(),
+          1 => const ScreenAmbiencePanel(),
+          2 => const MusicDynamicsPanel(),
+          3 => const SolidSchemePanel(),
+          _ => const SizedBox.shrink(),
+        },
+      ),
+    );
   }
 }
