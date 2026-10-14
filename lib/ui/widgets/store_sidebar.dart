@@ -43,7 +43,10 @@ class _StoreSidebarState extends State<StoreSidebar>
     with SingleTickerProviderStateMixin {
   static const double _width = 72;
   static const double _padV = AppSpacing.control;
-  static const double _btnOuterH = 68; // 64 内容 + 上下各 2 padding
+  /// 与 [_StoreNavButton] 一致：内容高 + 上下 [AppSpacing.compact]。
+  static const double _btnContentH = 64;
+  static const double _btnPadV = AppSpacing.compact;
+  static const double _btnOuterH = _btnContentH + _btnPadV * 2;
   static const double _indicatorH = 22;
   static const double _indicatorW = 5;
 
@@ -61,8 +64,12 @@ class _StoreSidebarState extends State<StoreSidebar>
   late double _toH;
   double _railHeight = 0;
 
+  /// 相对选中底（内容区）垂直居中，而非含外边距的 outer 盒。
   double _restingTop(int index) =>
-      _padV + index * _btnOuterH + (_btnOuterH - _indicatorH) / 2;
+      _padV +
+      index * _btnOuterH +
+      _btnPadV +
+      (_btnContentH - _indicatorH) / 2;
 
   void _snapToSelected() {
     if (_railHeight <= 0) return;
@@ -235,7 +242,7 @@ class _StoreNavButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.control,
-        vertical: AppSpacing.compact,
+        vertical: _StoreSidebarState._btnPadV,
       ),
       child: Material(
         color: Colors.transparent,
@@ -246,7 +253,7 @@ class _StoreNavButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: AppTheme.navDuration,
             curve: AppTheme.navCurve,
-            height: 64,
+            height: _StoreSidebarState._btnContentH,
             decoration: BoxDecoration(
               color: selected ? _selectedBg : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
