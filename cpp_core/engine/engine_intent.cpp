@@ -22,6 +22,12 @@ void engine_set_intent_region() {
   g_intent.solid[0] = '\0';
 }
 
+void engine_set_intent_music() {
+  std::lock_guard<std::mutex> lock(g_intent_mu);
+  g_intent.kind = DisplayIntentKind::Music;
+  g_intent.solid[0] = '\0';
+}
+
 void engine_set_intent_solid(const char *rrggbb) {
   if (rrggbb == nullptr || strlen(rrggbb) != 6)
     return;
@@ -68,6 +74,11 @@ void apply_display_intent(HANDLE h, const DisplayIntent &intent) {
     engine_set_intent_region();
     printf("apply_display_intent: region\n");
     break;
+  case DisplayIntentKind::Music:
+    engine_start_music(h);
+    engine_set_intent_music();
+    printf("apply_display_intent: music\n");
+    break;
   case DisplayIntentKind::Solid:
     engine_stop();
     engine_set_intent_solid(intent.solid);
@@ -97,6 +108,8 @@ bool parse_last_scene(const char *s, DisplayIntent *out) {
     intent.kind = DisplayIntentKind::Engine;
   } else if (strcmp(s, "region") == 0) {
     intent.kind = DisplayIntentKind::Region;
+  } else if (strcmp(s, "music") == 0) {
+    intent.kind = DisplayIntentKind::Music;
   } else if (strcmp(s, "idle") == 0) {
     intent.kind = DisplayIntentKind::Idle;
   } else if (strcmp(s, "off") == 0) {

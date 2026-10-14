@@ -12,6 +12,8 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         _onStatusEngine(running);
       case HelperStatusDisplay(:final kind):
         _onStatusDisplay(kind);
+      case HelperStatusMusicAudio(:final status):
+        _patch(musicAudio: status);
       case HelperStatusCaptureOutput():
         _onStatusCaptureOutput(event);
       case HelperStatusOutputsCount(:final count):
@@ -52,6 +54,14 @@ mixin _HelperStatusHandlers on _HelperStateBase {
           phase: HelperPhase.running,
           hasDevice: true,
           message: com.isEmpty ? '屏幕氛围运行中' : '$com · 屏幕氛围运行中',
+        );
+      case HelperDisplayKind.music:
+        _engineWanted = true;
+        _patch(
+          engineRunning: true,
+          phase: HelperPhase.running,
+          hasDevice: true,
+          message: com.isEmpty ? '音乐动态运行中' : '$com · 音乐动态运行中',
         );
       case HelperDisplayKind.solid:
         _engineWanted = false;
@@ -119,9 +129,10 @@ mixin _HelperStatusHandlers on _HelperStateBase {
         state.phase == HelperPhase.failed ||
         state.phase == HelperPhase.disconnected ||
         state.phase == HelperPhase.connecting;
-    // 为什么：引擎停了若仍留 engine/region，方案页「停止」钮会误亮。
+    // 为什么：引擎停了若仍留 engine/region/music，方案页「停止」钮会误亮。
     if (_lastDisplay == HelperDisplayKind.engine ||
-        _lastDisplay == HelperDisplayKind.region) {
+        _lastDisplay == HelperDisplayKind.region ||
+        _lastDisplay == HelperDisplayKind.music) {
       _lastDisplay = HelperDisplayKind.idle;
     }
     _patch(
@@ -244,11 +255,18 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void sendShutdownOff(bool enabled);
   void syncSegmentMapFromConfig();
   void startRegion();
+  void startMusic();
   void sendRegionAlgo(RegionAlgo algo);
   void sendRegionBlur(int blur);
   void sendRegionSmooth(double smooth);
   void sendRegionDark(int dark);
   void sendRegionBBox(RegionBBox box);
+  void sendMusicSource(MusicPickupSource source);
+  void sendMusicLayout(MusicLightMode layout);
+  void sendMusicReverse(bool reverse);
+  void sendMusicSensitivity(int sensitivity);
+  void sendMusicDecay(int decay);
+  void sendMusicSilence(MusicSilence silence);
   void sendLastCustomSolid(String rrggbb);
   void sendWallComp(bool enabled);
   void sendWallColor(String rrggbb);

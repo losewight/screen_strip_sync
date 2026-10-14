@@ -150,6 +150,19 @@ static void tray_start_region() {
   printf("tray start region\n");
 }
 
+static void tray_start_music() {
+  HANDLE h = serial_or_invalid();
+  if (h == INVALID_HANDLE_VALUE) {
+    printf("tray start music: no serial\n");
+    return;
+  }
+  engine_start_music(h);
+  engine_set_intent_music();
+  config_set_last_scene("music");
+  ipc_push_runtime_status();
+  printf("tray start music\n");
+}
+
 static void tray_toggle_autostart() {
   HelperConfig c{};
   config_copy(&c);
@@ -186,6 +199,10 @@ static void tray_show_menu(HWND hwnd) {
               light_flags |
                   (intent.kind == DisplayIntentKind::Region ? MF_CHECKED : 0),
               IDM_TRAY_START_REGION, L"屏幕氛围");
+  AppendMenuW(menu,
+              light_flags |
+                  (intent.kind == DisplayIntentKind::Music ? MF_CHECKED : 0),
+              IDM_TRAY_START_MUSIC, L"音乐动态");
   AppendMenuW(menu,
               light_flags |
                   (intent.kind == DisplayIntentKind::SoftOff ? MF_CHECKED : 0),
@@ -255,6 +272,9 @@ static LRESULT CALLBACK tray_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam,
       break;
     case IDM_TRAY_START_REGION:
       tray_start_region();
+      break;
+    case IDM_TRAY_START_MUSIC:
+      tray_start_music();
       break;
     case IDM_TRAY_SOFT_OFF:
       tray_soft_off();

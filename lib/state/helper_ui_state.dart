@@ -2,7 +2,7 @@
 import '../ipc/windows_com_ports.dart';
 
 /// 校准开始前的灯效场景；取消时按此还原（完成校准仍走 `start`）。
-enum CalibrationSceneKind { engine, region, solid, off }
+enum CalibrationSceneKind { engine, region, music, solid, off }
 
 /// 进入校准前的快照。须在 `soft_off` 之前采集。
 class CalibrationSceneSnapshot {
@@ -87,6 +87,7 @@ class HelperUiState {
     this.isScanningPorts = false,
     this.engineRunning = false,
     this.displayKind = HelperDisplayKind.idle,
+    this.musicAudio = HelperMusicAudioStatus.ok,
     this.snapshotTimedOut = false,
     this.captureOutputs = const [],
     this.currentCapture,
@@ -114,6 +115,9 @@ class HelperUiState {
   /// helper 当前显示意图（`status display` / 本地乐观更新）。
   final HelperDisplayKind displayKind;
 
+  /// 音乐动态音频采集状态（`status music_audio`）；非音乐模式时仍保留上次值。
+  final HelperMusicAudioStatus musicAudio;
+
   /// 已连上 IPC 但约 2s 内未收到 `cfg end`（主控「连接」可点「重试」）。
   final bool snapshotTimedOut;
 
@@ -130,6 +134,10 @@ class HelperUiState {
   /// 屏幕氛围（`start_region`）是否在应用中。
   bool get isRegionRunning =>
       engineRunning && displayKind == HelperDisplayKind.region;
+
+  /// 音乐动态（`start_music`）是否在应用中。
+  bool get isMusicRunning =>
+      engineRunning && displayKind == HelperDisplayKind.music;
 
   /// 纯色模式是否在应用中（引擎不跑，看 display）。
   bool get isSolidRunning => displayKind == HelperDisplayKind.solid;

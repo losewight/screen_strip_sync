@@ -83,6 +83,30 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(regionBBox: box);
   }
 
+  void setMusicSource(MusicPickupSource source) {
+    state = state.copyWith(musicSource: source);
+  }
+
+  void setMusicLayout(MusicLightMode layout) {
+    state = state.copyWith(musicLayout: layout);
+  }
+
+  void setMusicReverse(bool value) {
+    state = state.copyWith(musicReverse: value);
+  }
+
+  void setMusicSensitivity(int value) {
+    state = state.copyWith(musicSensitivity: value.clamp(0, 100));
+  }
+
+  void setMusicDecay(int value) {
+    state = state.copyWith(musicDecay: value.clamp(0, 100));
+  }
+
+  void setMusicSilence(MusicSilence silence) {
+    state = state.copyWith(musicSilence: silence);
+  }
+
   void setLastCustomSolid(String hex) {
     final h = hex.trim().toLowerCase();
     if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;

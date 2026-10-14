@@ -63,6 +63,20 @@ inline int clamp_pct(int v) {
     return 100;
   return v;
 }
+inline int clamp_music_pct(int v) { return clamp_pct(v); }
+inline char clamp_music_source(char c) {
+  if (c == 'i' || c == 'I')
+    return 'i';
+  if (c == 'b' || c == 'B')
+    return 'b';
+  return 's';
+}
+inline char clamp_music_layout(char c) {
+  return (c == 'm' || c == 'M') ? 'm' : 'l';
+}
+inline char clamp_music_silence(char c) {
+  return (c == 'm' || c == 'M') ? 'm' : 'o';
+}
 inline bool valid_region_bbox(int l, int t, int w, int h) {
   l = clamp_pct(l);
   t = clamp_pct(t);

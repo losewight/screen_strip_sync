@@ -7,16 +7,16 @@
 #include <windows.h>
 
 // 为什么：休眠记账 + 唤醒 / 冷启动按场景恢复；勿被临时黑帧冲掉
-// Engine=屏幕跟色(map)；Region=屏幕氛围(整块区域)
-enum class DisplayIntentKind { Idle, Engine, Region, Solid, SoftOff };
+// Engine=屏幕跟色(map)；Region=屏幕氛围(整块区域)；Music=音乐动态
+enum class DisplayIntentKind { Idle, Engine, Region, Music, Solid, SoftOff };
 
 struct DisplayIntent {
   DisplayIntentKind kind = DisplayIntentKind::Idle;
   char solid[7] = {}; // RRGGBB + '\0'；仅 kind==Solid 有意义
 };
 
-// 追色热路径分派；与 IPC start / start_region 一一对应
-enum class SyncPath { Map, Region };
+// 追色热路径分派；与 IPC start / start_region / start_music 一一对应
+enum class SyncPath { Map, Region, Music };
 
 bool power_on(HANDLE h);
 bool handshake(HANDLE h);
@@ -40,6 +40,14 @@ void engine_set_region_smooth(float v);
 void engine_set_region_dark(int v);
 void engine_set_region_bbox(int l, int t, int w, int h);
 
+// 音乐动态参数（与 map / region 正交）
+void engine_set_music_source(char src); // 's'|system 'i'|mic 'b'|both
+void engine_set_music_layout(char layout); // 'l'|linear 'm'|mirror
+void engine_set_music_reverse(bool on);
+void engine_set_music_sensitivity(int v); // 0..100
+void engine_set_music_decay(int v);       // 0..100
+void engine_set_music_silence(char mode); // 'o'|off 'm'|min
+
 // 映射与调色正交。payload = "x0,y0,x1,y1;..."（0..100 整数，10 段）
 // 非法返回 false（IPC 忽略）；合法替换整表。
 bool engine_set_map_from_ipc(const char *payload);
@@ -59,6 +67,7 @@ bool parse_last_scene(const char *s, DisplayIntent *out);
 
 void engine_start(HANDLE h);        // SyncPath::Map；lastScene=engine
 void engine_start_region(HANDLE h); // SyncPath::Region；lastScene=region
+void engine_start_music(HANDLE h);  // SyncPath::Music；lastScene=music
 void engine_request_stop();
 void engine_stop();
 // 停发帧 + 拆 DXGI 同一把 g_engine_mu，避免 stop 与 shutdown 之间被 start 插队
@@ -72,6 +81,7 @@ void engine_get_com(char *buf, size_t cap);
 void engine_set_intent_idle();
 void engine_set_intent_engine();
 void engine_set_intent_region();
+void engine_set_intent_music();
 void engine_set_intent_solid(const char *rrggbb);
 void engine_set_intent_soft_off();
 DisplayIntent engine_get_display_intent();

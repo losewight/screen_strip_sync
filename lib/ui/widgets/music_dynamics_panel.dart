@@ -3,59 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
+import '../../ipc/helper_status.dart';
+import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import 'info_hint.dart';
 import 'scheme_card.dart';
 import 'win11_segmented_control.dart';
+import 'win11_switch.dart';
 
-/// 音乐动态音频来源（UI 先落地；尚未写入 helper 配置）。
-enum MusicPickupSource {
-  speaker,
-  microphone,
-  both,
-}
-
-extension on MusicPickupSource {
-  String get label => switch (this) {
-    MusicPickupSource.speaker => '系统声音',
-    MusicPickupSource.microphone => '麦克风',
-    MusicPickupSource.both => '系统声音 + 麦克风',
-  };
-}
-
-/// 音乐动态灯光模式（UI 先落地；尚未写入 helper 配置）。
-enum MusicLightMode {
-  /// 从一端向另一端按电平逐段点亮。
-  startToEnd,
-
-  /// 左右两半镜像点亮。
-  dualMirror,
-}
-
-extension on MusicLightMode {
-  String get label => switch (this) {
-    MusicLightMode.startToEnd => '从头到尾',
-    MusicLightMode.dualMirror => '双条镜像',
-  };
-}
-
-/// 音乐动态面板（控灯入口尚未接入，顶栏小卡先与其它方案对齐）。
-class MusicDynamicsPanel extends ConsumerStatefulWidget {
+/// 音乐动态面板：开始 / 停止与参数下发走 helper IPC。
+class MusicDynamicsPanel extends ConsumerWidget {
   const MusicDynamicsPanel({super.key});
 
   @override
-  ConsumerState<MusicDynamicsPanel> createState() => _MusicDynamicsPanelState();
-}
-
-class _MusicDynamicsPanelState extends ConsumerState<MusicDynamicsPanel> {
-  MusicPickupSource _pickup = MusicPickupSource.speaker;
-  MusicLightMode _lightMode = MusicLightMode.startToEnd;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(helperStateProvider);
     final notifier = ref.read(helperStateProvider.notifier);
+    final cfg = ref.watch(configProvider);
+    final config = ref.read(configProvider.notifier);
     final can = ui.canControl;
+    final canEdit = ui.canConfigure && ref.watch(configReadyProvider);
+    // P2：尚无镜像校准字段；选双条镜像时视为未矫正，禁用开始。
+    final mirrorNeedsCalibrate =
+        cfg.musicLayout == MusicLightMode.dualMirror;
+    final canStart = can && !mirrorNeedsCalibrate;
 
     return Center(
       child: SingleChildScrollView(
@@ -71,38 +42,78 @@ class _MusicDynamicsPanelState extends ConsumerState<MusicDynamicsPanel> {
                 SchemeCard(
                   title: '音乐动态',
                   actions: [
-                    FilledButton(
-                      // 后端未接：按钮先占位，保持与其它方案同款布局。
-                      onPressed: null,
-                      child: const Text('开始音乐动态'),
-                    ),
+                    if (ui.isMusicRunning)
+                      OutlinedButton(
+                        onPressed: can ? () => notifier.send('stop') : null,
+                        child: const Text('停止'),
+                      )
+                    else
+                      FilledButton(
+                        onPressed: canStart ? notifier.startMusic : null,
+                        child: const Text('开始音乐动态'),
+                      ),
                     OutlinedButton(
                       onPressed: can ? notifier.softOff : null,
                       child: const Text('关灯'),
                     ),
                   ],
                 ),
+                if (mirrorNeedsCalibrate && !ui.isMusicRunning)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.compact),
+                    child: Text(
+                      '未矫正：请先完成个人矫正后再开始',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '音频来源',
-                  child: DropdownButtonFormField<MusicPickupSource>(
-                    key: ValueKey(_pickup),
-                    initialValue: _pickup,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      for (final source in MusicPickupSource.values)
-                        DropdownMenuItem(
-                          value: source,
-                          child: Text(source.label),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<MusicPickupSource>(
+                        key: ValueKey(cfg.musicSource),
+                        initialValue: cfg.musicSource,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final source in MusicPickupSource.values)
+                            DropdownMenuItem(
+                              value: source,
+                              child: Text(source.label),
+                            ),
+                        ],
+                        onChanged: canEdit
+                            ? (v) {
+                                if (v == null) return;
+                                config.setMusicSource(v);
+                                notifier.sendMusicSource(v);
+                              }
+                            : null,
+                      ),
+                      if (ui.musicAudio == HelperMusicAudioStatus.denied)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.text),
+                          child: Text(
+                            '麦克风权限被系统禁用',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        )
+                      else if (ui.musicAudio ==
+                          HelperMusicAudioStatus.noDevice)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.text),
+                          child: Text(
+                            '未找到音频设备',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
                     ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _pickup = v);
-                    },
                   ),
                 ),
                 const SizedBox(height: AppSpacing.text),
@@ -122,17 +133,128 @@ class _MusicDynamicsPanelState extends ConsumerState<MusicDynamicsPanel> {
                           for (final mode in MusicLightMode.values)
                             Win11Segment(value: mode, label: mode.label),
                         ],
-                        selected: _lightMode,
-                        onChanged: (mode) =>
-                            setState(() => _lightMode = mode),
+                        selected: cfg.musicLayout,
+                        onChanged: (mode) {
+                          if (!canEdit) return;
+                          config.setMusicLayout(mode);
+                          notifier.sendMusicLayout(mode);
+                        },
                       ),
                       AnimatedSize(
                         duration: AppTheme.navDuration,
                         curve: AppTheme.navCurve,
                         alignment: Alignment.topCenter,
-                        child: _lightMode == MusicLightMode.dualMirror
-                            ? const _DualMirrorCalibratePanel()
-                            : const SizedBox.shrink(),
+                        child: cfg.musicLayout == MusicLightMode.startToEnd
+                            ? Padding(
+                                padding: const EdgeInsets.only(
+                                  top: AppSpacing.text,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Expanded(
+                                      child: SchemeParamLabel('反向'),
+                                    ),
+                                    Win11Switch(
+                                      value: cfg.musicReverse,
+                                      onChanged: canEdit
+                                          ? (v) {
+                                              config.setMusicReverse(v);
+                                              notifier.sendMusicReverse(v);
+                                            }
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const _DualMirrorCalibratePanel(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.text),
+                SchemeCard(
+                  title: '效果',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SchemeParamLabel('灵敏度: ${cfg.musicSensitivity}'),
+                      Slider(
+                        value: cfg.musicSensitivity.toDouble().clamp(0, 100),
+                        min: 0,
+                        max: 100,
+                        divisions: 100,
+                        label: '${cfg.musicSensitivity}',
+                        onChanged: canEdit
+                            ? (v) => config.setMusicSensitivity(v.round())
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) =>
+                                  notifier.sendMusicSensitivity(v.round())
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      SchemeParamLabel('回落速度: ${cfg.musicDecay}'),
+                      Slider(
+                        value: cfg.musicDecay.toDouble().clamp(0, 100),
+                        min: 0,
+                        max: 100,
+                        divisions: 100,
+                        label: '${cfg.musicDecay}',
+                        onChanged: canEdit
+                            ? (v) => config.setMusicDecay(v.round())
+                            : null,
+                        onChangeEnd: canEdit
+                            ? (v) => notifier.sendMusicDecay(v.round())
+                            : null,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '慢',
+                              style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              '快',
+                              style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.control),
+                      Row(
+                        children: [
+                          const Expanded(child: SchemeParamLabel('静音表现')),
+                          const InfoHint(
+                            message:
+                                '没有可听电平时灯带怎么显示。\n'
+                                '全灭：静音时所有灯段熄灭。\n'
+                                '保留最低一格：静音时仍点亮最低一档，避免完全暗掉。',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.compact),
+                      Win11SegmentedControl<MusicSilence>(
+                        segments: [
+                          for (final s in MusicSilence.values)
+                            Win11Segment(value: s, label: s.label),
+                        ],
+                        selected: cfg.musicSilence,
+                        onChanged: (s) {
+                          if (!canEdit) return;
+                          config.setMusicSilence(s);
+                          notifier.sendMusicSilence(s);
+                        },
                       ),
                     ],
                   ),
@@ -146,7 +268,7 @@ class _MusicDynamicsPanelState extends ConsumerState<MusicDynamicsPanel> {
   }
 }
 
-/// 双条镜像下展开的个人矫正区（校准入口尚未接入）。
+/// 双条镜像下展开的个人矫正区（P3 再接校准入口）。
 class _DualMirrorCalibratePanel extends StatelessWidget {
   const _DualMirrorCalibratePanel();
 

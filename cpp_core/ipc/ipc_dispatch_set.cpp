@@ -454,6 +454,109 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
     }
     return true;
   }
+  if (strncmp(line, "set music_source ", 17) == 0) {
+    const char *p = line + 17;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char src = 0;
+    if (strcmp(p, "system") == 0)
+      src = 's';
+    else if (strcmp(p, "mic") == 0)
+      src = 'i';
+    else if (strcmp(p, "both") == 0)
+      src = 'b';
+    if (src == 0) {
+      printf("bad set music_source: [%s]\n", p);
+    } else {
+      engine_set_music_source(src);
+      config_set_music_source(src);
+      printf("cmd=set music_source\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_layout ", 17) == 0) {
+    const char *p = line + 17;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char layout = 0;
+    if (strcmp(p, "linear") == 0)
+      layout = 'l';
+    else if (strcmp(p, "mirror") == 0)
+      layout = 'm';
+    if (layout == 0) {
+      printf("bad set music_layout: [%s]\n", p);
+    } else {
+      engine_set_music_layout(layout);
+      config_set_music_layout(layout);
+      printf("cmd=set music_layout\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_reverse ", 18) == 0) {
+    const char *p = line + 18;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if ((*p == '0' || *p == '1') && p[1] == '\0') {
+      engine_set_music_reverse(*p == '1');
+      config_set_music_reverse(*p == '1');
+      printf("cmd=set music_reverse %c\n", *p);
+    } else {
+      printf("bad set music_reverse: [%s]\n", p);
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_sensitivity ", 22) == 0) {
+    const char *p = line + 22;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0' || v < 0 || v > 100) {
+      printf("bad set music_sensitivity: [%s]\n", p);
+    } else {
+      engine_set_music_sensitivity((int)v);
+      config_set_music_sensitivity((int)v);
+      printf("cmd=set music_sensitivity\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_decay ", 16) == 0) {
+    const char *p = line + 16;
+    char *end = nullptr;
+    long v = strtol(p, &end, 10);
+    if (end != p) {
+      while (*end == ' ' || *end == '\t')
+        ++end;
+    }
+    if (end == p || *end != '\0' || v < 0 || v > 100) {
+      printf("bad set music_decay: [%s]\n", p);
+    } else {
+      engine_set_music_decay((int)v);
+      config_set_music_decay((int)v);
+      printf("cmd=set music_decay\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set music_silence ", 18) == 0) {
+    const char *p = line + 18;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char mode = 0;
+    if (strcmp(p, "off") == 0)
+      mode = 'o';
+    else if (strcmp(p, "min") == 0)
+      mode = 'm';
+    if (mode == 0) {
+      printf("bad set music_silence: [%s]\n", p);
+    } else {
+      engine_set_music_silence(mode);
+      config_set_music_silence(mode);
+      printf("cmd=set music_silence\n");
+    }
+    return true;
+  }
   if (strncmp(line, "set region_bbox ", 16) == 0) {
     const char *p = line + 16;
     int l = 0, t = 0, w = 0, h = 0;

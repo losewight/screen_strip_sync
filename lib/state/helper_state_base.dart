@@ -29,6 +29,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     bool? hasDevice,
     bool? isScanningPorts,
     bool? engineRunning,
+    HelperMusicAudioStatus? musicAudio,
     bool? snapshotTimedOut,
     List<CaptureOutputInfo>? captureOutputs,
     CaptureOutputInfo? currentCapture,
@@ -45,6 +46,7 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
       isScanningPorts: isScanningPorts ?? state.isScanningPorts,
       engineRunning: engineRunning ?? state.engineRunning,
       displayKind: _lastDisplay,
+      musicAudio: musicAudio ?? state.musicAudio,
       snapshotTimedOut: snapshotTimedOut ?? state.snapshotTimedOut,
       captureOutputs: captureOutputs ?? state.captureOutputs,
       currentCapture: clearCurrentCapture

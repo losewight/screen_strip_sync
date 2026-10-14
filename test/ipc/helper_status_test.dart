@@ -87,6 +87,22 @@ void main() {
         ),
       );
       expect(
+        tryParseStatusLine('status display region'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.region,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status display music'),
+        isA<HelperStatusDisplay>().having(
+          (e) => e.kind,
+          'kind',
+          HelperDisplayKind.music,
+        ),
+      );
+      expect(
         tryParseStatusLine('status display solid'),
         isA<HelperStatusDisplay>().having(
           (e) => e.kind,
@@ -112,6 +128,43 @@ void main() {
       );
       expect(tryParseStatusLine('status display'), isNull);
       expect(tryParseStatusLine('status display other'), isNull);
+    });
+
+    test('parses status music_audio', () {
+      expect(
+        tryParseStatusLine('status music_audio ok'),
+        isA<HelperStatusMusicAudio>().having(
+          (e) => e.status,
+          'status',
+          HelperMusicAudioStatus.ok,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status music_audio denied'),
+        isA<HelperStatusMusicAudio>().having(
+          (e) => e.status,
+          'status',
+          HelperMusicAudioStatus.denied,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status music_audio no_device'),
+        isA<HelperStatusMusicAudio>().having(
+          (e) => e.status,
+          'status',
+          HelperMusicAudioStatus.noDevice,
+        ),
+      );
+      expect(
+        tryParseStatusLine('status music_audio error'),
+        isA<HelperStatusMusicAudio>().having(
+          (e) => e.status,
+          'status',
+          HelperMusicAudioStatus.error,
+        ),
+      );
+      expect(tryParseStatusLine('status music_audio'), isNull);
+      expect(tryParseStatusLine('status music_audio weird'), isNull);
     });
 
     test('parses status capture_output and output list', () {

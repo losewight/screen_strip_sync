@@ -1,7 +1,9 @@
 ﻿#include "engine_internal.h"
 
+#include "audio_capture.h"
 #include "config_clamp.h"
 #include "dxgi_capture.h"
+#include "music_params.h"
 
 #include <atomic>
 #include <cstdio>
@@ -118,6 +120,34 @@ void engine_set_region_bbox(int l, int t, int w, int h) {
   g_region_w = w;
   g_region_h = h;
 }
+
+static MusicSource music_source_from_char(char src) {
+  if (src == 'i' || src == 'I')
+    return MusicSource::Mic;
+  if (src == 'b' || src == 'B')
+    return MusicSource::Both;
+  return MusicSource::System;
+}
+
+void engine_set_music_source(char src) {
+  const MusicSource ms = music_source_from_char(src);
+  music_set_source(ms);
+  // 运行中改来源：热重启采集线程
+  if (g_running.load() && g_sync_path.load() == SyncPath::Music)
+    audio_restart(ms);
+}
+
+void engine_set_music_layout(char layout) {
+  music_set_layout_linear_or_mirror(layout);
+}
+
+void engine_set_music_reverse(bool on) { music_set_reverse(on); }
+
+void engine_set_music_sensitivity(int v) { music_set_sensitivity(v); }
+
+void engine_set_music_decay(int v) { music_set_decay(v); }
+
+void engine_set_music_silence(char mode) { music_set_silence(mode); }
 
 bool engine_set_com(const char *name) {
   if (name == nullptr)

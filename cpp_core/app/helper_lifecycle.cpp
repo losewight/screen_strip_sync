@@ -210,6 +210,7 @@ static void resume_worker_body() {
     return;
   }
 
+  // Music 不依赖 DXGI；勿把 Music 拉进重试失败→soft_off 分支
   if (snap.kind == DisplayIntentKind::Engine ||
       snap.kind == DisplayIntentKind::Region) {
     bool dxgi_ok = false;

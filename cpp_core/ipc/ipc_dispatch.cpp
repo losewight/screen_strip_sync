@@ -107,6 +107,16 @@ DispatchResult dispatch_line(const char *line, HANDLE *serial, SOCKET client) {
     printf("cmd=start_region\n");
     return DispatchResult::Continue;
   }
+  // 音乐动态：不依赖 DXGI；共用 stop/soft_off
+  if (strcmp(line, "start_music") == 0) {
+    if (!require_serial(serial, client, "start_music"))
+      return DispatchResult::Continue;
+    engine_start_music(*serial);
+    engine_set_intent_music();
+    config_set_last_scene("music");
+    printf("cmd=start_music\n");
+    return DispatchResult::Continue;
+  }
   if (strcmp(line, "stop") == 0) {
     engine_stop();
     engine_set_intent_idle();

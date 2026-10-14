@@ -56,6 +56,12 @@ void main() {
       expect(cfg.regionBlur, 3);
       expect(cfg.regionSmooth, 0.8);
       expect(cfg.regionDark, 15);
+      expect(cfg.musicSource, MusicPickupSource.speaker);
+      expect(cfg.musicLayout, MusicLightMode.startToEnd);
+      expect(cfg.musicReverse, isFalse);
+      expect(cfg.musicSensitivity, 50);
+      expect(cfg.musicDecay, 50);
+      expect(cfg.musicSilence, MusicSilence.off);
       expect(cfg.lastScene, 'idle');
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
@@ -286,6 +292,62 @@ void main() {
       expect(
         AppConfig.fromCfgLines(const ['cfg region_dark -2']).regionDark,
         0,
+      );
+    });
+
+    test('parses music_* fields and scene music', () {
+      final cfg = AppConfig.fromCfgLines(const [
+        'cfg music_source mic',
+        'cfg music_layout mirror',
+        'cfg music_reverse 1',
+        'cfg music_sensitivity 80',
+        'cfg music_decay 20',
+        'cfg music_silence min',
+        'cfg scene music',
+      ]);
+      expect(cfg.musicSource, MusicPickupSource.microphone);
+      expect(cfg.musicLayout, MusicLightMode.dualMirror);
+      expect(cfg.musicReverse, isTrue);
+      expect(cfg.musicSensitivity, 80);
+      expect(cfg.musicDecay, 20);
+      expect(cfg.musicSilence, MusicSilence.keepMin);
+      expect(cfg.lastScene, 'music');
+    });
+
+    test('clamps music numeric fields and falls back ipc words', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_sensitivity 200',
+        ]).musicSensitivity,
+        100,
+      );
+      expect(
+        AppConfig.fromCfgLines(const ['cfg music_decay -5']).musicDecay,
+        0,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_source both',
+        ]).musicSource,
+        MusicPickupSource.both,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_source xyz',
+        ]).musicSource,
+        MusicPickupSource.speaker,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_layout linear',
+        ]).musicLayout,
+        MusicLightMode.startToEnd,
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg music_silence off',
+        ]).musicSilence,
+        MusicSilence.off,
       );
     });
 

@@ -41,8 +41,15 @@ struct HelperConfig {
   float regionSmooth = 0.8f; // 0..0.99；高=更钝
   int regionDark = 15;       // 0..50
   RegionBBox regionBBox{};
+  // 音乐动态（与 map / region 正交）
+  char musicSource = 's';      // 's'=system | 'i'=mic | 'b'=both
+  char musicLayout = 'l';      // 'l'=linear | 'm'=mirror（P1 mirror 回退 linear）
+  bool musicReverse = false;
+  int musicSensitivity = 50;   // 0..100
+  int musicDecay = 50;         // 0..100
+  char musicSilence = 'o';     // 'o'=off | 'm'=min
   // H8：冷启动按 lastScene 恢复；运行时由场景命令更新
-  // 合法：engine|region|idle|off|solid RRGGBB
+  // 合法：engine|region|music|idle|off|solid RRGGBB
   char lastScene[32] = "idle";
   // 纯色 UI「自定义」色圈；6 位小写 hex，空=未设（UI 用默认紫）
   char lastCustomSolid[8] = "";
@@ -83,7 +90,13 @@ void config_set_screen_off_sync(bool on);
 void config_set_shutdown_off(bool on);
 void config_set_autostart(bool on); // JSON + HKCU Run
 void config_set_last_scene(
-    const char *scene); // engine|region|idle|off|solid RRGGBB
+    const char *scene); // engine|region|music|idle|off|solid RRGGBB
+void config_set_music_source(char src); // 's'|'i'|'b'
+void config_set_music_layout(char layout); // 'l'|'m'
+void config_set_music_reverse(bool on);
+void config_set_music_sensitivity(int v); // 0..100
+void config_set_music_decay(int v);       // 0..100
+void config_set_music_silence(char mode); // 'o'|'m'
 // 6 位 hex；非法返回 false（调用方忽略）
 bool config_set_last_custom_solid(const char *rrggbb);
 void config_set_wall_comp(bool on);

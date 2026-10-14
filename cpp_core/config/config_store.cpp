@@ -280,6 +280,60 @@ bool config_set_region_bbox(int l, int t, int w, int h) {
   return true;
 }
 
+void config_set_music_source(char src) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicSource = clamp_music_source(src);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_layout(char layout) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicLayout = clamp_music_layout(layout);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_reverse(bool on) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicReverse = on;
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_sensitivity(int v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicSensitivity = clamp_music_pct(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_decay(int v) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicDecay = clamp_music_pct(v);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_music_silence(char mode) {
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.musicSilence = clamp_music_silence(mode);
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
 bool config_set_last_custom_solid(const char *rrggbb) {
   if (!rrggbb || strlen(rrggbb) != 6)
     return false;
@@ -407,6 +461,9 @@ void config_set_last_scene(const char *scene) {
     break;
   case DisplayIntentKind::Region:
     snprintf(normalized, sizeof(normalized), "region");
+    break;
+  case DisplayIntentKind::Music:
+    snprintf(normalized, sizeof(normalized), "music");
     break;
   case DisplayIntentKind::SoftOff:
     snprintf(normalized, sizeof(normalized), "off");

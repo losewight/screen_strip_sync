@@ -33,13 +33,22 @@ final class HelperStatusEngine extends HelperStatusEvent {
   final bool running;
 }
 
-/// 显示意图：`status display engine|region|solid|soft_off|idle`
-enum HelperDisplayKind { idle, engine, region, solid, softOff }
+/// 显示意图：`status display engine|region|music|solid|soft_off|idle`
+enum HelperDisplayKind { idle, engine, region, music, solid, softOff }
 
 final class HelperStatusDisplay extends HelperStatusEvent {
   const HelperStatusDisplay(this.kind);
 
   final HelperDisplayKind kind;
+}
+
+/// 音乐动态音频采集状态：`status music_audio ok|no_device|denied|error`
+enum HelperMusicAudioStatus { ok, noDevice, denied, error }
+
+final class HelperStatusMusicAudio extends HelperStatusEvent {
+  const HelperStatusMusicAudio(this.status);
+
+  final HelperMusicAudioStatus status;
 }
 
 /// 当前真正 duplicate 的那块屏：`status capture_output NAME WxH L,T [friendly…]`
@@ -110,8 +119,19 @@ HelperDisplayKind? parseHelperDisplayKind(String value) {
     'idle' => HelperDisplayKind.idle,
     'engine' => HelperDisplayKind.engine,
     'region' => HelperDisplayKind.region,
+    'music' => HelperDisplayKind.music,
     'solid' => HelperDisplayKind.solid,
     'soft_off' => HelperDisplayKind.softOff,
+    _ => null,
+  };
+}
+
+HelperMusicAudioStatus? parseHelperMusicAudioStatus(String value) {
+  return switch (value) {
+    'ok' => HelperMusicAudioStatus.ok,
+    'no_device' => HelperMusicAudioStatus.noDevice,
+    'denied' => HelperMusicAudioStatus.denied,
+    'error' => HelperMusicAudioStatus.error,
     _ => null,
   };
 }
@@ -128,6 +148,7 @@ HelperStatusEvent? tryParseStatusLine(String line) {
     if (rest == 'com' ||
         rest == 'engine' ||
         rest == 'display' ||
+        rest == 'music_audio' ||
         rest == 'capture_output' ||
         rest == 'outputs' ||
         rest == 'output') {
@@ -148,6 +169,10 @@ HelperStatusEvent? tryParseStatusLine(String line) {
   if (key == 'display') {
     final kind = parseHelperDisplayKind(value);
     if (kind != null) return HelperStatusDisplay(kind);
+  }
+  if (key == 'music_audio') {
+    final status = parseHelperMusicAudioStatus(value);
+    if (status != null) return HelperStatusMusicAudio(status);
   }
   if (key == 'capture_output') {
     return _parseCaptureOutput(value);

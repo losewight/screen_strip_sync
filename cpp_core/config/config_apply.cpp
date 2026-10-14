@@ -30,6 +30,12 @@ void config_apply() {
   engine_set_region_dark(c.regionDark);
   engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
                          c.regionBBox.h);
+  engine_set_music_source(c.musicSource);
+  engine_set_music_layout(c.musicLayout);
+  engine_set_music_reverse(c.musicReverse);
+  engine_set_music_sensitivity(c.musicSensitivity);
+  engine_set_music_decay(c.musicDecay);
+  engine_set_music_silence(c.musicSilence);
   engine_set_wall_comp(c.wallCompEnabled);
   if (c.wallColor[0] != '\0')
     engine_set_wall_color(c.wallColor);

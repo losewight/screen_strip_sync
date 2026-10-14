@@ -25,6 +25,11 @@ add_executable(helper WIN32
   engine/engine_intent.cpp
   engine/wall_comp.cpp
   engine/seg_gate.cpp
+  engine/music_level.cpp
+  engine/music_layout.cpp
+  engine/music_params.cpp
+  engine/music_frame.cpp
+  audio/audio_capture.cpp
   ipc/ipc_loop.cpp
   ipc/ipc_push.cpp
   ipc/ipc_dispatch.cpp
@@ -48,11 +53,12 @@ target_include_directories(helper PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/config
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
   ${CMAKE_CURRENT_SOURCE_DIR}/capture
+  ${CMAKE_CURRENT_SOURCE_DIR}/audio
   ${CMAKE_CURRENT_SOURCE_DIR}/ipc
   ${CMAKE_CURRENT_SOURCE_DIR}/shell
 )
 
-target_link_libraries(helper PRIVATE kernel32 user32 shell32 ole32 comctl32 advapi32 ws2_32 d3d11 dxgi)
+target_link_libraries(helper PRIVATE kernel32 user32 shell32 ole32 uuid comctl32 advapi32 ws2_32 d3d11 dxgi)
 
 # 为什么：GUI 子系统下原生 printf 无控制台；/FI 宏转到 g_helper_log
 # /utf-8：源文件与执行字符集均按 UTF-8，消掉中文注释触发的 C4819（代码页 936）
@@ -70,6 +76,17 @@ target_include_directories(seg_gate_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
 target_compile_options(seg_gate_test PRIVATE /utf-8)
+
+# Music 电平 / 布局离线断言（控制台；不编入 helper）
+add_executable(music_level_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/music_level_test/music_level_test.cpp
+  engine/music_level.cpp
+  engine/music_layout.cpp
+)
+target_include_directories(music_level_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(music_level_test PRIVATE /utf-8)
 
 # 慢变黑极光色诊断（控制台；不编入 helper）
 add_executable(fade_aurora_diag

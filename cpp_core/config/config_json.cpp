@@ -535,6 +535,48 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_region_bbox_obj(p, &box))
         return false;
       cfg->regionBBox = box;
+    } else if (strcmp(key, "musicSource") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "mic") == 0 || s[0] == 'i' || s[0] == 'I')
+        cfg->musicSource = 'i';
+      else if (strcmp(s, "both") == 0 || s[0] == 'b' || s[0] == 'B')
+        cfg->musicSource = 'b';
+      else
+        cfg->musicSource = 's';
+    } else if (strcmp(key, "musicLayout") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "mirror") == 0 || s[0] == 'm' || s[0] == 'M')
+        cfg->musicLayout = 'm';
+      else
+        cfg->musicLayout = 'l';
+    } else if (strcmp(key, "musicReverse") == 0) {
+      bool v = false;
+      if (!parse_bool(p, &v))
+        return false;
+      cfg->musicReverse = v;
+    } else if (strcmp(key, "musicSensitivity") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->musicSensitivity =
+          clamp_music_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "musicDecay") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->musicDecay = clamp_music_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "musicSilence") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "min") == 0 || s[0] == 'm' || s[0] == 'M')
+        cfg->musicSilence = 'm';
+      else
+        cfg->musicSilence = 'o';
     } else if (strcmp(key, "segmentMap") == 0) {
       if (!parse_segment_map(p, cfg))
         return false;
@@ -666,9 +708,28 @@ std::string config_format_json(const HelperConfig &c) {
   snprintf(num, sizeof(num), "  \"regionDark\": %d,\n", c.regionDark);
   o.append(num);
   snprintf(num, sizeof(num),
-           "  \"regionBBox\": {\"l\": %d, \"t\": %d, \"w\": %d, \"h\": %d}",
+           "  \"regionBBox\": {\"l\": %d, \"t\": %d, \"w\": %d, \"h\": %d},\n",
            c.regionBBox.l, c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
   o.append(num);
+
+  o.append("  \"musicSource\": ");
+  append_escaped(&o, c.musicSource == 'i'   ? "mic"
+                     : c.musicSource == 'b' ? "both"
+                                            : "system");
+  o.append(",\n");
+  o.append("  \"musicLayout\": ");
+  append_escaped(&o, c.musicLayout == 'm' ? "mirror" : "linear");
+  o.append(",\n");
+  o.append("  \"musicReverse\": ");
+  o.append(c.musicReverse ? "true" : "false");
+  o.append(",\n");
+  snprintf(num, sizeof(num), "  \"musicSensitivity\": %d,\n",
+           c.musicSensitivity);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"musicDecay\": %d,\n", c.musicDecay);
+  o.append(num);
+  o.append("  \"musicSilence\": ");
+  append_escaped(&o, c.musicSilence == 'm' ? "min" : "off");
 
   if (c.hasMap) {
     o.append(",\n  \"segmentMap\": [\n");

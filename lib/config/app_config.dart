@@ -1,7 +1,9 @@
-﻿import 'region_bbox.dart';
+﻿import 'music_config.dart';
+import 'region_bbox.dart';
 import 'segment_map_codec.dart';
 import 'segment_sample.dart';
 
+export 'music_config.dart';
 export 'region_bbox.dart';
 export 'segment_sample.dart';
 
@@ -65,6 +67,12 @@ class AppConfig {
     this.regionSmooth = 0.8,
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
+    this.musicSource = MusicPickupSource.speaker,
+    this.musicLayout = MusicLightMode.startToEnd,
+    this.musicReverse = false,
+    this.musicSensitivity = 50,
+    this.musicDecay = 50,
+    this.musicSilence = MusicSilence.off,
     this.lastScene = 'idle',
     this.lastCustomSolid = '',
     this.wallCompEnabled = false,
@@ -138,7 +146,25 @@ class AppConfig {
   /// 屏幕氛围取色框（被抓那块屏的百分比）。
   final RegionBBox regionBBox;
 
-  /// helper `cfg scene`；含 `engine` / `region` / …
+  /// 音乐动态音频来源。
+  final MusicPickupSource musicSource;
+
+  /// 音乐动态灯光排布：线性 / 双条镜像。
+  final MusicLightMode musicLayout;
+
+  /// 线性模式下是否反向点亮。
+  final bool musicReverse;
+
+  /// 音乐灵敏度 0..100（默认 50）。
+  final int musicSensitivity;
+
+  /// 电平回落速度 0..100（默认 50；高=更快落下）。
+  final int musicDecay;
+
+  /// 静音时全灭 / 保留最低一格。
+  final MusicSilence musicSilence;
+
+  /// helper `cfg scene`；含 `engine` / `region` / `music` / …
   final String lastScene;
 
   /// 纯色「自定义」色圈；6 位小写 hex，空=未设。
@@ -186,6 +212,12 @@ class AppConfig {
     double? regionSmooth,
     int? regionDark,
     RegionBBox? regionBBox,
+    MusicPickupSource? musicSource,
+    MusicLightMode? musicLayout,
+    bool? musicReverse,
+    int? musicSensitivity,
+    int? musicDecay,
+    MusicSilence? musicSilence,
     String? lastScene,
     String? lastCustomSolid,
     bool? wallCompEnabled,
@@ -216,6 +248,12 @@ class AppConfig {
       regionSmooth: regionSmooth ?? this.regionSmooth,
       regionDark: regionDark ?? this.regionDark,
       regionBBox: regionBBox ?? this.regionBBox,
+      musicSource: musicSource ?? this.musicSource,
+      musicLayout: musicLayout ?? this.musicLayout,
+      musicReverse: musicReverse ?? this.musicReverse,
+      musicSensitivity: musicSensitivity ?? this.musicSensitivity,
+      musicDecay: musicDecay ?? this.musicDecay,
+      musicSilence: musicSilence ?? this.musicSilence,
       lastScene: lastScene ?? this.lastScene,
       lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
       wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
@@ -251,6 +289,12 @@ class AppConfig {
     var regionSmooth = 0.8;
     var regionDark = 15;
     var regionBBox = const RegionBBox();
+    var musicSource = MusicPickupSource.speaker;
+    var musicLayout = MusicLightMode.startToEnd;
+    var musicReverse = false;
+    var musicSensitivity = 50;
+    var musicDecay = 50;
+    var musicSilence = MusicSilence.off;
     var scene = 'idle';
     var lastCustomSolid = '';
     var wallCompEnabled = false;
@@ -336,6 +380,20 @@ class AppConfig {
         case 'region_bbox':
           final box = RegionBBox.tryParse(val);
           if (box != null) regionBBox = box;
+        case 'music_source':
+          musicSource = MusicPickupSourceIpc.fromIpcWord(val);
+        case 'music_layout':
+          musicLayout = MusicLightModeIpc.fromIpcWord(val);
+        case 'music_reverse':
+          if (val == '0' || val == '1') musicReverse = val == '1';
+        case 'music_sensitivity':
+          final v = int.tryParse(val);
+          if (v != null) musicSensitivity = v.clamp(0, 100);
+        case 'music_decay':
+          final v = int.tryParse(val);
+          if (v != null) musicDecay = v.clamp(0, 100);
+        case 'music_silence':
+          musicSilence = MusicSilenceIpc.fromIpcWord(val);
         case 'scene':
           if (val.isNotEmpty) scene = val;
         case 'last_custom_solid':
@@ -386,6 +444,12 @@ class AppConfig {
       regionSmooth: regionSmooth,
       regionDark: regionDark,
       regionBBox: regionBBox,
+      musicSource: musicSource,
+      musicLayout: musicLayout,
+      musicReverse: musicReverse,
+      musicSensitivity: musicSensitivity,
+      musicDecay: musicDecay,
+      musicSilence: musicSilence,
       lastScene: scene,
       lastCustomSolid: lastCustomSolid,
       wallCompEnabled: wallCompEnabled,

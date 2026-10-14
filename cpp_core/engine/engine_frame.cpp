@@ -1,8 +1,11 @@
 ﻿#include "engine_internal.h"
 
+#include "audio_capture.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "letterbox_detect.h"
+#include "music_frame.h"
+#include "music_params.h"
 #include "seg_gate.h"
 #include "serial_port.h"
 #include "subtitle_detect.h"
@@ -260,9 +263,24 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
 
 static DxgiErr produce_colors(int frame_index, char *out_frame,
                               size_t out_cap) {
-  if (g_sync_path.load() == SyncPath::Region)
+  const SyncPath path = g_sync_path.load();
+  if (path == SyncPath::Music)
+    return produce_colors_music(frame_index, out_frame, out_cap);
+  if (path == SyncPath::Region)
     return produce_colors_region(frame_index, out_frame, out_cap);
   return produce_colors_map(frame_index, out_frame, out_cap);
+}
+
+// 须持 g_engine_mu；join worker，若上一路径是 Music 则停音频
+static void stop_worker_locked() {
+  const SyncPath prev = g_sync_path.load();
+  g_running.store(false);
+  if (g_worker.joinable())
+    g_worker.join();
+  g_ema_inited = false;
+  reset_seg_gates();
+  if (prev == SyncPath::Music)
+    audio_stop();
 }
 
 // 为什么：整段 Sleep(2000) 会让 engine_stop 的 join 卡死；50ms 切片才能看见 g_running
@@ -351,15 +369,11 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   if (g_running.load() && g_sync_path.load() == path &&
       !helper_is_shutting_down())
     return;
-  g_running.store(false);
-  // 为什么：g_running 已是 false 但 joinable 的残留 worker 仍可能占串口；不能用旗标当 join 条件
-  if (g_worker.joinable())
-    g_worker.join();
-  g_ema_inited = false;
-  reset_seg_gates();
+  stop_worker_locked();
   if (helper_is_shutting_down())
     return;
-  if (!dxgi_is_ready()) {
+  // Music 不依赖 DXGI（P4 screen 配色再加回）
+  if (path != SyncPath::Music && !dxgi_is_ready()) {
     DxgiErr e = dxgi_init();
     if (e != DxgiErr::Ok) {
       printf("engine_start_path: dxgi_init failed: %d\n", (int)e);
@@ -371,6 +385,8 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   reset_seg_gates();
   letterbox_reset();
   subtitle_reset();
+  if (path == SyncPath::Music)
+    audio_start(music_get_source());
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }
@@ -379,34 +395,24 @@ void engine_start(HANDLE h) { engine_start_path(h, SyncPath::Map); }
 
 void engine_start_region(HANDLE h) { engine_start_path(h, SyncPath::Region); }
 
+void engine_start_music(HANDLE h) { engine_start_path(h, SyncPath::Music); }
+
 void engine_request_stop() { g_running.store(false); }
 
 void engine_stop() {
   std::lock_guard<std::mutex> lock(g_engine_mu);
-  g_running.store(false);
-  if (g_worker.joinable())
-    g_worker.join();
-  g_ema_inited = false;
-  reset_seg_gates();
+  stop_worker_locked();
 }
 
 void engine_stop_and_release_dxgi() {
   std::lock_guard<std::mutex> lock(g_engine_mu);
-  g_running.store(false);
-  if (g_worker.joinable())
-    g_worker.join();
-  g_ema_inited = false;
-  reset_seg_gates();
+  stop_worker_locked();
   dxgi_shutdown();
 }
 
 DxgiErr engine_switch_capture_output(const char *name) {
   std::lock_guard<std::mutex> lock(g_engine_mu);
-  g_running.store(false);
-  if (g_worker.joinable())
-    g_worker.join();
-  g_ema_inited = false;
-  reset_seg_gates();
+  stop_worker_locked();
 
   // 为什么：停发帧与拆/建 DXGI 同一把锁，避免中间被 start 插队
   dxgi_set_capture_output(name ? name : "auto");
