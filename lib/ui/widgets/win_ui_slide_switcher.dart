@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 
+Offset _axisOffset(Axis axis, double pixels) {
+  final snapped = pixels.roundToDouble();
+  return axis == Axis.horizontal ? Offset(snapped, 0) : Offset(0, snapped);
+}
+
 /// WinUI 3 [SlideNavigationTransition] 风格：按索引方向横滑 + 淡入淡出。
 ///
 /// 索引增大 → 新页自右入、旧页向左出；减小则相反。
@@ -11,6 +16,7 @@ class WinUiSlideSwitcher extends StatefulWidget {
     super.key,
     required this.index,
     required this.child,
+    this.axis = Axis.horizontal,
     this.duration = AppTheme.pageTransitionDuration,
     this.curve = AppTheme.pageTransitionCurve,
     this.slideFraction = 0.06,
@@ -18,10 +24,11 @@ class WinUiSlideSwitcher extends StatefulWidget {
 
   final int index;
   final Widget child;
+  final Axis axis;
   final Duration duration;
   final Curve curve;
 
-  /// 相对内容宽度的滑入距离（Fluent 短距滑入，非全页翻页）。
+  /// 相对内容主轴长度的滑入距离（Fluent 短距滑入，非全页翻页）。
   final double slideFraction;
 
   @override
@@ -82,40 +89,48 @@ class _WinUiSlideSwitcherState extends State<WinUiSlideSwitcher>
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: _t,
-        builder: (context, _) {
-          final outgoing = _outgoing;
-          final dx = widget.slideFraction;
-          // 前进：新页从 +dx 入，旧页向 -dx 出；后退相反。
-          final inFrom = _forward ? dx : -dx;
-          final outTo = _forward ? -dx : dx;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final extent = widget.axis == Axis.horizontal
+            ? constraints.maxWidth
+            : constraints.maxHeight;
+        final travel = extent * widget.slideFraction;
 
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              if (outgoing != null && _t.value < 1)
-                IgnorePointer(
-                  child: Opacity(
-                    opacity: 1 - _t.value,
-                    child: FractionalTranslation(
-                      translation: Offset(outTo * _t.value, 0),
-                      child: outgoing,
+        return ClipRect(
+          child: AnimatedBuilder(
+            animation: _t,
+            builder: (context, _) {
+              final outgoing = _outgoing;
+              final t = _t.value.clamp(0.0, 1.0);
+              final inFrom = _forward ? travel : -travel;
+              final outTo = _forward ? -travel : travel;
+
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (outgoing != null && t < 1)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: _SlideFadeLayer(
+                          opacity: 1 - t,
+                          offset: _axisOffset(widget.axis, outTo * t),
+                          child: outgoing,
+                        ),
+                      ),
+                    ),
+                  Positioned.fill(
+                    child: _SlideFadeLayer(
+                      opacity: t,
+                      offset: _axisOffset(widget.axis, inFrom * (1 - t)),
+                      child: _incoming,
                     ),
                   ),
-                ),
-              Opacity(
-                opacity: _t.value.clamp(0.0, 1.0),
-                child: FractionalTranslation(
-                  translation: Offset(inFrom * (1 - _t.value), 0),
-                  child: _incoming,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -193,47 +208,76 @@ class _WinUiSlideIndexedStackState extends State<WinUiSlideIndexedStack>
     super.dispose();
   }
 
-  Offset _offset(double delta) => widget.axis == Axis.horizontal
-      ? Offset(delta, 0)
-      : Offset(0, delta);
-
   @override
   Widget build(BuildContext context) {
-    final d = widget.slideFraction;
-    final inFrom = _forward ? d : -d;
-    final outTo = _forward ? -d : d;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final extent = widget.axis == Axis.horizontal
+            ? constraints.maxWidth
+            : constraints.maxHeight;
+        final travel = extent * widget.slideFraction;
+        final inFrom = _forward ? travel : -travel;
+        final outTo = _forward ? -travel : travel;
 
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: _t,
-        builder: (context, _) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              for (var i = 0; i < widget.children.length; i++)
-                _buildLayer(
-                  index: i,
-                  inFrom: inFrom,
-                  outTo: outTo,
+        return ClipRect(
+          child: AnimatedBuilder(
+            animation: _t,
+            builder: (context, _) {
+              final t = _t.value.clamp(0.0, 1.0);
+              // 始终先画旧页、再画新页，避免切到较小索引时旧页盖住新页造成横抖感。
+              final outgoing = _outgoingIndex;
+              final stackChildren = <Widget>[
+                for (var i = 0; i < widget.children.length; i++)
+                  if (i != _index && i != outgoing)
+                    Positioned.fill(
+                      child: _buildLayer(
+                        index: i,
+                        t: t,
+                        inFrom: inFrom,
+                        outTo: outTo,
+                      ),
+                    ),
+                if (outgoing != null)
+                  Positioned.fill(
+                    child: _buildLayer(
+                      index: outgoing,
+                      t: t,
+                      inFrom: inFrom,
+                      outTo: outTo,
+                    ),
+                  ),
+                Positioned.fill(
+                  child: _buildLayer(
+                    index: _index,
+                    t: t,
+                    inFrom: inFrom,
+                    outTo: outTo,
+                  ),
                 ),
-            ],
-          );
-        },
-      ),
+              ];
+              return Stack(
+                fit: StackFit.expand,
+                children: stackChildren,
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLayer({
     required int index,
+    required double t,
     required double inFrom,
     required double outTo,
   }) {
     final isIncoming = index == _index;
     final isOutgoing =
-        index == _outgoingIndex && _outgoingIndex != null && _t.value < 1;
+        index == _outgoingIndex && _outgoingIndex != null && t < 1;
     final active = isIncoming || isOutgoing;
+    final child = widget.children[index];
 
-    Widget child = widget.children[index];
     if (!active) {
       return Offstage(
         offstage: true,
@@ -241,26 +285,53 @@ class _WinUiSlideIndexedStackState extends State<WinUiSlideIndexedStack>
       );
     }
 
-    final opacity = isIncoming ? _t.value.clamp(0.0, 1.0) : 1 - _t.value;
-    final translation = isIncoming
-        ? _offset(inFrom * (1 - _t.value))
-        : _offset(outTo * _t.value);
-
-    child = Opacity(
-      opacity: opacity,
-      child: FractionalTranslation(
-        translation: translation,
-        child: child,
-      ),
-    );
-
-    if (isOutgoing) {
-      child = IgnorePointer(child: child);
-    }
+    final opacity = isIncoming ? t : 1 - t;
+    final pixels = isIncoming ? inFrom * (1 - t) : outTo * t;
 
     return TickerMode(
       enabled: isIncoming,
-      child: child,
+      child: IgnorePointer(
+        ignoring: isOutgoing,
+        child: _SlideFadeLayer(
+          opacity: opacity,
+          offset: _axisOffset(widget.axis, pixels),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// 整像素位移 + 淡入淡出。
+///
+/// 铺不透明 [AppTheme.contentBg]，避免居中内容四周镂空把另一页透出来。
+class _SlideFadeLayer extends StatelessWidget {
+  const _SlideFadeLayer({
+    required this.opacity,
+    required this.offset,
+    required this.child,
+  });
+
+  final double opacity;
+  final Offset offset;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget layer = ColoredBox(
+      color: AppTheme.contentBg,
+      child: SizedBox.expand(
+        child: RepaintBoundary(child: child),
+      ),
+    );
+    final o = opacity.clamp(0.0, 1.0);
+    if (o < 1) {
+      layer = Opacity(opacity: o, child: layer);
+    }
+    return Transform.translate(
+      offset: offset,
+      filterQuality: FilterQuality.none,
+      child: layer,
     );
   }
 }

@@ -30,6 +30,9 @@ class MainShell extends ConsumerStatefulWidget {
 class _MainShellState extends ConsumerState<MainShell> {
   int _index = 0;
 
+  /// 顶栏内容索引；进设置时保持离开前的页，避免收起过程中串页。
+  int _chromeIndex = 0;
+
   static const _pages = [
     ControlPage(),
     LightingSchemesPage(),
@@ -40,7 +43,10 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _select(int i) {
     if (i == _index) return;
-    setState(() => _index = i);
+    setState(() {
+      _index = i;
+      if (i != _settingsIndex) _chromeIndex = i;
+    });
     // 一切到软件设置就消侧栏圆点（每个远端版本只提醒一次）。
     if (i == _settingsIndex) {
       ref.read(updateCheckProvider.notifier).acknowledgeBadge();
@@ -87,28 +93,37 @@ class _MainShellState extends ConsumerState<MainShell> {
                 Expanded(
                   child: Column(
                     children: [
-                      if (_index == 0)
-                        StripStatusBar(phase: phase)
-                      else if (_index == 1)
-                        ModeTabBar(
-                          items: lightingSchemeTabs,
-                          selectedIndex: lightingTab,
-                          onSelected: ref
-                              .read(lightingSchemeTabProvider.notifier)
-                              .select,
-                          trailing: StripStatusPill(
-                            color: phaseStyle.accent,
-                            label: phaseStyle.label,
-                          ),
+                      // 与页切同时长收展顶栏，避免进设置时内容区高度骤变。
+                      _CollapseHeight(
+                        visible: _index != _settingsIndex,
+                        child: SizedBox(
+                          height: ModeTabBar.height,
+                          child: _chromeIndex == 0
+                              ? StripStatusBar(phase: phase)
+                              : ModeTabBar(
+                                  items: lightingSchemeTabs,
+                                  selectedIndex: lightingTab,
+                                  onSelected: ref
+                                      .read(lightingSchemeTabProvider.notifier)
+                                      .select,
+                                  trailing: StripStatusPill(
+                                    color: phaseStyle.accent,
+                                    label: phaseStyle.label,
+                                  ),
+                                ),
                         ),
-                      // 软件设置无顶栏，进度条一并藏起；Offstage 保单实例状态
-                      Offstage(
-                        offstage: _index == 2,
+                      ),
+                      // 进度条单实例保留；高度收起，不 Offstage 卸树。
+                      _CollapseHeight(
+                        visible: _index != _settingsIndex,
                         child: TickerMode(
-                          enabled: _index != 2,
-                          child: StripProgressBar(
-                            key: const ValueKey('shell-strip-progress'),
-                            phase: phase,
+                          enabled: _index != _settingsIndex,
+                          child: SizedBox(
+                            height: StripProgressBar.height,
+                            child: StripProgressBar(
+                              key: const ValueKey('shell-strip-progress'),
+                              phase: phase,
+                            ),
                           ),
                         ),
                       ),
@@ -127,6 +142,33 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 用 [Align.heightFactor] 收展，避免把固定高度子组件硬压成 0 约束。
+class _CollapseHeight extends StatelessWidget {
+  const _CollapseHeight({required this.visible, required this.child});
+
+  final bool visible;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: AppTheme.pageTransitionDuration,
+      curve: AppTheme.pageTransitionCurve,
+      tween: Tween<double>(end: visible ? 1 : 0),
+      builder: (context, factor, child) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: factor,
+            child: child,
+          ),
+        );
+      },
+      child: child,
     );
   }
 }

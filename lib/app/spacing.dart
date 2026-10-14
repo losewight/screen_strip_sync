@@ -23,9 +23,10 @@ abstract final class AppSpacing {
   /// 带标题的页面区块之间；也用于模式条 Tab 高度等。
   static const double pageSection = 48;
 
-  /// 页面内容区：左右 [page]，上下 [card]（顶栏下方不必再留满 page）。
+  /// 页面内容区：左右与顶栏（[ModeTabBar] / [StripStatusBar]）同为 [card]，
+  /// 上下 [card]（顶栏下方不必再留满 page）。
   static const EdgeInsets pageInsets = EdgeInsets.symmetric(
-    horizontal: page,
+    horizontal: card,
     vertical: card,
   );
 
