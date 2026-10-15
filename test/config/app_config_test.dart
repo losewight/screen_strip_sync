@@ -42,6 +42,8 @@ void main() {
       expect(cfg.nearBlack, 30);
       expect(cfg.blurStep, 0);
       expect(cfg.saturation, 1.0);
+      expect(cfg.brightness, BrightnessSetting.defaults);
+      expect(cfg.regionBrightness, BrightnessSetting.defaults);
       expect(cfg.saturationAlgo, SaturationAlgo.neutral);
       expect(cfg.sampleAlgo, SampleAlgo.mean);
       expect(cfg.nearBlackLuma, NearBlackLuma.rec601);
@@ -281,6 +283,52 @@ void main() {
       expect(cfg.regionDark, 3);
       expect(cfg.regionBBox, const RegionBBox(l: 12, t: 20, w: 70, h: 55));
       expect(cfg.lastScene, 'region');
+    });
+
+    test('parses brightness and region_brightness', () {
+      final cfg = AppConfig.fromCfgLines(const [
+        'cfg brightness linear 10,90',
+        'cfg region_brightness full 30,60',
+      ]);
+      expect(
+        cfg.brightness,
+        const BrightnessSetting(mode: BrightnessMode.linear, lo: 10, hi: 90),
+      );
+      expect(
+        cfg.regionBrightness,
+        const BrightnessSetting(mode: BrightnessMode.full, lo: 30, hi: 60),
+      );
+    });
+
+    test('clamps brightness range and swaps reversed', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg brightness linear -5,200',
+        ]).brightness,
+        const BrightnessSetting(mode: BrightnessMode.linear, lo: 0, hi: 100),
+      );
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg region_brightness linear 80,20',
+        ]).regionBrightness,
+        const BrightnessSetting(mode: BrightnessMode.linear, lo: 20, hi: 80),
+      );
+    });
+
+    test('illegal brightness mode falls back to full', () {
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg brightness xyz 25,75',
+        ]).brightness,
+        const BrightnessSetting(mode: BrightnessMode.full, lo: 25, hi: 75),
+      );
+      // 非法格式整行忽略，保留默认
+      expect(
+        AppConfig.fromCfgLines(const [
+          'cfg brightness linear',
+        ]).brightness,
+        BrightnessSetting.defaults,
+      );
     });
 
     test('clamps region numeric fields', () {

@@ -48,6 +48,16 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
   }
 
   @override
+  void sendBrightness(BrightnessSetting value) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set brightness ${value.toIpcPayload()}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
   void sendMode(ColorMode mode) {
     if (!_client.isConnected) return;
     try {
@@ -150,6 +160,16 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
     if (!box.isValid) return;
     try {
       _sendIpc('set region_bbox ${box.toIpcPayload()}');
+    } catch (e) {
+      _patch(message: '$e');
+    }
+  }
+
+  @override
+  void sendRegionBrightness(BrightnessSetting value) {
+    if (!_client.isConnected) return;
+    try {
+      _sendIpc('set region_brightness ${value.toIpcPayload()}');
     } catch (e) {
       _patch(message: '$e');
     }

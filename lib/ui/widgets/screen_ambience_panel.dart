@@ -114,7 +114,12 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.text),
-                const BrightnessModeCard(),
+                BrightnessModeCard(
+                  value: cfg.regionBrightness,
+                  enabled: canEdit,
+                  onChanged: canEdit ? config.setRegionBrightness : null,
+                  onChangeEnd: canEdit ? notifier.sendRegionBrightness : null,
+                ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '跟色参数',

@@ -18,6 +18,10 @@ struct HelperConfig {
   int nearBlack = 30; // 0..64；越大越忽略黑边（亮度算法见 nearBlackLuma）
   int blurStep = 0;
   float saturation = 1.f; // 0.5..2；1=原色，默认 100%
+  // 亮度模式：'f'=全亮度（BRT 0x63）| 'l'=线性；区间 0..100 即 BRT 原值
+  char brightnessMode = 'f';
+  int brightnessLo = 25;
+  int brightnessHi = 75;
   // 固定 'n'=减去中性色；'l'=保持亮度仅旧 JSON 兼容，加载时会被钳为 'n'
   char saturationAlgo = 'n';
   char sampleAlgo = 'm';   // 固定 mean；'r'=rms 仅兼容旧 JSON，加载时会被钳为 'm'
@@ -41,6 +45,10 @@ struct HelperConfig {
   float regionSmooth = 0.8f; // 0..0.99；高=更钝
   int regionDark = 15;       // 0..50
   RegionBBox regionBBox{};
+  // 屏幕氛围亮度模式（与 map brightness* 正交）
+  char regionBrightnessMode = 'f';
+  int regionBrightnessLo = 25;
+  int regionBrightnessHi = 75;
   // 音乐动态（与 map / region 正交）
   char musicSource = 's';      // 's'=system | 'i'=mic | 'b'=both
   char musicLayout = 'l';      // 'l'=linear | 'm'=mirror（P1 mirror 回退 linear）
@@ -83,6 +91,8 @@ void config_set_ema_alpha(float v);
 void config_set_near_black(int v);
 void config_set_blur(int v);
 void config_set_saturation(float v);
+void config_set_brightness(char mode, int lo, int hi); // mode 'f'|'l'；lo/hi 0..100
+void config_set_region_brightness(char mode, int lo, int hi);
 void config_set_saturation_algo(char algo); // 固定 'n'；'l' 忽略
 void config_set_sample_algo(char algo); // 'r'|'m'
 void config_set_near_black_luma(char mode); // '6'|'a'

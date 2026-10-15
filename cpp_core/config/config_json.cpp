@@ -371,6 +371,42 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_number(p, &v))
         return false;
       cfg->saturation = clamp_saturation((float)v);
+    } else if (strcmp(key, "brightnessMode") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "linear") == 0 || s[0] == 'l' || s[0] == 'L')
+        cfg->brightnessMode = 'l';
+      else
+        cfg->brightnessMode = 'f';
+    } else if (strcmp(key, "brightnessLo") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->brightnessLo = clamp_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "brightnessHi") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->brightnessHi = clamp_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "regionBrightnessMode") == 0) {
+      char s[16];
+      if (!parse_string(p, s, sizeof(s)))
+        return false;
+      if (strcmp(s, "linear") == 0 || s[0] == 'l' || s[0] == 'L')
+        cfg->regionBrightnessMode = 'l';
+      else
+        cfg->regionBrightnessMode = 'f';
+    } else if (strcmp(key, "regionBrightnessLo") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->regionBrightnessLo = clamp_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
+    } else if (strcmp(key, "regionBrightnessHi") == 0) {
+      double v = 0;
+      if (!parse_number(p, &v))
+        return false;
+      cfg->regionBrightnessHi = clamp_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
     } else if (strcmp(key, "saturationAlgo") == 0) {
       // 固定减去中性色；旧 JSON 的 luma 读入后钳为 neutral
       char s[16];
@@ -667,7 +703,12 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
     if (*p == '}') {
       ++p;
       skip_ws(p);
-      return *p == '\0';
+      if (*p != '\0')
+        return false;
+      clamp_brightness_range(&cfg->brightnessLo, &cfg->brightnessHi);
+      clamp_brightness_range(&cfg->regionBrightnessLo,
+                             &cfg->regionBrightnessHi);
+      return true;
     }
     return false;
   }
@@ -710,6 +751,13 @@ std::string config_format_json(const HelperConfig &c) {
   snprintf(num, sizeof(num), "  \"blurStep\": %d,\n", c.blurStep);
   o.append(num);
   snprintf(num, sizeof(num), "  \"saturation\": %.4g,\n", (double)c.saturation);
+  o.append(num);
+  o.append("  \"brightnessMode\": ");
+  append_escaped(&o, c.brightnessMode == 'l' ? "linear" : "full");
+  o.append(",\n");
+  snprintf(num, sizeof(num), "  \"brightnessLo\": %d,\n", c.brightnessLo);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"brightnessHi\": %d,\n", c.brightnessHi);
   o.append(num);
   o.append("  \"saturationAlgo\": ");
   append_escaped(&o, c.saturationAlgo == 'n' ? "neutral" : "luma");
@@ -784,6 +832,15 @@ std::string config_format_json(const HelperConfig &c) {
   snprintf(num, sizeof(num),
            "  \"regionBBox\": {\"l\": %d, \"t\": %d, \"w\": %d, \"h\": %d},\n",
            c.regionBBox.l, c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
+  o.append(num);
+  o.append("  \"regionBrightnessMode\": ");
+  append_escaped(&o, c.regionBrightnessMode == 'l' ? "linear" : "full");
+  o.append(",\n");
+  snprintf(num, sizeof(num), "  \"regionBrightnessLo\": %d,\n",
+           c.regionBrightnessLo);
+  o.append(num);
+  snprintf(num, sizeof(num), "  \"regionBrightnessHi\": %d,\n",
+           c.regionBrightnessHi);
   o.append(num);
 
   o.append("  \"musicSource\": ");

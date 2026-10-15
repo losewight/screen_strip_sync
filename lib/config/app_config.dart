@@ -1,8 +1,10 @@
-﻿import 'music_config.dart';
+﻿import 'brightness_config.dart';
+import 'music_config.dart';
 import 'region_bbox.dart';
 import 'segment_map_codec.dart';
 import 'segment_sample.dart';
 
+export 'brightness_config.dart';
 export 'music_config.dart';
 export 'region_bbox.dart';
 export 'segment_sample.dart';
@@ -49,6 +51,7 @@ class AppConfig {
     this.nearBlack = 30,
     this.blurStep = 0,
     this.saturation = 1.0,
+    this.brightness = BrightnessSetting.defaults,
     this.saturationAlgo = SaturationAlgo.neutral,
     this.sampleAlgo = SampleAlgo.mean,
     this.nearBlackLuma = NearBlackLuma.rec601,
@@ -67,6 +70,7 @@ class AppConfig {
     this.regionSmooth = 0.8,
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
+    this.regionBrightness = BrightnessSetting.defaults,
     this.musicSource = MusicPickupSource.speaker,
     this.musicLayout = MusicLightMode.startToEnd,
     this.musicReverse = false,
@@ -96,6 +100,9 @@ class AppConfig {
 
   /// 饱和度增益 0.5..2.0；1.0=原色，默认 1.0（100%）。
   final double saturation;
+
+  /// 屏幕跟色亮度模式（全亮度 / 线性区间）。
+  final BrightnessSetting brightness;
 
   /// 饱和度算法：固定减去中性色；luma 仅旧 cfg 兼容。
   final SaturationAlgo saturationAlgo;
@@ -149,6 +156,9 @@ class AppConfig {
 
   /// 屏幕氛围取色框（被抓那块屏的百分比）。
   final RegionBBox regionBBox;
+
+  /// 屏幕氛围亮度模式（与 [brightness] 正交）。
+  final BrightnessSetting regionBrightness;
 
   /// 音乐动态音频来源。
   final MusicPickupSource musicSource;
@@ -213,6 +223,7 @@ class AppConfig {
     int? nearBlack,
     int? blurStep,
     double? saturation,
+    BrightnessSetting? brightness,
     SaturationAlgo? saturationAlgo,
     SampleAlgo? sampleAlgo,
     NearBlackLuma? nearBlackLuma,
@@ -232,6 +243,7 @@ class AppConfig {
     double? regionSmooth,
     int? regionDark,
     RegionBBox? regionBBox,
+    BrightnessSetting? regionBrightness,
     MusicPickupSource? musicSource,
     MusicLightMode? musicLayout,
     bool? musicReverse,
@@ -254,6 +266,7 @@ class AppConfig {
       nearBlack: nearBlack ?? this.nearBlack,
       blurStep: blurStep ?? this.blurStep,
       saturation: saturation ?? this.saturation,
+      brightness: brightness ?? this.brightness,
       saturationAlgo: saturationAlgo ?? this.saturationAlgo,
       sampleAlgo: sampleAlgo ?? this.sampleAlgo,
       nearBlackLuma: nearBlackLuma ?? this.nearBlackLuma,
@@ -272,6 +285,7 @@ class AppConfig {
       regionSmooth: regionSmooth ?? this.regionSmooth,
       regionDark: regionDark ?? this.regionDark,
       regionBBox: regionBBox ?? this.regionBBox,
+      regionBrightness: regionBrightness ?? this.regionBrightness,
       musicSource: musicSource ?? this.musicSource,
       musicLayout: musicLayout ?? this.musicLayout,
       musicReverse: musicReverse ?? this.musicReverse,
@@ -299,6 +313,7 @@ class AppConfig {
     var nearBlack = 30;
     var blurStep = 0;
     var saturation = 1.0;
+    var brightness = BrightnessSetting.defaults;
     var saturationAlgo = SaturationAlgo.neutral;
     var sampleAlgo = SampleAlgo.mean;
     var nearBlackLuma = NearBlackLuma.rec601;
@@ -317,6 +332,7 @@ class AppConfig {
     var regionSmooth = 0.8;
     var regionDark = 15;
     var regionBBox = const RegionBBox();
+    var regionBrightness = BrightnessSetting.defaults;
     var musicSource = MusicPickupSource.speaker;
     var musicLayout = MusicLightMode.startToEnd;
     var musicReverse = false;
@@ -359,6 +375,9 @@ class AppConfig {
         case 'saturation':
           final v = double.tryParse(val);
           if (v != null) saturation = v.clamp(0.5, 2.0);
+        case 'brightness':
+          final parsed = BrightnessSetting.tryParse(val);
+          if (parsed != null) brightness = parsed;
         case 'saturation_algo':
           // UI 已撤；固定减去中性色（与 helper 钳制一致）。
           saturationAlgo = SaturationAlgo.neutral;
@@ -412,6 +431,9 @@ class AppConfig {
         case 'region_bbox':
           final box = RegionBBox.tryParse(val);
           if (box != null) regionBBox = box;
+        case 'region_brightness':
+          final parsed = BrightnessSetting.tryParse(val);
+          if (parsed != null) regionBrightness = parsed;
         case 'music_source':
           musicSource = MusicPickupSourceIpc.fromIpcWord(val);
         case 'music_layout':
@@ -469,6 +491,7 @@ class AppConfig {
       nearBlack: nearBlack,
       blurStep: blurStep,
       saturation: saturation,
+      brightness: brightness,
       saturationAlgo: saturationAlgo,
       sampleAlgo: sampleAlgo,
       nearBlackLuma: nearBlackLuma,
@@ -487,6 +510,7 @@ class AppConfig {
       regionSmooth: regionSmooth,
       regionDark: regionDark,
       regionBBox: regionBBox,
+      regionBrightness: regionBrightness,
       musicSource: musicSource,
       musicLayout: musicLayout,
       musicReverse: musicReverse,

@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include "config_clamp.h"
 #include "config_store.h"
 #include "ipc_internal.h"
 #include "ipc_loop.h"
@@ -13,6 +14,42 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+// 解析 "full|linear lo,hi"；成功写 mode('f'|'l')/lo/hi 并返回 true。
+static bool parse_brightness_arg(const char *p, char *mode, int *lo, int *hi) {
+  if (!p || !mode || !lo || !hi)
+    return false;
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  char word[16] = {};
+  int wi = 0;
+  while (*p && *p != ' ' && *p != '\t' && wi + 1 < (int)sizeof(word))
+    word[wi++] = *p++;
+  word[wi] = '\0';
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  if (strcmp(word, "linear") == 0)
+    *mode = 'l';
+  else if (strcmp(word, "full") == 0)
+    *mode = 'f';
+  else
+    return false;
+  char *end = nullptr;
+  long a = strtol(p, &end, 10);
+  if (end == p || *end != ',')
+    return false;
+  p = end + 1;
+  long b = strtol(p, &end, 10);
+  if (end == p)
+    return false;
+  while (*end == ' ' || *end == '\t')
+    ++end;
+  if (*end != '\0')
+    return false;
+  *lo = (int)a;
+  *hi = (int)b;
+  return true;
+}
 
 // 匹配并处理配置类 set 命令；未匹配返回 false，由 dispatch_line 继续。
 bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
@@ -98,6 +135,46 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
       if (fabsf(after.saturation - v) > 0.0005f)
         ipc_push_config_snapshot();
       printf("cmd=set saturation\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set brightness ", 15) == 0) {
+    const char *p = line + 15;
+    char mode = 'f';
+    int lo = 0, hi = 0;
+    if (!parse_brightness_arg(p, &mode, &lo, &hi)) {
+      printf("bad set brightness: [%s]\n", p);
+    } else {
+      engine_set_brightness(mode, lo, hi);
+      config_set_brightness(mode, lo, hi);
+      HelperConfig after{};
+      config_copy(&after);
+      int clo = lo, chi = hi;
+      clamp_brightness_range(&clo, &chi);
+      if (after.brightnessMode != clamp_brightness_mode(mode) ||
+          after.brightnessLo != clo || after.brightnessHi != chi)
+        ipc_push_config_snapshot();
+      printf("cmd=set brightness\n");
+    }
+    return true;
+  }
+  if (strncmp(line, "set region_brightness ", 22) == 0) {
+    const char *p = line + 22;
+    char mode = 'f';
+    int lo = 0, hi = 0;
+    if (!parse_brightness_arg(p, &mode, &lo, &hi)) {
+      printf("bad set region_brightness: [%s]\n", p);
+    } else {
+      engine_set_region_brightness(mode, lo, hi);
+      config_set_region_brightness(mode, lo, hi);
+      HelperConfig after{};
+      config_copy(&after);
+      int clo = lo, chi = hi;
+      clamp_brightness_range(&clo, &chi);
+      if (after.regionBrightnessMode != clamp_brightness_mode(mode) ||
+          after.regionBrightnessLo != clo || after.regionBrightnessHi != chi)
+        ipc_push_config_snapshot();
+      printf("cmd=set region_brightness\n");
     }
     return true;
   }

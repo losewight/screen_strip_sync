@@ -84,7 +84,12 @@ class ScreenSyncPanel extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.text),
-                const BrightnessModeCard(),
+                BrightnessModeCard(
+                  value: cfg.brightness,
+                  enabled: canEdit,
+                  onChanged: canEdit ? config.setBrightness : null,
+                  onChangeEnd: canEdit ? notifier.sendBrightness : null,
+                ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '跟色参数',

@@ -15,6 +15,9 @@ extern std::mutex g_engine_mu;
 
 extern std::atomic<float> g_alpha;
 extern std::atomic<float> g_saturation;
+// 打包：bit16=线性；bit8..15=lo；bit0..7=hi（0..100）
+extern std::atomic<unsigned> g_map_brightness;
+extern std::atomic<unsigned> g_region_brightness;
 
 extern std::atomic<char> g_region_algo;
 extern std::atomic<int> g_region_blur;

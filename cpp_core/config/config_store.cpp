@@ -124,6 +124,30 @@ void config_set_saturation(float v) {
   ensure_saver_started();
 }
 
+void config_set_brightness(char mode, int lo, int hi) {
+  clamp_brightness_range(&lo, &hi);
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.brightnessMode = clamp_brightness_mode(mode);
+    g_cfg.brightnessLo = lo;
+    g_cfg.brightnessHi = hi;
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
+void config_set_region_brightness(char mode, int lo, int hi) {
+  clamp_brightness_range(&lo, &hi);
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    g_cfg.regionBrightnessMode = clamp_brightness_mode(mode);
+    g_cfg.regionBrightnessLo = lo;
+    g_cfg.regionBrightnessHi = hi;
+    mark_dirty_unlocked();
+  }
+  ensure_saver_started();
+}
+
 void config_set_saturation_algo(char algo) {
   (void)algo;
   {

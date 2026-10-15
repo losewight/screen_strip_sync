@@ -29,6 +29,9 @@ void engine_set_alpha(float alpha);
 void engine_set_near_black(int v);
 void engine_set_blur(int v);
 void engine_set_saturation(float v); // 0.5..2；map 路径饱和度增益
+// 亮度模式：mode 'f'|'l'；lo/hi 0..100（BRT 原值）；map / region 各一份
+void engine_set_brightness(char mode, int lo, int hi);
+void engine_set_region_brightness(char mode, int lo, int hi);
 void engine_set_sample_algo(char algo); // 'r'=rms, 'm'=mean
 void engine_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg
 bool engine_set_com(const char *name);
@@ -66,7 +69,9 @@ void engine_copy_map_snapshot(bool *out_custom,
 
 // map 共享采样：抓屏 → EMA → 饱和度 → seg_gate → out_rgb[10][3]
 // timeout_ms 传给 DXGI；Music Screen 用 5，map 路径用 50。
-DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]);
+// out_level：可选；EMA 后 / sat 前的 max(R,G,B)，暗门灭时为 0（供线性 BRT）。
+DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3],
+                        float out_level[10] = nullptr);
 
 // 休眠拆掉 DXGI 后，追色 / 唤醒恢复前必须再 init
 bool engine_ensure_dxgi();

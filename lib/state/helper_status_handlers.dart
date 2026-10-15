@@ -256,11 +256,13 @@ mixin _HelperStatusHandlers on _HelperStateBase {
   void syncSegmentMapFromConfig();
   void startRegion();
   void startMusic();
+  void sendBrightness(BrightnessSetting value);
   void sendRegionAlgo(RegionAlgo algo);
   void sendRegionBlur(int blur);
   void sendRegionSmooth(double smooth);
   void sendRegionDark(int dark);
   void sendRegionBBox(RegionBBox box);
+  void sendRegionBrightness(BrightnessSetting value);
   void sendMusicSource(MusicPickupSource source);
   void sendMusicLayout(MusicLightMode layout);
   void sendMusicReverse(bool reverse);

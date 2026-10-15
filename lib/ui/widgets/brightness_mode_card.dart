@@ -2,54 +2,53 @@ import 'package:flutter/material.dart';
 
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
+import '../../config/brightness_config.dart';
 import 'scheme_card.dart';
 import 'win11_segmented_control.dart';
 
-/// 亮度模式（仅 UI；后续再接 helper）。
-enum BrightnessModeUi {
-  full,
-  linear;
+/// 亮度模式卡片：受控；选「线性」时用 [AnimatedSize] 展开 0–100 区间条。
+class BrightnessModeCard extends StatelessWidget {
+  const BrightnessModeCard({
+    super.key,
+    required this.value,
+    this.onChanged,
+    this.onChangeEnd,
+    this.enabled = true,
+  });
 
-  String get label => switch (this) {
-    BrightnessModeUi.full => '全亮度',
-    BrightnessModeUi.linear => '线性',
-  };
-}
-
-/// 亮度模式卡片：本地切换态；选「线性」时用 [AnimatedSize] 展开 0–64 区间条。
-class BrightnessModeCard extends StatefulWidget {
-  const BrightnessModeCard({super.key});
-
-  @override
-  State<BrightnessModeCard> createState() => _BrightnessModeCardState();
-}
-
-class _BrightnessModeCardState extends State<BrightnessModeCard> {
-  BrightnessModeUi _mode = BrightnessModeUi.full;
-  RangeValues _linearRange = const RangeValues(16, 48);
+  final BrightnessSetting value;
+  final ValueChanged<BrightnessSetting>? onChanged;
+  final ValueChanged<BrightnessSetting>? onChangeEnd;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final start = _linearRange.start.round();
-    final end = _linearRange.end.round();
+    final canEdit = enabled && onChanged != null;
+    final start = value.lo;
+    final end = value.hi;
     return SchemeCard(
       title: '亮度模式',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Win11SegmentedControl<BrightnessModeUi>(
+          Win11SegmentedControl<BrightnessMode>(
             segments: [
-              for (final mode in BrightnessModeUi.values)
+              for (final mode in BrightnessMode.values)
                 Win11Segment(value: mode, label: mode.label),
             ],
-            selected: _mode,
-            onChanged: (mode) => setState(() => _mode = mode),
+            selected: value.mode,
+            onChanged: (mode) {
+              if (!canEdit) return;
+              final next = value.copyWith(mode: mode);
+              onChanged!(next);
+              onChangeEnd?.call(next);
+            },
           ),
           AnimatedSize(
             duration: AppTheme.navDuration,
             curve: AppTheme.navCurve,
             alignment: Alignment.topCenter,
-            child: _mode == BrightnessModeUi.linear
+            child: value.mode == BrightnessMode.linear
                 ? Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.text),
                     child: Column(
@@ -77,13 +76,30 @@ class _BrightnessModeCardState extends State<BrightnessModeCard> {
                                 ShowValueIndicator.onlyForDiscrete,
                           ),
                           child: RangeSlider(
-                            values: _linearRange,
+                            values: RangeValues(
+                              start.toDouble(),
+                              end.toDouble(),
+                            ),
                             min: 0,
-                            max: 64,
-                            divisions: 64,
+                            max: 100,
+                            divisions: 100,
                             labels: RangeLabels('$start', '$end'),
-                            onChanged: (v) =>
-                                setState(() => _linearRange = v),
+                            onChanged: canEdit
+                                ? (v) => onChanged!(
+                                      value.copyWith(
+                                        lo: v.start.round(),
+                                        hi: v.end.round(),
+                                      ),
+                                    )
+                                : null,
+                            onChangeEnd: canEdit && onChangeEnd != null
+                                ? (v) => onChangeEnd!(
+                                      value.copyWith(
+                                        lo: v.start.round(),
+                                        hi: v.end.round(),
+                                      ),
+                                    )
+                                : null,
                           ),
                         ),
                       ],

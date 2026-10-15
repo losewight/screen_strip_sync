@@ -58,6 +58,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
     state = state.copyWith(saturation: value.clamp(0.5, 2.0));
   }
 
+  void setBrightness(BrightnessSetting value) {
+    state = state.copyWith(brightness: value);
+  }
+
   void setMode(ColorMode mode) {
     state = state.copyWith(mode: mode);
   }
@@ -81,6 +85,10 @@ class ConfigNotifier extends Notifier<AppConfig> {
   void setRegionBBox(RegionBBox box) {
     if (!box.isValid) return;
     state = state.copyWith(regionBBox: box);
+  }
+
+  void setRegionBrightness(BrightnessSetting value) {
+    state = state.copyWith(regionBrightness: value);
   }
 
   void setMusicSource(MusicPickupSource source) {

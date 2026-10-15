@@ -21,6 +21,9 @@ std::mutex g_engine_mu;
 std::atomic<float> g_alpha{1.f};
 // 为什么：默认 1.0（UI 100% 原色）；IPC/JSON 可改
 std::atomic<float> g_saturation{1.f};
+// 默认 full + 25..75（与 HelperConfig 对齐）
+std::atomic<unsigned> g_map_brightness{(25u << 8) | 75u};
+std::atomic<unsigned> g_region_brightness{(25u << 8) | 75u};
 // 屏幕氛围参数（与 map alpha/near_black/blur 正交）
 std::atomic<char> g_region_algo{'m'};
 std::atomic<int> g_region_blur{3};
@@ -73,6 +76,22 @@ void engine_set_saturation(float v) {
   if (v > 2.f)
     v = 2.f;
   g_saturation.store(v);
+}
+
+static unsigned pack_brightness(char mode, int lo, int hi) {
+  clamp_brightness_range(&lo, &hi);
+  unsigned packed = ((unsigned)lo << 8) | (unsigned)hi;
+  if (clamp_brightness_mode(mode) == 'l')
+    packed |= (1u << 16);
+  return packed;
+}
+
+void engine_set_brightness(char mode, int lo, int hi) {
+  g_map_brightness.store(pack_brightness(mode, lo, hi));
+}
+
+void engine_set_region_brightness(char mode, int lo, int hi) {
+  g_region_brightness.store(pack_brightness(mode, lo, hi));
 }
 
 void engine_set_region_algo(char algo) {

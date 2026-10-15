@@ -22,12 +22,15 @@ void config_apply() {
   engine_set_near_black(c.nearBlack);
   engine_set_blur(c.blurStep);
   engine_set_saturation(c.saturation);
+  engine_set_brightness(c.brightnessMode, c.brightnessLo, c.brightnessHi);
   engine_set_sample_algo(c.sampleAlgo);
   engine_set_near_black_luma(c.nearBlackLuma);
   engine_set_region_algo(c.regionAlgo);
   engine_set_region_blur(c.regionBlur);
   engine_set_region_smooth(c.regionSmooth);
   engine_set_region_dark(c.regionDark);
+  engine_set_region_brightness(c.regionBrightnessMode, c.regionBrightnessLo,
+                               c.regionBrightnessHi);
   engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
                          c.regionBBox.h);
   engine_set_music_source(c.musicSource);

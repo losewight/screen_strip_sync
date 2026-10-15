@@ -191,6 +191,9 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg near_black %d\n", c.nearBlack);
   send_line(client, "cfg blur %d\n", c.blurStep);
   send_line(client, "cfg saturation %.2f\n", (double)c.saturation);
+  send_line(client, "cfg brightness %s %d,%d\n",
+            c.brightnessMode == 'l' ? "linear" : "full", c.brightnessLo,
+            c.brightnessHi);
   send_line(client, "cfg saturation_algo %s\n", "neutral");
   send_line(client, "cfg sample_algo %s\n",
             c.sampleAlgo == 'm' ? "mean" : "rms");
@@ -213,6 +216,9 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg region_dark %d\n", c.regionDark);
   send_line(client, "cfg region_bbox %d,%d,%d,%d\n", c.regionBBox.l,
             c.regionBBox.t, c.regionBBox.w, c.regionBBox.h);
+  send_line(client, "cfg region_brightness %s %d,%d\n",
+            c.regionBrightnessMode == 'l' ? "linear" : "full",
+            c.regionBrightnessLo, c.regionBrightnessHi);
   send_line(client, "cfg music_source %s\n",
             c.musicSource == 'i'   ? "mic"
             : c.musicSource == 'b' ? "both"

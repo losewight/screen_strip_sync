@@ -84,7 +84,8 @@ static inline float asym_tracking_alpha(float alpha, float L_new, float L_old) {
 }
 
 // 为什么：采样先墙补一份给判定；显示路径 EMA(+sat) 后再墙补，两路同口径。
-static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
+// 返回暗门是否 ON（供线性 BRT 用段亮度；灭段按 0）。
+static bool seg_finish(int i, float sample_r, float sample_g, float sample_b,
                        float disp_r, float disp_g, float disp_b,
                        unsigned char out_rgb[3]) {
   diag_note_raw(i, sample_r, sample_g, sample_b);
@@ -96,17 +97,39 @@ static void seg_finish(int i, float sample_r, float sample_g, float sample_b,
   wall_comp_apply(&dr, &dg, &db);
 
   float out[3];
-  seg_gate_step(&g_seg_gate[i], gr, gg, gb, dr, dg, db, out);
+  const bool on = seg_gate_step(&g_seg_gate[i], gr, gg, gb, dr, dg, db, out);
   if (g_seg_gate[i].flipped)
     ++g_diag_gate_flip[i];
 
   out_rgb[0] = (unsigned char)(out[0] + 0.5f);
   out_rgb[1] = (unsigned char)(out[1] + 0.5f);
   out_rgb[2] = (unsigned char)(out[2] + 0.5f);
+  return on;
+}
+
+// packed：bit16=线性；bit8..15=lo；bit0..7=hi。全亮度固定 0x63。
+static unsigned frame_brightness(unsigned packed, const float level[10]) {
+  if ((packed & (1u << 16)) == 0)
+    return 0x63u;
+  const unsigned lo = (packed >> 8) & 0xffu;
+  const unsigned hi = packed & 0xffu;
+  float sum = 0.f;
+  for (int i = 0; i < 10; ++i)
+    sum += level[i];
+  float t = sum / (10.f * 255.f);
+  if (t < 0.f)
+    t = 0.f;
+  if (t > 1.f)
+    t = 1.f;
+  unsigned brt = lo + (unsigned)((float)(hi - lo) * t + 0.5f);
+  if (brt > 100u)
+    brt = 100u;
+  return brt;
 }
 
 // 抓屏 → EMA → 饱和度 → seg_gate；Music Screen 与 map 共用。
-DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]) {
+DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3],
+                        float out_level[10]) {
   if (!out_rgb)
     return DxgiErr::AcquireFailed;
   unsigned char rgb[10][3] = {};
@@ -139,6 +162,9 @@ DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]) {
       g_ema_b[i] = a * b + (1.f - a) * g_ema_b[i];
     }
 
+    // 线性 BRT：EMA 后 / sat 前的 max；暗门灭时写 0
+    const float level_pre = channel_max3(g_ema_r[i], g_ema_g[i], g_ema_b[i]);
+
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
@@ -166,7 +192,9 @@ DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]) {
         ob = 255.f;
     }
 
-    seg_finish(i, r, g, b, or_, og, ob, out_rgb[i]);
+    const bool on = seg_finish(i, r, g, b, or_, og, ob, out_rgb[i]);
+    if (out_level)
+      out_level[i] = on ? level_pre : 0.f;
   }
   g_ema_inited = true;
   diag_maybe_log();
@@ -178,7 +206,8 @@ DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3]) {
 static DxgiErr produce_colors_map(int frame_index, char *out_frame,
                                   size_t out_cap) {
   unsigned char out_rgb[10][3] = {};
-  DxgiErr e = map_sample_step(50, out_rgb);
+  float levels[10] = {};
+  DxgiErr e = map_sample_step(50, out_rgb, levels);
   if (e != DxgiErr::Ok)
     return e;
 
@@ -187,13 +216,14 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
     snprintf(colors[i], sizeof(colors[i]), "%02x%02x%02x", out_rgb[i][0],
              out_rgb[i][1], out_rgb[i][2]);
 
+  const unsigned brt = frame_brightness(g_map_brightness.load(), levels);
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
-           "set_rgb_pc %04x 00 63 "
+           "set_rgb_pc %04x 00 %02x "
            "%s 2 %s 2 %s 2 %s 2 %s 2 "
            "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           frame_id, colors[0], colors[1], colors[2], colors[3], colors[4],
-           colors[5], colors[6], colors[7], colors[8], colors[9]);
+           frame_id, brt, colors[0], colors[1], colors[2], colors[3],
+           colors[4], colors[5], colors[6], colors[7], colors[8], colors[9]);
 
   // 红线：组完再查长度
   if (strlen(out_frame) >= 120)
@@ -221,6 +251,7 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
 
   const float smooth = g_region_smooth.load();
   char colors[10][7] = {};
+  float levels[10] = {};
 
   for (int i = 0; i < 10; ++i) {
     const float r = (float)rgb[i][0];
@@ -243,24 +274,27 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
       g_ema_b[i] = s * g_ema_b[i] + (1.f - s) * b;
     }
 
+    const float level_pre = channel_max3(g_ema_r[i], g_ema_g[i], g_ema_b[i]);
     float or_ = g_ema_r[i];
     float og = g_ema_g[i];
     float ob = g_ema_b[i];
     unsigned char out_rgb[3];
-    seg_finish(i, r, g, b, or_, og, ob, out_rgb);
+    const bool on = seg_finish(i, r, g, b, or_, og, ob, out_rgb);
+    levels[i] = on ? level_pre : 0.f;
     snprintf(colors[i], sizeof(colors[i]), "%02x%02x%02x", out_rgb[0],
              out_rgb[1], out_rgb[2]);
   }
   g_ema_inited = true;
   diag_maybe_log();
 
+  const unsigned brt = frame_brightness(g_region_brightness.load(), levels);
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
-           "set_rgb_pc %04x 00 63 "
+           "set_rgb_pc %04x 00 %02x "
            "%s 2 %s 2 %s 2 %s 2 %s 2 "
            "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           frame_id, colors[0], colors[1], colors[2], colors[3], colors[4],
-           colors[5], colors[6], colors[7], colors[8], colors[9]);
+           frame_id, brt, colors[0], colors[1], colors[2], colors[3],
+           colors[4], colors[5], colors[6], colors[7], colors[8], colors[9]);
 
   if (strlen(out_frame) >= 120)
     return DxgiErr::AcquireFailed;

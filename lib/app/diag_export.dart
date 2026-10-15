@@ -71,6 +71,7 @@ abstract final class DiagExporter {
     buf.writeln('nearBlack: ${config.nearBlack}');
     buf.writeln('blurStep: ${config.blurStep}');
     buf.writeln('saturation: ${config.saturation}');
+    buf.writeln('brightness: ${config.brightness.toIpcPayload()}');
     buf.writeln('saturationAlgo: ${config.saturationAlgo.name}');
     buf.writeln('sampleAlgo: ${config.sampleAlgo.name}');
     buf.writeln('nearBlackLuma: ${config.nearBlackLuma.name}');
@@ -79,6 +80,9 @@ abstract final class DiagExporter {
     buf.writeln('regionSmooth: ${config.regionSmooth}');
     buf.writeln('regionDark: ${config.regionDark}');
     buf.writeln('regionBBox: ${config.regionBBox.toIpcPayload()}');
+    buf.writeln(
+      'regionBrightness: ${config.regionBrightness.toIpcPayload()}',
+    );
     buf.writeln('hasSegmentMap: ${config.hasSegmentMap}');
     buf.writeln();
 
