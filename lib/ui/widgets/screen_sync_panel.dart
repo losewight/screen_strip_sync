@@ -2,25 +2,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/spacing.dart';
-import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
+import '../widgets/brightness_mode_card.dart';
 import '../widgets/info_hint.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/segment_map_calibrator.dart';
-import '../widgets/win11_segmented_control.dart';
 import '../widgets/win11_switch.dart';
-
-/// 亮度模式（仅 UI；后续再接 helper）。
-enum _BrightnessMode {
-  full,
-  linear;
-
-  String get label => switch (this) {
-    _BrightnessMode.full => '全亮度',
-    _BrightnessMode.linear => '线性',
-  };
-}
 
 /// 屏幕跟色：逐段 map / 顶边均分 + EMA 参数；入口命令 `start`。
 class ScreenSyncPanel extends ConsumerWidget {
@@ -96,7 +84,7 @@ class ScreenSyncPanel extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.text),
-                const _BrightnessModeCard(),
+                const BrightnessModeCard(),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
                   title: '跟色参数',
@@ -226,64 +214,6 @@ class ScreenSyncPanel extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 亮度模式卡片：本地切换态；选「线性」时用 [AnimatedSize] 展开 0–64 滑条。
-class _BrightnessModeCard extends StatefulWidget {
-  const _BrightnessModeCard();
-
-  @override
-  State<_BrightnessModeCard> createState() => _BrightnessModeCardState();
-}
-
-class _BrightnessModeCardState extends State<_BrightnessModeCard> {
-  _BrightnessMode _mode = _BrightnessMode.full;
-  int _linearValue = 32;
-
-  @override
-  Widget build(BuildContext context) {
-    return SchemeCard(
-      title: '亮度模式',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Win11SegmentedControl<_BrightnessMode>(
-            segments: [
-              for (final mode in _BrightnessMode.values)
-                Win11Segment(value: mode, label: mode.label),
-            ],
-            selected: _mode,
-            onChanged: (mode) => setState(() => _mode = mode),
-          ),
-          AnimatedSize(
-            duration: AppTheme.navDuration,
-            curve: AppTheme.navCurve,
-            alignment: Alignment.topCenter,
-            child: _mode == _BrightnessMode.linear
-                ? Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.text),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SchemeParamLabel('区间: $_linearValue'),
-                        Slider(
-                          value: _linearValue.toDouble(),
-                          min: 0,
-                          max: 64,
-                          divisions: 64,
-                          label: '$_linearValue',
-                          onChanged: (v) =>
-                              setState(() => _linearValue = v.round()),
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
       ),
     );
   }
