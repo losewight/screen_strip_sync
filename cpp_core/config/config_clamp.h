@@ -64,6 +64,22 @@ inline int clamp_pct(int v) {
   return v;
 }
 inline int clamp_music_pct(int v) { return clamp_pct(v); }
+// 亮度模式：'f'=全亮度 | 'l'=线性
+inline char clamp_brightness_mode(char c) {
+  return (c == 'l' || c == 'L') ? 'l' : 'f';
+}
+// 线性区间 0..100（即 BRT 原值 0x00..0x64）；反序时交换
+inline void clamp_brightness_range(int *lo, int *hi) {
+  if (!lo || !hi)
+    return;
+  *lo = clamp_pct(*lo);
+  *hi = clamp_pct(*hi);
+  if (*lo > *hi) {
+    const int t = *lo;
+    *lo = *hi;
+    *hi = t;
+  }
+}
 inline char clamp_music_source(char c) {
   if (c == 'i' || c == 'I')
     return 'i';
