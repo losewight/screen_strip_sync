@@ -124,17 +124,39 @@ DxgiErr produce_colors_music(int frame_index, char *out_frame, size_t out_cap) {
   }
 
   char colors[kSegmentCount][7] = {};
-  for (int i = 0; i < kSegmentCount; ++i)
+  bool any_lit = false;
+  for (int i = 0; i < kSegmentCount; ++i) {
     snprintf(colors[i], sizeof(colors[i]), "%02x%02x%02x", rgb[i][0],
              rgb[i][1], rgb[i][2]);
+    if (rgb[i][0] | rgb[i][1] | rgb[i][2])
+      any_lit = true;
+  }
+
+  // 音乐模式：有段点亮时 BRT 随 level 单调亮→暗；全灭时保持 63（与今日黑帧一致）。
+  // 不做 63↔L 交替、不做鼓点 pulse。floor=0x14（~20%）保证低电平仍可读。
+  constexpr unsigned kMusicBrtFloor = 0x14;
+  constexpr unsigned kMusicBrtCeil = 0x63;
+  unsigned brt = kMusicBrtCeil;
+  if (any_lit) {
+    float lv = level;
+    if (lv < 0.f)
+      lv = 0.f;
+    if (lv > 1.f)
+      lv = 1.f;
+    brt = kMusicBrtFloor +
+          (unsigned)((kMusicBrtCeil - kMusicBrtFloor) * lv + 0.5f);
+    if (brt > kMusicBrtCeil)
+      brt = kMusicBrtCeil;
+  }
 
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
   snprintf(out_frame, out_cap,
-           "set_rgb_pc %04x 00 63 "
+           "set_rgb_pc %04x 00 %02x "
            "%s 2 %s 2 %s 2 %s 2 %s 2 "
            "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           frame_id, colors[0], colors[1], colors[2], colors[3], colors[4],
-           colors[5], colors[6], colors[7], colors[8], colors[9]);
+           frame_id, brt, colors[0], colors[1], colors[2], colors[3],
+           colors[4], colors[5], colors[6], colors[7], colors[8],
+           colors[9]);
 
   if (strlen(out_frame) >= 120)
     return DxgiErr::AcquireFailed;
