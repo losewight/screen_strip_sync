@@ -1,8 +1,7 @@
-﻿// 必须先于 windows.h
+// 必须先于 windows.h
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include "audio_capture.h"
 #include "config_store.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
@@ -69,9 +68,6 @@ void send_display_status(SOCKET client) {
   case DisplayIntentKind::Region:
     send_status_kv(client, "display", "region");
     break;
-  case DisplayIntentKind::Music:
-    send_status_kv(client, "display", "music");
-    break;
   case DisplayIntentKind::Solid:
     send_status_kv(client, "display", "solid");
     break;
@@ -83,26 +79,6 @@ void send_display_status(SOCKET client) {
     send_status_kv(client, "display", "idle");
     break;
   }
-}
-
-static void send_music_audio_status(SOCKET client) {
-  const char *word = "ok";
-  switch (audio_status()) {
-  case AudioStatus::NoDevice:
-    word = "no_device";
-    break;
-  case AudioStatus::Denied:
-    word = "denied";
-    break;
-  case AudioStatus::Error:
-    word = "error";
-    break;
-  case AudioStatus::Ok:
-  default:
-    word = "ok";
-    break;
-  }
-  send_status_kv(client, "music_audio", word);
 }
 
 static void send_capture_status(SOCKET client) {
@@ -154,8 +130,6 @@ void push_runtime_status(SOCKET client, bool include_com) {
   send_engine_status(client);
   send_display_status(client);
   send_capture_status(client);
-  if (engine_get_display_intent().kind == DisplayIntentKind::Music)
-    send_music_audio_status(client);
 }
 
 static void format_scene(char *out, size_t cap) {
@@ -166,9 +140,6 @@ static void format_scene(char *out, size_t cap) {
     break;
   case DisplayIntentKind::Region:
     snprintf(out, cap, "region");
-    break;
-  case DisplayIntentKind::Music:
-    snprintf(out, cap, "music");
     break;
   case DisplayIntentKind::Solid:
     snprintf(out, cap, "solid %s", intent.solid);
@@ -219,38 +190,6 @@ void push_config_lines(SOCKET client) {
   send_line(client, "cfg region_brightness %s %d,%d\n",
             c.regionBrightnessMode == 'l' ? "linear" : "full",
             c.regionBrightnessLo, c.regionBrightnessHi);
-  send_line(client, "cfg music_source %s\n",
-            c.musicSource == 'i'   ? "mic"
-            : c.musicSource == 'b' ? "both"
-                                   : "system");
-  send_line(client, "cfg music_layout %s\n",
-            c.musicLayout == 'm' ? "mirror" : "linear");
-  send_line(client, "cfg music_reverse %d\n", c.musicReverse ? 1 : 0);
-  send_line(client, "cfg music_sensitivity %d\n", c.musicSensitivity);
-  send_line(client, "cfg music_decay %d\n", c.musicDecay);
-  send_line(client, "cfg music_silence %s\n",
-            c.musicSilence == 'm' ? "min" : "off");
-  {
-    const bool none = c.musicMirror[0] < 0 && c.musicMirror[1] < 0 &&
-                      c.musicMirror[2] < 0 && c.musicMirror[3] < 0;
-    if (none) {
-      send_line(client, "cfg music_mirror none\n");
-    } else {
-      send_line(client, "cfg music_mirror %d,%d,%d,%d\n", c.musicMirror[0],
-                c.musicMirror[1], c.musicMirror[2], c.musicMirror[3]);
-    }
-  }
-  send_line(client, "cfg music_rest %s\n",
-            c.musicRest == 'p'   ? "peak"
-            : c.musicRest == 'b' ? "base"
-                                 : "off");
-  send_line(client, "cfg music_palette %s\n",
-            c.musicPalette == 'r'   ? "rainbow"
-            : c.musicPalette == 'f' ? "fixed"
-            : c.musicPalette == 'l' ? "level"
-            : c.musicPalette == 's' ? "screen"
-                                    : "vu");
-  send_line(client, "cfg music_color %s\n", c.musicColor);
   // 空串也推，便于 UI 区分「未设」与缺字段
   send_line(client, "cfg last_custom_solid %s\n", c.lastCustomSolid);
   send_line(client, "cfg wall_comp %d\n", c.wallCompEnabled ? 1 : 0);

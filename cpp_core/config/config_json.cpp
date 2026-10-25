@@ -1,7 +1,6 @@
-﻿#include "config_json.h"
+#include "config_json.h"
 
 #include "config_clamp.h"
-#include "music_layout.h"
 
 #include <cstdio>
 #include <cstring>
@@ -572,121 +571,6 @@ bool config_parse_json(const char *json, HelperConfig *cfg,
       if (!parse_region_bbox_obj(p, &box))
         return false;
       cfg->regionBBox = box;
-    } else if (strcmp(key, "musicSource") == 0) {
-      char s[16];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      if (strcmp(s, "mic") == 0 || s[0] == 'i' || s[0] == 'I')
-        cfg->musicSource = 'i';
-      else if (strcmp(s, "both") == 0 || s[0] == 'b' || s[0] == 'B')
-        cfg->musicSource = 'b';
-      else
-        cfg->musicSource = 's';
-    } else if (strcmp(key, "musicLayout") == 0) {
-      char s[16];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      if (strcmp(s, "mirror") == 0 || s[0] == 'm' || s[0] == 'M')
-        cfg->musicLayout = 'm';
-      else
-        cfg->musicLayout = 'l';
-    } else if (strcmp(key, "musicReverse") == 0) {
-      bool v = false;
-      if (!parse_bool(p, &v))
-        return false;
-      cfg->musicReverse = v;
-    } else if (strcmp(key, "musicSensitivity") == 0) {
-      double v = 0;
-      if (!parse_number(p, &v))
-        return false;
-      cfg->musicSensitivity =
-          clamp_music_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
-    } else if (strcmp(key, "musicDecay") == 0) {
-      double v = 0;
-      if (!parse_number(p, &v))
-        return false;
-      cfg->musicDecay = clamp_music_pct((int)(v + (v >= 0 ? 0.5 : -0.5)));
-    } else if (strcmp(key, "musicSilence") == 0) {
-      char s[16];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      if (strcmp(s, "min") == 0 || s[0] == 'm' || s[0] == 'M')
-        cfg->musicSilence = 'm';
-      else
-        cfg->musicSilence = 'o';
-    } else if (strcmp(key, "musicMirror") == 0) {
-      skip_ws(p);
-      if (*p == 'n' || *p == 'N') {
-        // null
-        if (!skip_value(p))
-          return false;
-        cfg->musicMirror[0] = cfg->musicMirror[1] = cfg->musicMirror[2] =
-            cfg->musicMirror[3] = -1;
-      } else if (*p == '[') {
-        ++p;
-        int ends[4] = {-1, -1, -1, -1};
-        for (int i = 0; i < 4; ++i) {
-          skip_ws(p);
-          double v = 0;
-          if (!parse_number(p, &v))
-            return false;
-          ends[i] = (int)(v + (v >= 0 ? 0.5 : -0.5));
-          skip_ws(p);
-          if (i < 3) {
-            if (*p != ',')
-              return false;
-            ++p;
-          }
-        }
-        skip_ws(p);
-        if (*p != ']')
-          return false;
-        ++p;
-        MusicLayout lay{};
-        if (ends[0] < 0 && ends[1] < 0 && ends[2] < 0 && ends[3] < 0) {
-          for (int i = 0; i < 4; ++i)
-            cfg->musicMirror[i] = -1;
-        } else if (music_layout_mirror(ends, &lay)) {
-          for (int i = 0; i < 4; ++i)
-            cfg->musicMirror[i] = ends[i];
-        } else {
-          for (int i = 0; i < 4; ++i)
-            cfg->musicMirror[i] = -1;
-        }
-      } else {
-        return false;
-      }
-    } else if (strcmp(key, "musicRest") == 0) {
-      char s[16];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      if (strcmp(s, "peak") == 0 || s[0] == 'p' || s[0] == 'P')
-        cfg->musicRest = 'p';
-      else if (strcmp(s, "base") == 0 || s[0] == 'b' || s[0] == 'B')
-        cfg->musicRest = 'b';
-      else
-        cfg->musicRest = 'o';
-    } else if (strcmp(key, "musicPalette") == 0) {
-      char s[16];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      if (strcmp(s, "rainbow") == 0 || s[0] == 'r' || s[0] == 'R')
-        cfg->musicPalette = 'r';
-      else if (strcmp(s, "fixed") == 0 || s[0] == 'f' || s[0] == 'F')
-        cfg->musicPalette = 'f';
-      else if (strcmp(s, "level") == 0 || s[0] == 'l' || s[0] == 'L')
-        cfg->musicPalette = 'l';
-      else if (strcmp(s, "screen") == 0 || s[0] == 's' || s[0] == 'S')
-        cfg->musicPalette = 's';
-      else
-        cfg->musicPalette = 'v';
-    } else if (strcmp(key, "musicColor") == 0) {
-      char s[8];
-      if (!parse_string(p, s, sizeof(s)))
-        return false;
-      char norm[8];
-      if (clamp_music_color(s, norm, (int)sizeof(norm)))
-        snprintf(cfg->musicColor, sizeof(cfg->musicColor), "%s", norm);
     } else if (strcmp(key, "segmentMap") == 0) {
       if (!parse_segment_map(p, cfg))
         return false;
@@ -839,58 +723,11 @@ std::string config_format_json(const HelperConfig &c) {
   snprintf(num, sizeof(num), "  \"regionBrightnessLo\": %d,\n",
            c.regionBrightnessLo);
   o.append(num);
-  snprintf(num, sizeof(num), "  \"regionBrightnessHi\": %d,\n",
-           c.regionBrightnessHi);
-  o.append(num);
-
-  o.append("  \"musicSource\": ");
-  append_escaped(&o, c.musicSource == 'i'   ? "mic"
-                     : c.musicSource == 'b' ? "both"
-                                            : "system");
-  o.append(",\n");
-  o.append("  \"musicLayout\": ");
-  append_escaped(&o, c.musicLayout == 'm' ? "mirror" : "linear");
-  o.append(",\n");
-  o.append("  \"musicReverse\": ");
-  o.append(c.musicReverse ? "true" : "false");
-  o.append(",\n");
-  snprintf(num, sizeof(num), "  \"musicSensitivity\": %d,\n",
-           c.musicSensitivity);
-  o.append(num);
-  snprintf(num, sizeof(num), "  \"musicDecay\": %d,\n", c.musicDecay);
-  o.append(num);
-  o.append("  \"musicSilence\": ");
-  append_escaped(&o, c.musicSilence == 'm' ? "min" : "off");
-  o.append(",\n");
-  {
-    const bool none = c.musicMirror[0] < 0 && c.musicMirror[1] < 0 &&
-                      c.musicMirror[2] < 0 && c.musicMirror[3] < 0;
-    if (none) {
-      o.append("  \"musicMirror\": null,\n");
-    } else {
-      snprintf(num, sizeof(num),
-               "  \"musicMirror\": [%d, %d, %d, %d],\n", c.musicMirror[0],
-               c.musicMirror[1], c.musicMirror[2], c.musicMirror[3]);
-      o.append(num);
-    }
-  }
-  o.append("  \"musicRest\": ");
-  append_escaped(&o, c.musicRest == 'p'   ? "peak"
-                     : c.musicRest == 'b' ? "base"
-                                          : "off");
-  o.append(",\n");
-  o.append("  \"musicPalette\": ");
-  append_escaped(&o, c.musicPalette == 'r'   ? "rainbow"
-                     : c.musicPalette == 'f' ? "fixed"
-                     : c.musicPalette == 'l' ? "level"
-                     : c.musicPalette == 's' ? "screen"
-                                             : "vu");
-  o.append(",\n");
-  o.append("  \"musicColor\": ");
-  append_escaped(&o, c.musicColor);
-
   if (c.hasMap) {
-    o.append(",\n  \"segmentMap\": [\n");
+    snprintf(num, sizeof(num), "  \"regionBrightnessHi\": %d,\n",
+             c.regionBrightnessHi);
+    o.append(num);
+    o.append("  \"segmentMap\": [\n");
     for (int i = 0; i < kSegmentCount; ++i) {
       const SegmentRect &r = c.map[i];
       snprintf(num, sizeof(num),
@@ -903,7 +740,9 @@ std::string config_format_json(const HelperConfig &c) {
     }
     o.append("  ]\n");
   } else {
-    o.append("\n");
+    snprintf(num, sizeof(num), "  \"regionBrightnessHi\": %d\n",
+             c.regionBrightnessHi);
+    o.append(num);
   }
   o.append("}\n");
   return o;

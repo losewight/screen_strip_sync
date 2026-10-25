@@ -1,10 +1,7 @@
-﻿#include "engine_internal.h"
+#include "engine_internal.h"
 
-#include "audio_capture.h"
 #include "config_clamp.h"
 #include "dxgi_capture.h"
-#include "music_layout.h"
-#include "music_params.h"
 
 #include <atomic>
 #include <cstdio>
@@ -139,61 +136,6 @@ void engine_set_region_bbox(int l, int t, int w, int h) {
   g_region_t = t;
   g_region_w = w;
   g_region_h = h;
-}
-
-static MusicSource music_source_from_char(char src) {
-  if (src == 'i' || src == 'I')
-    return MusicSource::Mic;
-  if (src == 'b' || src == 'B')
-    return MusicSource::Both;
-  return MusicSource::System;
-}
-
-void engine_set_music_source(char src) {
-  const MusicSource ms = music_source_from_char(src);
-  music_set_source(ms);
-  // 运行中改来源：热重启采集线程
-  if (g_running.load() && g_sync_path.load() == SyncPath::Music)
-    audio_restart(ms);
-}
-
-void engine_set_music_layout(char layout) {
-  music_set_layout_linear_or_mirror(layout);
-}
-
-void engine_set_music_reverse(bool on) { music_set_reverse(on); }
-
-void engine_set_music_sensitivity(int v) { music_set_sensitivity(v); }
-
-void engine_set_music_decay(int v) { music_set_decay(v); }
-
-void engine_set_music_silence(char mode) { music_set_silence(mode); }
-
-bool engine_set_music_mirror(const int ends[4]) {
-  if (!ends)
-    return false;
-  const bool clear =
-      ends[0] < 0 && ends[1] < 0 && ends[2] < 0 && ends[3] < 0;
-  if (!clear) {
-    MusicLayout lay{};
-    if (!music_layout_mirror(ends, &lay))
-      return false;
-  }
-  if (clear)
-    music_clear_mirror();
-  else
-    music_set_mirror(ends);
-  return true;
-}
-
-void engine_clear_music_mirror() { music_clear_mirror(); }
-
-void engine_set_music_rest(char mode) { music_set_rest(mode); }
-
-void engine_set_music_palette(char p) { music_set_palette(p); }
-
-bool engine_set_music_color(const char *rrggbb) {
-  return music_set_color(rrggbb);
 }
 
 bool engine_set_com(const char *name) {

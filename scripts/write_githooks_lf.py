@@ -1,21 +1,22 @@
-﻿"""Write .githooks scripts with LF endings and no BOM (Windows-safe)."""
+"""Write .githooks scripts with LF endings and no BOM (Windows-safe)."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / ".githooks"
 
 PREPARE = r"""#!/bin/sh
-# Strip Cursor agent trailers before the editor / commit finalizes.
+# Strip Agent trailers before the editor / commit finalizes.
 
 MSG_FILE="$1"
 [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
 
-tmp="${MSG_FILE}.strip-cursoragent.$$"
-# Drop Co-authored-by: Cursor <cursoragent@cursor.com> and any cursoragent line.
+tmp="${MSG_FILE}.strip-agent.$$"
+# Drop any Co-authored-by referencing agents/bots, cursoragent, or agent signature lines.
 if ! grep -viE \
-  -e '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor[[:space:]]*<cursoragent@cursor\.com>[[:space:]]*$' \
-  -e 'cursoragent@cursor\.com' \
-  -e '(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)' \
+  -e '^[[:space:]]*Co-authored-by:[[:space:]]*.*(cursor|agent|antigravity|copilot|gemini|claude|chatgpt|openai|anthropic|bot)' \
+  -e 'cursoragent' \
+  -e '^[[:space:]]*Signed-off-by:[[:space:]]*.*(agent|bot)' \
+  -e '^[[:space:]]*(\[?[Aa]gent\]?|🤖|Generated[ -]by:)' \
   "$MSG_FILE" >"$tmp"
 then
   : >"$tmp"
@@ -36,18 +37,15 @@ exit 0
 """
 
 COMMIT_MSG = r"""#!/bin/sh
-# Reject commits whose message still mentions Cursor agent identity.
+# Reject commits whose message contains Agent tags or identity.
 MSG_FILE="$1"
 [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
 
-if grep -qiE \
-  -e 'cursoragent@cursor\.com' \
-  -e 'Co-authored-by:[[:space:]]*Cursor' \
-  -e '(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)' \
-  "$MSG_FILE"
-then
-  echo "error: commit message must not contain Cursor agent identity" >&2
-  echo "       (cursoragent / Co-authored-by: Cursor <cursoragent@cursor.com>)" >&2
+pattern='cursoragent|Co-authored-by:[[:space:]]*.*(cursor|agent|antigravity|copilot|gemini|claude|chatgpt|openai|anthropic|bot)|Signed-off-by:[[:space:]]*.*(agent|bot)|^[[:space:]]*(\[?[Aa]gent\]?|🤖|Generated[ -]by:)'
+
+if grep -qiE -e "$pattern" "$MSG_FILE"; then
+  echo "error: commit message must not contain Agent tags or identity" >&2
+  echo "       (cursoragent / Co-authored-by with agent/bot / [agent] / AI tags)" >&2
   echo "       Remove those lines and commit again." >&2
   exit 1
 fi
@@ -55,10 +53,10 @@ exit 0
 """
 
 PRE_PUSH = r"""#!/bin/sh
-# Block push if any outgoing commit message still has Cursor agent identity.
+# Block push if any outgoing commit message still has Agent tags or identity.
 
 zero="0000000000000000000000000000000000000000"
-pattern='cursoragent@cursor\.com|Co-authored-by:[[:space:]]*Cursor|(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)'
+pattern='cursoragent|Co-authored-by:[[:space:]]*.*(cursor|agent|antigravity|copilot|gemini|claude|chatgpt|openai|anthropic|bot)|Signed-off-by:[[:space:]]*.*(agent|bot)|^[[:space:]]*(\[?[Aa]gent\]?|🤖|Generated[ -]by:)'
 
 while read -r local_ref local_sha remote_ref remote_sha
 do
@@ -80,7 +78,7 @@ do
     done
   )"
   if [ -n "$bad_commits" ]; then
-    echo "error: push blocked — commit message(s) contain Cursor agent identity:" >&2
+    echo "error: push blocked — commit message(s) contain Agent tags or identity:" >&2
     echo "$bad_commits" | while read -r c; do
       [ -n "$c" ] || continue
       echo "  $(git log -1 --format='%h %s' "$c")" >&2

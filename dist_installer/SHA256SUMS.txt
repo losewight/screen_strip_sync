@@ -1,2 +1,2 @@
-666670e3e905b8d152e368660c1690ae32caeca577ea099440c0507675625bec  ScreenStripSync-1.1.1-windows-x64.zip
-f9bcc83d0541a9038d613d686cd24970af9aa9fe5ae3a1737aaa9d4b319d4db9  ScreenStripSync-1.1.1-windows-x64-Setup.exe
+ad70fcdcacce9a3d79620c63b3dc2ccb8040f14b4da7a0e2f95d335bbe799939  ScreenStripSync-1.1.1-windows-x64-Setup.exe
+b6bbc56c0a0e692dc50fb2ca73ba328fdc6bf1d1e37605be606579e7ae840109  ScreenStripSync-1.1.1-windows-x64.zip

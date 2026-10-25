@@ -1,8 +1,8 @@
 #!/bin/sh
-# Block push if any outgoing commit message still has Cursor agent identity.
+# Block push if any outgoing commit message still has Agent tags or identity.
 
 zero="0000000000000000000000000000000000000000"
-pattern='cursoragent@cursor\.com|Co-authored-by:[[:space:]]*Cursor|(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)'
+pattern='cursoragent|Co-authored-by:[[:space:]]*.*(cursor|agent|antigravity|copilot|gemini|claude|chatgpt|openai|anthropic|bot)|Signed-off-by:[[:space:]]*.*(agent|bot)|^[[:space:]]*(\[?[Aa]gent\]?|🤖|Generated[ -]by:)'
 
 while read -r local_ref local_sha remote_ref remote_sha
 do
@@ -24,7 +24,7 @@ do
     done
   )"
   if [ -n "$bad_commits" ]; then
-    echo "error: push blocked — commit message(s) contain Cursor agent identity:" >&2
+    echo "error: push blocked — commit message(s) contain Agent tags or identity:" >&2
     echo "$bad_commits" | while read -r c; do
       [ -n "$c" ] || continue
       echo "  $(git log -1 --format='%h %s' "$c")" >&2

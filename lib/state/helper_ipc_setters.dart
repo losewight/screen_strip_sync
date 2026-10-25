@@ -90,25 +90,6 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
     }
   }
 
-  /// 音乐动态：独立于 map / region 的控灯入口。
-  @override
-  void startMusic() {
-    if (!_client.isConnected) return;
-    try {
-      _cancelPendingSolid();
-      _engineWanted = true;
-      _lastDisplay = HelperDisplayKind.music;
-      _sendIpc('start_music');
-      _patch(
-        message: '音乐动态运行中',
-        phase: HelperPhase.running,
-        engineRunning: true,
-      );
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
   @override
   void sendRegionAlgo(RegionAlgo algo) {
     if (!_client.isConnected) return;
@@ -170,112 +151,6 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
     if (!_client.isConnected) return;
     try {
       _sendIpc('set region_brightness ${value.toIpcPayload()}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicSource(MusicPickupSource source) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_source ${source.ipcWord}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicLayout(MusicLightMode layout) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_layout ${layout.ipcWord}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicReverse(bool reverse) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_reverse ${reverse ? 1 : 0}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicSensitivity(int sensitivity) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_sensitivity ${sensitivity.clamp(0, 100)}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicDecay(int decay) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_decay ${decay.clamp(0, 100)}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicSilence(MusicSilence silence) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_silence ${silence.ipcWord}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicMirror(MusicMirror mirror) {
-    if (!_client.isConnected) return;
-    try {
-      if (mirror.isUnset) {
-        _sendIpc('set music_mirror clear');
-      } else if (mirror.isValid) {
-        _sendIpc('set music_mirror ${mirror.toIpcPayload()}');
-      }
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicRest(MusicRest rest) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_rest ${rest.ipcWord}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicPalette(MusicPalette palette) {
-    if (!_client.isConnected) return;
-    try {
-      _sendIpc('set music_palette ${palette.ipcWord}');
-    } catch (e) {
-      _patch(message: '$e');
-    }
-  }
-
-  @override
-  void sendMusicColor(String rrggbb) {
-    if (!_client.isConnected) return;
-    final h = rrggbb.trim().toLowerCase();
-    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h) || h == '000000') return;
-    try {
-      _sendIpc('set music_color $h');
     } catch (e) {
       _patch(message: '$e');
     }

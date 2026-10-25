@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -89,48 +89,6 @@ class ConfigNotifier extends Notifier<AppConfig> {
 
   void setRegionBrightness(BrightnessSetting value) {
     state = state.copyWith(regionBrightness: value);
-  }
-
-  void setMusicSource(MusicPickupSource source) {
-    state = state.copyWith(musicSource: source);
-  }
-
-  void setMusicLayout(MusicLightMode layout) {
-    state = state.copyWith(musicLayout: layout);
-  }
-
-  void setMusicReverse(bool value) {
-    state = state.copyWith(musicReverse: value);
-  }
-
-  void setMusicSensitivity(int value) {
-    state = state.copyWith(musicSensitivity: value.clamp(0, 100));
-  }
-
-  void setMusicDecay(int value) {
-    state = state.copyWith(musicDecay: value.clamp(0, 100));
-  }
-
-  void setMusicSilence(MusicSilence silence) {
-    state = state.copyWith(musicSilence: silence);
-  }
-
-  void setMusicMirror(MusicMirror mirror) {
-    state = state.copyWith(musicMirror: mirror);
-  }
-
-  void setMusicRest(MusicRest rest) {
-    state = state.copyWith(musicRest: rest);
-  }
-
-  void setMusicPalette(MusicPalette palette) {
-    state = state.copyWith(musicPalette: palette);
-  }
-
-  void setMusicColor(String hex) {
-    final h = hex.trim().toLowerCase();
-    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h) || h == '000000') return;
-    state = state.copyWith(musicColor: h);
   }
 
   void setLastCustomSolid(String hex) {

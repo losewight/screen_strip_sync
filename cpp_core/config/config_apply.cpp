@@ -33,18 +33,6 @@ void config_apply() {
                                c.regionBrightnessHi);
   engine_set_region_bbox(c.regionBBox.l, c.regionBBox.t, c.regionBBox.w,
                          c.regionBBox.h);
-  engine_set_music_source(c.musicSource);
-  engine_set_music_layout(c.musicLayout);
-  engine_set_music_reverse(c.musicReverse);
-  engine_set_music_sensitivity(c.musicSensitivity);
-  engine_set_music_decay(c.musicDecay);
-  engine_set_music_silence(c.musicSilence);
-  if (!engine_set_music_mirror(c.musicMirror))
-    engine_clear_music_mirror();
-  engine_set_music_rest(c.musicRest);
-  engine_set_music_palette(c.musicPalette);
-  if (!engine_set_music_color(c.musicColor))
-    (void)engine_set_music_color("00aaff");
   engine_set_wall_comp(c.wallCompEnabled);
   if (c.wallColor[0] != '\0')
     engine_set_wall_color(c.wallColor);

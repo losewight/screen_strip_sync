@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:screen_strip_sync/config/app_config.dart';
 import 'package:screen_strip_sync/config/segment_map_codec.dart';
 
@@ -58,15 +58,6 @@ void main() {
       expect(cfg.regionBlur, 3);
       expect(cfg.regionSmooth, 0.8);
       expect(cfg.regionDark, 15);
-      expect(cfg.musicSource, MusicPickupSource.speaker);
-      expect(cfg.musicLayout, MusicLightMode.startToEnd);
-      expect(cfg.musicReverse, isFalse);
-      expect(cfg.musicSensitivity, 50);
-      expect(cfg.musicDecay, 50);
-      expect(cfg.musicSilence, MusicSilence.off);
-      expect(cfg.musicPalette, MusicPalette.vu);
-      expect(cfg.musicColor, '00aaff');
-      expect(cfg.hasMusicColor, isTrue);
       expect(cfg.lastScene, 'idle');
       expect(cfg.wallCompEnabled, isFalse);
       expect(cfg.wallColor, '');
@@ -343,135 +334,6 @@ void main() {
       expect(
         AppConfig.fromCfgLines(const ['cfg region_dark -2']).regionDark,
         0,
-      );
-    });
-
-    test('parses music_* fields and scene music', () {
-      final cfg = AppConfig.fromCfgLines(const [
-        'cfg music_source mic',
-        'cfg music_layout mirror',
-        'cfg music_reverse 1',
-        'cfg music_sensitivity 80',
-        'cfg music_decay 20',
-        'cfg music_silence min',
-        'cfg music_mirror 0,3,9,6',
-        'cfg music_rest peak',
-        'cfg music_palette rainbow',
-        'cfg music_color FF8800',
-        'cfg scene music',
-      ]);
-      expect(cfg.musicSource, MusicPickupSource.microphone);
-      expect(cfg.musicLayout, MusicLightMode.dualMirror);
-      expect(cfg.musicReverse, isTrue);
-      expect(cfg.musicSensitivity, 80);
-      expect(cfg.musicDecay, 20);
-      expect(cfg.musicSilence, MusicSilence.keepMin);
-      expect(cfg.musicMirror, const MusicMirror(l0: 0, l1: 3, r0: 9, r1: 6));
-      expect(cfg.musicRest, MusicRest.peak);
-      expect(cfg.musicPalette, MusicPalette.rainbow);
-      expect(cfg.musicColor, 'ff8800');
-      expect(cfg.hasMusicColor, isTrue);
-      expect(cfg.lastScene, 'music');
-    });
-
-    test('parses music_palette and music_color', () {
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_palette fixed',
-        ]).musicPalette,
-        MusicPalette.fixed,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_palette level',
-        ]).musicPalette,
-        MusicPalette.level,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_palette screen',
-        ]).musicPalette,
-        MusicPalette.screen,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_palette vu',
-        ]).musicPalette,
-        MusicPalette.vu,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_color AABBCC',
-        ]).musicColor,
-        'aabbcc',
-      );
-      // 全黑非法，保留默认
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_color 000000',
-        ]).musicColor,
-        '00aaff',
-      );
-      // 非法 hex 保留默认
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_color xyz',
-        ]).musicColor,
-        '00aaff',
-      );
-    });
-
-    test('music_mirror none and illegal fall back', () {
-      expect(
-        AppConfig.fromCfgLines(const ['cfg music_mirror none']).musicMirror,
-        MusicMirror.none,
-      );
-      expect(
-        AppConfig.fromCfgLines(const ['cfg music_mirror 0,5,4,9']).musicMirror,
-        MusicMirror.none,
-      );
-    });
-
-    test('clamps music numeric fields and falls back ipc words', () {
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_sensitivity 200',
-        ]).musicSensitivity,
-        100,
-      );
-      expect(
-        AppConfig.fromCfgLines(const ['cfg music_decay -5']).musicDecay,
-        0,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_source both',
-        ]).musicSource,
-        MusicPickupSource.both,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_source xyz',
-        ]).musicSource,
-        MusicPickupSource.speaker,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_layout linear',
-        ]).musicLayout,
-        MusicLightMode.startToEnd,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_silence off',
-        ]).musicSilence,
-        MusicSilence.off,
-      );
-      expect(
-        AppConfig.fromCfgLines(const [
-          'cfg music_palette xyz',
-        ]).musicPalette,
-        MusicPalette.vu,
       );
     });
 

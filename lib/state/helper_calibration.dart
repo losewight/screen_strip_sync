@@ -22,8 +22,6 @@ mixin _HelperCalibration on _HelperSolidGate, _HelperIpcSetters {
         return CalibrationSceneKind.engine;
       case HelperDisplayKind.region:
         return CalibrationSceneKind.region;
-      case HelperDisplayKind.music:
-        return CalibrationSceneKind.music;
       case HelperDisplayKind.solid:
         return CalibrationSceneKind.solid;
       case HelperDisplayKind.softOff:
@@ -34,7 +32,6 @@ mixin _HelperCalibration on _HelperSolidGate, _HelperIpcSetters {
     final scene = ref.read(configProvider).lastScene.trim();
     if (scene == 'engine') return CalibrationSceneKind.engine;
     if (scene == 'region') return CalibrationSceneKind.region;
-    if (scene == 'music') return CalibrationSceneKind.music;
     if (scene == 'off') return CalibrationSceneKind.off;
     if (scene.startsWith('solid ')) return CalibrationSceneKind.solid;
     if (_engineWanted || state.engineRunning) {
@@ -59,7 +56,7 @@ mixin _HelperCalibration on _HelperSolidGate, _HelperIpcSetters {
     return null;
   }
 
-  /// 校准取消：按进入前的 engine / region / music / solid / off 分别还原。
+  /// 校准取消：按进入前的 engine / region / solid / off 分别还原。
   void restoreAfterCalibrationCancel(CalibrationSceneSnapshot snap) {
     if (!_client.isConnected) return;
     switch (snap.kind) {
@@ -67,8 +64,6 @@ mixin _HelperCalibration on _HelperSolidGate, _HelperIpcSetters {
         send('start');
       case CalibrationSceneKind.region:
         startRegion();
-      case CalibrationSceneKind.music:
-        startMusic();
       case CalibrationSceneKind.solid:
         final hex = snap.solidHex;
         if (hex != null && hex.isNotEmpty) {

@@ -1,11 +1,9 @@
-﻿import 'brightness_config.dart';
-import 'music_config.dart';
+import 'brightness_config.dart';
 import 'region_bbox.dart';
 import 'segment_map_codec.dart';
 import 'segment_sample.dart';
 
 export 'brightness_config.dart';
-export 'music_config.dart';
 export 'region_bbox.dart';
 export 'segment_sample.dart';
 
@@ -71,16 +69,6 @@ class AppConfig {
     this.regionDark = 15,
     this.regionBBox = const RegionBBox(),
     this.regionBrightness = BrightnessSetting.defaults,
-    this.musicSource = MusicPickupSource.speaker,
-    this.musicLayout = MusicLightMode.startToEnd,
-    this.musicReverse = false,
-    this.musicSensitivity = 50,
-    this.musicDecay = 50,
-    this.musicSilence = MusicSilence.off,
-    this.musicMirror = MusicMirror.none,
-    this.musicRest = MusicRest.off,
-    this.musicPalette = MusicPalette.vu,
-    this.musicColor = '00aaff',
     this.lastScene = 'idle',
     this.lastCustomSolid = '',
     this.wallCompEnabled = false,
@@ -160,37 +148,7 @@ class AppConfig {
   /// 屏幕氛围亮度模式（与 [brightness] 正交）。
   final BrightnessSetting regionBrightness;
 
-  /// 音乐动态音频来源。
-  final MusicPickupSource musicSource;
-
-  /// 音乐动态灯光排布：线性 / 双条镜像。
-  final MusicLightMode musicLayout;
-
-  /// 线性模式下是否反向点亮。
-  final bool musicReverse;
-
-  /// 音乐灵敏度 0..100（默认 50）。
-  final int musicSensitivity;
-
-  /// 电平回落速度 0..100（默认 50；高=更快落下）。
-  final int musicDecay;
-
-  /// 静音时全灭 / 保留最低一格。
-  final MusicSilence musicSilence;
-
-  /// 双条镜像端点；[MusicMirror.none] = 未矫正。
-  final MusicMirror musicMirror;
-
-  /// 镜像其余段：始终灭 / 满格闪亮 / 跟随底色。
-  final MusicRest musicRest;
-
-  /// 音乐动态配色方案。
-  final MusicPalette musicPalette;
-
-  /// 自选单色；6 位小写 hex（默认 `00aaff`）。
-  final String musicColor;
-
-  /// helper `cfg scene`；含 `engine` / `region` / `music` / …
+  /// helper `cfg scene`；含 `engine` / `region` / `solid ...` / `off` / `idle`
   final String lastScene;
 
   /// 纯色「自定义」色圈；6 位小写 hex，空=未设。
@@ -213,10 +171,6 @@ class AppConfig {
 
   bool get hasWallColor =>
       RegExp(r'^[0-9a-f]{6}$').hasMatch(wallColor.trim().toLowerCase());
-
-  bool get hasMusicColor =>
-      RegExp(r'^[0-9a-f]{6}$').hasMatch(musicColor.trim().toLowerCase()) &&
-      musicColor.trim().toLowerCase() != '000000';
 
   AppConfig copyWith({
     double? emaAlpha,
@@ -244,16 +198,6 @@ class AppConfig {
     int? regionDark,
     RegionBBox? regionBBox,
     BrightnessSetting? regionBrightness,
-    MusicPickupSource? musicSource,
-    MusicLightMode? musicLayout,
-    bool? musicReverse,
-    int? musicSensitivity,
-    int? musicDecay,
-    MusicSilence? musicSilence,
-    MusicMirror? musicMirror,
-    MusicRest? musicRest,
-    MusicPalette? musicPalette,
-    String? musicColor,
     String? lastScene,
     String? lastCustomSolid,
     bool? wallCompEnabled,
@@ -286,16 +230,6 @@ class AppConfig {
       regionDark: regionDark ?? this.regionDark,
       regionBBox: regionBBox ?? this.regionBBox,
       regionBrightness: regionBrightness ?? this.regionBrightness,
-      musicSource: musicSource ?? this.musicSource,
-      musicLayout: musicLayout ?? this.musicLayout,
-      musicReverse: musicReverse ?? this.musicReverse,
-      musicSensitivity: musicSensitivity ?? this.musicSensitivity,
-      musicDecay: musicDecay ?? this.musicDecay,
-      musicSilence: musicSilence ?? this.musicSilence,
-      musicMirror: musicMirror ?? this.musicMirror,
-      musicRest: musicRest ?? this.musicRest,
-      musicPalette: musicPalette ?? this.musicPalette,
-      musicColor: musicColor ?? this.musicColor,
       lastScene: lastScene ?? this.lastScene,
       lastCustomSolid: lastCustomSolid ?? this.lastCustomSolid,
       wallCompEnabled: wallCompEnabled ?? this.wallCompEnabled,
@@ -333,16 +267,6 @@ class AppConfig {
     var regionDark = 15;
     var regionBBox = const RegionBBox();
     var regionBrightness = BrightnessSetting.defaults;
-    var musicSource = MusicPickupSource.speaker;
-    var musicLayout = MusicLightMode.startToEnd;
-    var musicReverse = false;
-    var musicSensitivity = 50;
-    var musicDecay = 50;
-    var musicSilence = MusicSilence.off;
-    var musicMirror = MusicMirror.none;
-    var musicRest = MusicRest.off;
-    var musicPalette = MusicPalette.vu;
-    var musicColor = '00aaff';
     var scene = 'idle';
     var lastCustomSolid = '';
     var wallCompEnabled = false;
@@ -434,31 +358,6 @@ class AppConfig {
         case 'region_brightness':
           final parsed = BrightnessSetting.tryParse(val);
           if (parsed != null) regionBrightness = parsed;
-        case 'music_source':
-          musicSource = MusicPickupSourceIpc.fromIpcWord(val);
-        case 'music_layout':
-          musicLayout = MusicLightModeIpc.fromIpcWord(val);
-        case 'music_reverse':
-          if (val == '0' || val == '1') musicReverse = val == '1';
-        case 'music_sensitivity':
-          final v = int.tryParse(val);
-          if (v != null) musicSensitivity = v.clamp(0, 100);
-        case 'music_decay':
-          final v = int.tryParse(val);
-          if (v != null) musicDecay = v.clamp(0, 100);
-        case 'music_silence':
-          musicSilence = MusicSilenceIpc.fromIpcWord(val);
-        case 'music_mirror':
-          musicMirror = MusicMirror.tryParse(val) ?? MusicMirror.none;
-        case 'music_rest':
-          musicRest = MusicRestIpc.fromIpcWord(val);
-        case 'music_palette':
-          musicPalette = MusicPaletteIpc.fromIpcWord(val);
-        case 'music_color':
-          final h = val.trim().toLowerCase();
-          if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h) && h != '000000') {
-            musicColor = h;
-          }
         case 'scene':
           if (val.isNotEmpty) scene = val;
         case 'last_custom_solid':
@@ -511,16 +410,6 @@ class AppConfig {
       regionDark: regionDark,
       regionBBox: regionBBox,
       regionBrightness: regionBrightness,
-      musicSource: musicSource,
-      musicLayout: musicLayout,
-      musicReverse: musicReverse,
-      musicSensitivity: musicSensitivity,
-      musicDecay: musicDecay,
-      musicSilence: musicSilence,
-      musicMirror: musicMirror,
-      musicRest: musicRest,
-      musicPalette: musicPalette,
-      musicColor: musicColor,
       lastScene: scene,
       lastCustomSolid: lastCustomSolid,
       wallCompEnabled: wallCompEnabled,

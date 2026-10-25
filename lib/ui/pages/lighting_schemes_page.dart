@@ -1,9 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/lighting_scheme_tab.dart';
 import '../widgets/mode_tab_bar.dart';
-import '../widgets/music_dynamics_panel.dart';
 import '../widgets/screen_ambience_panel.dart';
 import '../widgets/screen_sync_panel.dart';
 import '../widgets/solid_scheme_panel.dart';
@@ -20,11 +19,6 @@ const lightingSchemeTabs = <ModeTabItem>[
     icon: Icons.flare_outlined,
     selectedIcon: Icons.flare,
     label: '屏幕氛围',
-  ),
-  ModeTabItem(
-    icon: Icons.graphic_eq,
-    selectedIcon: Icons.graphic_eq,
-    label: '音乐动态',
   ),
   ModeTabItem(
     icon: Icons.palette_outlined,
@@ -48,8 +42,7 @@ class LightingSchemesPage extends ConsumerWidget {
         child: switch (tab) {
           0 => const ScreenSyncPanel(),
           1 => const ScreenAmbiencePanel(),
-          2 => const MusicDynamicsPanel(),
-          3 => const SolidSchemePanel(),
+          2 => const SolidSchemePanel(),
           _ => const SizedBox.shrink(),
         },
       ),

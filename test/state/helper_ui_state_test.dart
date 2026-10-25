@@ -1,54 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:screen_strip_sync/ipc/helper_status.dart';
 import 'package:screen_strip_sync/state/helper_ui_state.dart';
 
 void main() {
   HelperUiState state(HelperPhase phase) =>
       HelperUiState(phase: phase, message: '');
-
-  group('isMusicRunning', () {
-    test('true only when engine runs and display is music', () {
-      expect(
-        const HelperUiState(
-          phase: HelperPhase.running,
-          message: '',
-          engineRunning: true,
-          displayKind: HelperDisplayKind.music,
-        ).isMusicRunning,
-        isTrue,
-      );
-    });
-
-    test('false when engine stopped or other display', () {
-      expect(
-        const HelperUiState(
-          phase: HelperPhase.ready,
-          message: '',
-          engineRunning: false,
-          displayKind: HelperDisplayKind.music,
-        ).isMusicRunning,
-        isFalse,
-      );
-      expect(
-        const HelperUiState(
-          phase: HelperPhase.running,
-          message: '',
-          engineRunning: true,
-          displayKind: HelperDisplayKind.region,
-        ).isMusicRunning,
-        isFalse,
-      );
-      expect(
-        const HelperUiState(
-          phase: HelperPhase.running,
-          message: '',
-          engineRunning: true,
-          displayKind: HelperDisplayKind.engine,
-        ).isMusicRunning,
-        isFalse,
-      );
-    });
-  });
 
   group('canControl', () {
     test('true only when serial is ready', () {

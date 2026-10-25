@@ -27,8 +27,7 @@
 | `sync` | 请求全量配置与状态快照 |
 | `start` | 屏幕跟色（map）；持久化场景为 `engine` |
 | `start_region` | 屏幕氛围（region）；与 `start` 互斥；场景为 `region` |
-| `start_music` | 音乐动态；与 map/region 互斥；场景为 `music`；不依赖 DXGI |
-| `stop` | 停止引擎（map / region / music 共用） |
+| `stop` | 停止引擎（map / region 共用） |
 | `solid RRGGBB` | 发送一帧纯色（6 位 hex） |
 | `soft_off` | UI 关灯：停引擎 + 纯黑帧；**不**调用设备 `set_power 0` |
 | `off` | 真下电：停引擎 + 设备 `set_power 0`（界面很少用） |
@@ -53,17 +52,6 @@
 | `set region_smooth <0..0.99>` | 氛围时间惯性（与 map α「越大越跟手」极性相反） |
 | `set region_dark <0..50>` | 氛围暗场阈值 |
 | `set region_bbox L,T,W,H` | 氛围取色框（被抓那块屏的百分比整数 0..100） |
-| `set music_source system\|mic\|both` | 音乐采集来源（系统 loopback / 麦克风 / 两者取 max） |
-| `set music_layout linear\|mirror` | 段序布局；`mirror` 需合法 `music_mirror`，否则回退 `linear` |
-| `set music_reverse 0\|1` | 段序是否反向 |
-| `set music_sensitivity <0..100>` | 灵敏度；默认 50 |
-| `set music_decay <0..100>` | 回落速度；默认 50 |
-| `set music_silence off\|min` | 静音表现：全灭 / 保留最低一格 |
-| `set music_mirror l0,l1,r0,r1` | 双条镜像端点（0..9）；相交非法则忽略 |
-| `set music_mirror clear` | 清除镜像端点（回 -1） |
-| `set music_rest off\|peak\|base` | 其余段：始终灭 / 满格闪亮 / 跟随底色 |
-| `set music_palette vu\|rainbow\|fixed\|level\|screen` | 音乐配色；默认 `vu` |
-| `set music_color RRGGBB` | Fixed 自选色；`000000` 非法 |
 | `set capture_output <DeviceName\|auto>` | DXGI 抓哪块屏；`auto` = 主屏。热切换不动串口 |
 | `set last_custom_solid RRGGBB` | 记住自定义纯色 |
 | `set letterbox_detect 0\|1` | 智能忽略电影黑边（落盘）；与 `near_black` 正交 |
@@ -79,19 +67,13 @@
 | --- | --- |
 | `cfg <key> <value>` | 配置快照项（key 与 `set` 同名，含 `capture_output`） |
 | `cfg map …` | 当前采样映射 |
-| `cfg scene …` | `engine` / `region` / `music` / `solid RRGGBB` / `off` / `idle` |
-| `cfg music_source\|music_layout\|music_reverse\|music_sensitivity\|music_decay\|music_silence` | 音乐动态参数 |
-| `cfg music_mirror l0,l1,r0,r1\|none` | 双条镜像端点；未设为 `none` |
-| `cfg music_rest off\|peak\|base` | 其余段处理 |
-| `cfg music_palette vu\|rainbow\|fixed\|level\|screen` | 音乐配色 |
-| `cfg music_color RRGGBB` | Fixed 自选色 |
+| `cfg scene …` | `engine` / `region` / `solid RRGGBB` / `off` / `idle` |
 | `cfg end` | 快照结束；界面收到后才视为配置完整 |
 | `status ready` | 串口已就绪 |
 | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程 |
 | `status com COMn` | 当前打开的 COM |
 | `status engine 0\|1` | 发帧线程是否在运行 |
-| `status display …` | `engine` / `region` / `music` / `solid` / `soft_off` / `idle` |
-| `status music_audio …` | 仅 `display music` 时：`ok` / `no_device` / `denied` / `error` |
+| `status display …` | `engine` / `region` / `solid` / `soft_off` / `idle` |
 | `status capture_output NAME WxH L,T [friendly…]` | 当前 duplicate 的屏＋桌面矩形；友好名可选 |
 | `status outputs <n>` | 随后 n 条 `status output` |
 | `status output i NAME WxH L,T p c [friendly…]` | 可 duplicate 的一块屏（primary / current） |
@@ -109,11 +91,10 @@
 | --- | --- | --- |
 | 屏幕跟色 map | `start` | `segmentMap` 或顶边均分；百分比相对被抓那块屏；α / near_black / blur / saturation |
 | 屏幕氛围 region | `start_region` | `region_bbox` 竖直切 10 段；bbox 相对被抓那块屏；mean/max + blur/smooth/dark |
-| 音乐动态 music | `start_music` | WASAPI 系统 loopback / 麦克风窗口电平 → VU 绿→红；不走 DXGI / 暗门 |
 
 截图与框选只在 Flutter 完成；IPC 只传百分比等结果，不传像素流。
 
-map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻结）。相关常量写在 helper 内，**不进 IPC / JSON**；硬件行为见 [灯带串口通信协议.md §5.7](./灯带串口通信协议.md)，实现说明见 [项目注意事项与踩坑.md §4](./项目注意事项与踩坑.md)。音乐路径不经暗门。
+map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻结）。相关常量写在 helper 内，**不进 IPC / JSON**；硬件行为见 [灯带串口通信协议.md §5.7](./灯带串口通信协议.md)，实现说明见 [项目注意事项与踩坑.md §4](./项目注意事项与踩坑.md)。
 
 ---
 
@@ -137,8 +118,7 @@ map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻�
 | `startOnBoot` | 开机自启 |
 | `segmentMap` | map 段矩形 |
 | `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` | region |
-| `musicSource` / `musicLayout` / `musicReverse` / `musicSensitivity` / `musicDecay` / `musicSilence` | music |
-| `lastScene` | `engine` / `region` / `music` / `solid RRGGBB` / `off` / `idle` |
+| `lastScene` | `engine` / `region` / `solid RRGGBB` / `off` / `idle` |
 | `lastCustomSolid` | 自定义纯色 hex，可空 |
 
 缺字段用默认；解析失败整体回退且不阻塞启动。  

@@ -1,1 +1,9 @@
+* text=auto eol=crlf
 .githooks/** text eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.exe binary
+*.zip binary
+*.tar.gz binary

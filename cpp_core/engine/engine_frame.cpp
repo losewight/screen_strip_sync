@@ -1,11 +1,8 @@
-﻿#include "engine_internal.h"
+#include "engine_internal.h"
 
-#include "audio_capture.h"
 #include "dxgi_capture.h"
 #include "helper_lifecycle.h"
 #include "letterbox_detect.h"
-#include "music_frame.h"
-#include "music_params.h"
 #include "seg_gate.h"
 #include "serial_port.h"
 #include "subtitle_detect.h"
@@ -127,7 +124,7 @@ static unsigned frame_brightness(unsigned packed, const float level[10]) {
   return brt;
 }
 
-// 抓屏 → EMA → 饱和度 → seg_gate；Music Screen 与 map 共用。
+// 抓屏 → EMA → 饱和度 → seg_gate。
 DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3],
                         float out_level[10]) {
   if (!out_rgb)
@@ -304,23 +301,18 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
 static DxgiErr produce_colors(int frame_index, char *out_frame,
                               size_t out_cap) {
   const SyncPath path = g_sync_path.load();
-  if (path == SyncPath::Music)
-    return produce_colors_music(frame_index, out_frame, out_cap);
   if (path == SyncPath::Region)
     return produce_colors_region(frame_index, out_frame, out_cap);
   return produce_colors_map(frame_index, out_frame, out_cap);
 }
 
-// 须持 g_engine_mu；join worker，若上一路径是 Music 则停音频
+// 须持 g_engine_mu；join worker
 static void stop_worker_locked() {
-  const SyncPath prev = g_sync_path.load();
   g_running.store(false);
   if (g_worker.joinable())
     g_worker.join();
   g_ema_inited = false;
   reset_seg_gates();
-  if (prev == SyncPath::Music)
-    audio_stop();
 }
 
 // 为什么：整段 Sleep(2000) 会让 engine_stop 的 join 卡死；50ms 切片才能看见 g_running
@@ -412,8 +404,7 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   stop_worker_locked();
   if (helper_is_shutting_down())
     return;
-  // Music 默认不依赖 DXGI；Screen 配色在 produce_colors_music 内 ensure
-  if (path != SyncPath::Music && !dxgi_is_ready()) {
+  if (!dxgi_is_ready()) {
     DxgiErr e = dxgi_init();
     if (e != DxgiErr::Ok) {
       printf("engine_start_path: dxgi_init failed: %d\n", (int)e);
@@ -425,8 +416,6 @@ static void engine_start_path(HANDLE h, SyncPath path) {
   reset_seg_gates();
   letterbox_reset();
   subtitle_reset();
-  if (path == SyncPath::Music)
-    audio_start(music_get_source());
   g_running.store(true);
   g_worker = std::thread(frame_loop, h);
 }
@@ -434,8 +423,6 @@ static void engine_start_path(HANDLE h, SyncPath path) {
 void engine_start(HANDLE h) { engine_start_path(h, SyncPath::Map); }
 
 void engine_start_region(HANDLE h) { engine_start_path(h, SyncPath::Region); }
-
-void engine_start_music(HANDLE h) { engine_start_path(h, SyncPath::Music); }
 
 void engine_request_stop() { g_running.store(false); }
 

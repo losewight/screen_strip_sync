@@ -4,7 +4,6 @@
 #include "dxgi_capture.h"
 #include "ipc_loop.h"
 #include "light_engine.h"
-#include "music_params.h"
 #include "serial_port.h"
 #include "ui_launcher.h"
 
@@ -211,12 +210,9 @@ static void resume_worker_body() {
     return;
   }
 
-  // Engine/Region 依赖 DXGI；Music+Screen 也重试，失败回退 Vu（不 soft_off）
-  const bool music_screen =
-      snap.kind == DisplayIntentKind::Music &&
-      music_get_palette_enum() == MusicPalette::Screen;
+  // Engine/Region 依赖 DXGI
   if (snap.kind == DisplayIntentKind::Engine ||
-      snap.kind == DisplayIntentKind::Region || music_screen) {
+      snap.kind == DisplayIntentKind::Region) {
     bool dxgi_ok = false;
     for (int i = 1; i <= 20; ++i) {
       if (g_shutting_down.load())
@@ -230,11 +226,7 @@ static void resume_worker_body() {
       sleep_interruptible_shutdown(500);
     }
     if (!dxgi_ok) {
-      if (music_screen) {
-        printf("resume: dxgi give up -> Music Screen fallback Vu\n");
-        music_set_palette(MusicPalette::Vu);
-      } else {
-        printf("resume: dxgi give up -> soft_off (was engine/region)\n");
+      printf("resume: dxgi give up -> soft_off (was engine/region)\n");
         if (g_shutting_down.load()) {
           g_awaiting_resume.store(false);
           g_resuming.store(false);

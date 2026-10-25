@@ -1,16 +1,13 @@
 #!/bin/sh
-# Reject commits whose message still mentions Cursor agent identity.
+# Reject commits whose message contains Agent tags or identity.
 MSG_FILE="$1"
 [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
 
-if grep -qiE \
-  -e 'cursoragent@cursor\.com' \
-  -e 'Co-authored-by:[[:space:]]*Cursor' \
-  -e '(^|[^[:alnum:]_])cursoragent([^[:alnum:]_]|$)' \
-  "$MSG_FILE"
-then
-  echo "error: commit message must not contain Cursor agent identity" >&2
-  echo "       (cursoragent / Co-authored-by: Cursor <cursoragent@cursor.com>)" >&2
+pattern='cursoragent|Co-authored-by:[[:space:]]*.*(cursor|agent|antigravity|copilot|gemini|claude|chatgpt|openai|anthropic|bot)|Signed-off-by:[[:space:]]*.*(agent|bot)|^[[:space:]]*(\[?[Aa]gent\]?|🤖|Generated[ -]by:)'
+
+if grep -qiE -e "$pattern" "$MSG_FILE"; then
+  echo "error: commit message must not contain Agent tags or identity" >&2
+  echo "       (cursoragent / Co-authored-by with agent/bot / [agent] / AI tags)" >&2
   echo "       Remove those lines and commit again." >&2
   exit 1
 fi

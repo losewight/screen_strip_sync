@@ -1,4 +1,4 @@
-﻿part of 'helper_state.dart';
+part of 'helper_state.dart';
 
 /// 共享字段与 `_patch` / `_sendIpc`，供各 mixin 挂载。
 abstract class _HelperStateBase extends Notifier<HelperUiState> {
@@ -29,7 +29,6 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
     bool? hasDevice,
     bool? isScanningPorts,
     bool? engineRunning,
-    HelperMusicAudioStatus? musicAudio,
     bool? snapshotTimedOut,
     List<CaptureOutputInfo>? captureOutputs,
     CaptureOutputInfo? currentCapture,
@@ -46,7 +45,6 @@ abstract class _HelperStateBase extends Notifier<HelperUiState> {
       isScanningPorts: isScanningPorts ?? state.isScanningPorts,
       engineRunning: engineRunning ?? state.engineRunning,
       displayKind: _lastDisplay,
-      musicAudio: musicAudio ?? state.musicAudio,
       snapshotTimedOut: snapshotTimedOut ?? state.snapshotTimedOut,
       captureOutputs: captureOutputs ?? state.captureOutputs,
       currentCapture: clearCurrentCapture

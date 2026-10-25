@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
@@ -16,7 +16,7 @@ class ModeTabItem {
   final String label;
 }
 
-/// 内容区顶部的模式切换条（屏幕跟色 / 屏幕氛围 / 音乐动态 / 纯色）。
+/// 内容区顶部的模式切换条（屏幕跟色 / 屏幕氛围 / 纯色）。
 class ModeTabBar extends StatelessWidget {
   const ModeTabBar({
     super.key,
