@@ -3,6 +3,7 @@
 // light_engine 模块内部共享状态；对外仍只暴露 light_engine.h。
 
 #include "light_engine.h"
+#include "rgb_frame_builder.h"
 #include "seg_gate.h"
 
 #include <atomic>

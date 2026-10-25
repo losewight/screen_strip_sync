@@ -25,6 +25,7 @@ add_executable(helper WIN32
   engine/engine_intent.cpp
   engine/wall_comp.cpp
   engine/seg_gate.cpp
+  engine/rgb_frame_builder.cpp
   ipc/ipc_loop.cpp
   ipc/ipc_push.cpp
   ipc/ipc_dispatch.cpp
@@ -70,6 +71,16 @@ target_include_directories(seg_gate_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
 target_compile_options(seg_gate_test PRIVATE /utf-8)
+
+# 组帧逻辑与多米数 Step 离线断言测试（控制台；不编入 helper）
+add_executable(rgb_frame_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/rgb_frame_test/rgb_frame_test.cpp
+  engine/rgb_frame_builder.cpp
+)
+target_include_directories(rgb_frame_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(rgb_frame_test PRIVATE /utf-8)
 
 
 # 慢变黑极光色诊断（控制台；不编入 helper）

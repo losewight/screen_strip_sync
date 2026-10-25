@@ -215,15 +215,7 @@ static DxgiErr produce_colors_map(int frame_index, char *out_frame,
 
   const unsigned brt = frame_brightness(g_map_brightness.load(), levels);
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
-  snprintf(out_frame, out_cap,
-           "set_rgb_pc %04x 00 %02x "
-           "%s 2 %s 2 %s 2 %s 2 %s 2 "
-           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           frame_id, brt, colors[0], colors[1], colors[2], colors[3],
-           colors[4], colors[5], colors[6], colors[7], colors[8], colors[9]);
-
-  // 红线：组完再查长度
-  if (strlen(out_frame) >= 120)
+  if (!build_rgb_pc_frame(frame_id, brt, colors, 0, out_frame, out_cap))
     return DxgiErr::AcquireFailed;
   return DxgiErr::Ok;
 }
@@ -286,14 +278,7 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
 
   const unsigned brt = frame_brightness(g_region_brightness.load(), levels);
   const unsigned frame_id = (unsigned)frame_index & 0xFFFFu;
-  snprintf(out_frame, out_cap,
-           "set_rgb_pc %04x 00 %02x "
-           "%s 2 %s 2 %s 2 %s 2 %s 2 "
-           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           frame_id, brt, colors[0], colors[1], colors[2], colors[3],
-           colors[4], colors[5], colors[6], colors[7], colors[8], colors[9]);
-
-  if (strlen(out_frame) >= 120)
+  if (!build_rgb_pc_frame(frame_id, brt, colors, 0, out_frame, out_cap))
     return DxgiErr::AcquireFailed;
   return DxgiErr::Ok;
 }

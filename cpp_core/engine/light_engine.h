@@ -25,6 +25,8 @@ bool send_solid(HANDLE h, const char *rrggbb);
 // 校准向导：仅 seg 段白，其余黑；节流在 send_one_frame 内
 bool send_highlight(HANDLE h, int seg);
 bool try_serial_ready(HANDLE *out_h);
+int engine_get_device_step();
+void engine_set_device_step(int step);
 void engine_set_alpha(float alpha);
 void engine_set_near_black(int v);
 void engine_set_blur(int v);

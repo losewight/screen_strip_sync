@@ -66,19 +66,10 @@ static bool send_seq_frame(HANDLE h, int frame_id, int lit_through) {
   }
 
   char frame[128];
-  const int n = snprintf(frame, sizeof(frame),
-                         "set_rgb_pc %04x 00 63 "
-                         "%s 2 %s 2 %s 2 %s 2 %s 2 "
-                         "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-                         frame_id & 0xFFFF, colors[0], colors[1], colors[2],
-                         colors[3], colors[4], colors[5], colors[6], colors[7],
-                         colors[8], colors[9]);
-  if (n < 0 || (size_t)n >= sizeof(frame))
+  if (!build_rgb_pc_frame((unsigned)frame_id, 0x63, colors, 0, frame, sizeof(frame)))
     return false;
 
   const DWORD len = (DWORD)strlen(frame);
-  if (len >= 120)
-    return false;
   if (!send_one_frame(h, frame, len))
     return false;
   Sleep(300); // 自检动画用 300ms 间隔（仍 ≥50ms 红线）
@@ -139,17 +130,10 @@ bool send_solid(HANDLE h, const char *rrggbb) {
            (unsigned)(g + 0.5f), (unsigned)(b + 0.5f));
 
   char frame[128];
-  snprintf(frame, sizeof(frame),
-           "set_rgb_pc %04x 00 63 %s 2 %s 2 %s 2 %s 2 %s 2 "
-           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           1, color, color, color, color, color, color, color, color, color,
-           color);
-
-  DWORD len = (DWORD)strlen(frame);
-  if (len >= 120) { // 红线：拒绝 >=120
-    printf("frame too long: %lu\n", (unsigned long)len);
+  if (!build_rgb_pc_solid_frame(1, 0x63, color, 0, frame, sizeof(frame)))
     return false;
-  }
+
+  const DWORD len = (DWORD)strlen(frame);
   if (!send_one_frame(h, frame, len))
     return false;
   return true;
@@ -163,18 +147,10 @@ bool send_highlight(HANDLE h, int seg) {
     colors[i] = (i == seg) ? "ffffff" : "000000";
 
   char frame[128];
-  snprintf(frame, sizeof(frame),
-           "set_rgb_pc %04x 00 63 "
-           "%s 2 %s 2 %s 2 %s 2 %s 2 "
-           "%s 2 %s 2 %s 2 %s 2 %s 2\r\n",
-           1, colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
-           colors[6], colors[7], colors[8], colors[9]);
-
-  DWORD len = (DWORD)strlen(frame);
-  if (len >= 120) {
-    printf("highlight frame too long: %lu\n", (unsigned long)len);
+  if (!build_rgb_pc_frame(1, 0x63, colors, 0, frame, sizeof(frame)))
     return false;
-  }
+
+  const DWORD len = (DWORD)strlen(frame);
   if (!send_one_frame(h, frame, len))
     return false;
   return true;
