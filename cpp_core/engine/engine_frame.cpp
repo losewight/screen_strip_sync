@@ -80,23 +80,23 @@ static inline float asym_tracking_alpha(float alpha, float L_new, float L_old) {
   return scaled;
 }
 
-// 为什么：采样先墙补一份给判定；显示路径 EMA(+sat) 后再墙补，两路同口径。
+// 为什么：先由暗门依据纯净屏幕采样与显示色判定开灭、防抖与色相锁；
+// 判定为 ON 的段在最终输出前统一做一次墙色补偿，避免物理校准侵入状态机与无谓算力开销。
 // 返回暗门是否 ON（供线性 BRT 用段亮度；灭段按 0）。
 static bool seg_finish(int i, float sample_r, float sample_g, float sample_b,
                        float disp_r, float disp_g, float disp_b,
                        unsigned char out_rgb[3]) {
   diag_note_raw(i, sample_r, sample_g, sample_b);
 
-  float gr = sample_r, gg = sample_g, gb = sample_b;
-  wall_comp_apply(&gr, &gg, &gb);
-
-  float dr = disp_r, dg = disp_g, db = disp_b;
-  wall_comp_apply(&dr, &dg, &db);
-
   float out[3];
-  const bool on = seg_gate_step(&g_seg_gate[i], gr, gg, gb, dr, dg, db, out);
+  const bool on = seg_gate_step(&g_seg_gate[i], sample_r, sample_g, sample_b,
+                                disp_r, disp_g, disp_b, out);
   if (g_seg_gate[i].flipped)
     ++g_diag_gate_flip[i];
+
+  if (on) {
+    wall_comp_apply(&out[0], &out[1], &out[2]);
+  }
 
   out_rgb[0] = (unsigned char)(out[0] + 0.5f);
   out_rgb[1] = (unsigned char)(out[1] + 0.5f);

@@ -65,3 +65,4 @@ AGENT.md
 # Local planning / analysis notes (not for public git)
 /docs/PLAN_*.md
 /docs/serial_color_analysis_report.md
+/docs/wall_comp_bug_analysis_report.md

@@ -103,6 +103,27 @@ target_include_directories(hdr_convert_test PRIVATE
 )
 target_compile_options(hdr_convert_test PRIVATE /utf-8)
 
+# 墙色补偿离线断言测试（控制台；不编入 helper）
+add_executable(wall_comp_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/wall_comp_test/wall_comp_test.cpp
+  engine/wall_comp.cpp
+)
+target_include_directories(wall_comp_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(wall_comp_test PRIVATE /utf-8)
+
+# 端到端流水线离线断言测试（控制台；不编入 helper）
+add_executable(pipeline_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/pipeline_test/pipeline_test.cpp
+  engine/seg_gate.cpp
+  engine/wall_comp.cpp
+)
+target_include_directories(pipeline_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+target_compile_options(pipeline_test PRIVATE /utf-8)
+
 # experiments/frame_interval_limit：极限帧间隔摸底（控制台，不编入 helper）
 # add_executable(interval_limit_test
 #   ${CMAKE_CURRENT_SOURCE_DIR}/../experiments/frame_interval_limit/interval_limit_test.cpp

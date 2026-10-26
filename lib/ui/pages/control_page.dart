@@ -212,7 +212,7 @@ class _ConnectBar extends StatelessWidget {
 class _WallColorCompCard extends ConsumerWidget {
   const _WallColorCompCard();
 
-  static const _defaultPick = Color(0xFF9C27B0);
+  static const _defaultPick = Color(0xFFF5EFE6);
 
   Future<void> _pickWallColor(
     BuildContext context,
@@ -242,6 +242,9 @@ class _WallColorCompCard extends ConsumerWidget {
     final canEdit = ui.canConfigure && cfgReady;
     final hasColor = cfg.hasWallColor;
     final wallColor = colorFromSolidHex(cfg.wallColor);
+    final isSaturatedOrDark = wallColor != null &&
+        (HSVColor.fromColor(wallColor).saturation > 0.35 ||
+            HSVColor.fromColor(wallColor).value < 0.50);
 
     return Container(
       decoration: BoxDecoration(
@@ -255,11 +258,11 @@ class _WallColorCompCard extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
                     Text(
                       '墙面色彩补偿',
@@ -273,13 +276,13 @@ class _WallColorCompCard extends ConsumerWidget {
                     SizedBox(width: AppSpacing.compact),
                     InfoHint(
                       message:
-                          '墙面不是白/黑中性色时，灯带光会被墙色“染”偏；\n'
-                          '在此按墙面底色做校正。白墙或黑墙一般不必用。',
+                          '以墙面反光颜色为准校正灯带输出，减轻有色墙面发灰偏色；\n'
+                          '开启后灯带直视光会向墙色互补方向微调。白墙或黑墙一般不必开启。',
                     ),
                   ],
                 ),
-                SizedBox(height: AppSpacing.compact),
-                Text(
+                const SizedBox(height: AppSpacing.compact),
+                const Text(
                   '按墙面底色校正灯带输出，减轻偏色与发灰。',
                   style: TextStyle(
                     fontFamily: AppTheme.fontFamily,
@@ -287,6 +290,17 @@ class _WallColorCompCard extends ConsumerWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
+                if (hasColor && isSaturatedOrDark && cfg.wallCompEnabled) ...[
+                  const SizedBox(height: AppSpacing.compact),
+                  const Text(
+                    '提示：当前所选墙色偏深或鲜艳，直视光会有明显补色偏移，建议选择浅色墙面。',
+                    style: TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 11,
+                      color: Color(0xFFFFC53D),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
