@@ -11,9 +11,54 @@ int engine_get_device_step() {
 }
 
 void engine_set_device_step(int step) {
-  if (step >= 1 && step <= 9) {
+  if (is_valid_strip_length(step)) {
     g_device_step.store(step, std::memory_order_relaxed);
   }
+}
+
+bool is_valid_strip_length(int meters) {
+  return meters >= 2 && meters <= 5;
+}
+
+int parse_strip_length(const char *buf) {
+  if (!buf)
+    return 0;
+
+  // 1. 优先匹配设备推送状态：rep_length N
+  const char *rep = strstr(buf, "rep_length");
+  if (rep) {
+    int v = 0;
+    if (sscanf(rep, "rep_length %d", &v) == 1) {
+      if (is_valid_strip_length(v))
+        return v;
+    }
+  }
+
+  // 2. 逐行匹配响应中的数字（2, 3, 4）
+  const char *p = buf;
+  while (*p) {
+    while (*p == ' ' || *p == '\r' || *p == '\n')
+      p++;
+    if (!*p)
+      break;
+
+    int val = 0;
+    if (sscanf(p, "%d", &val) == 1 && is_valid_strip_length(val)) {
+      // 确认数字之后紧跟的是分隔符或结尾（防多位数字如 20、40）
+      const char *num_end = p;
+      while (*num_end >= '0' && *num_end <= '9')
+        num_end++;
+      if (*num_end == '\r' || *num_end == '\n' || *num_end == ' ' ||
+          *num_end == '\0') {
+        return val;
+      }
+    }
+
+    // 移动到下一行
+    while (*p && *p != '\n')
+      p++;
+  }
+  return 0;
 }
 
 template <typename ColorGetter>
@@ -25,7 +70,7 @@ static bool build_rgb_pc_frame_internal(unsigned frame_id, unsigned brightness,
   }
 
   const int eff_step = (step > 0) ? step : engine_get_device_step();
-  if (eff_step < 1 || eff_step > 9) {
+  if (!is_valid_strip_length(eff_step)) {
     out_frame[0] = '\0';
     return false;
   }

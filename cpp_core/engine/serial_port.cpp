@@ -141,29 +141,40 @@ bool send_one_frame(HANDLE handle, const char *data, DWORD frame_len) {
   return true;
 }
 
-bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
-  // 为什么：读是轮询+Sleep，若占着写锁，发帧线程会被卡住几百 ms；
-  // 握手/关灯路径本就是「先 write 再 read」，同线程不会并发写读交错。
-  char buf[256] = {0};
+size_t read_response_text(HANDLE handle, char *out_buf, size_t out_cap,
+                          DWORD timeout_ms, const char *find_str) {
+  if (!out_buf || out_cap == 0)
+    return 0;
+  out_buf[0] = '\0';
   size_t total_len = 0;
   DWORD start_time = GetTickCount();
 
   while (GetTickCount() - start_time < timeout_ms) {
     DWORD nread = 0;
-    DWORD cap = (DWORD)(sizeof(buf) - 1 - total_len);
+    DWORD cap = (DWORD)(out_cap - 1 - total_len);
     if (cap == 0)
-      return false;
-    if (!ReadFile(handle, buf + total_len, cap, &nread, nullptr))
-      return false;
+      break;
+    if (!ReadFile(handle, out_buf + total_len, cap, &nread, nullptr))
+      break;
     if (nread > 0) {
       total_len += nread;
-      buf[total_len] = '\0';
-      if (strstr(buf, "ok\r\n") != nullptr)
-        return true;
+      out_buf[total_len] = '\0';
+      if (find_str && strstr(out_buf, find_str) != nullptr)
+        return total_len;
+      if (!find_str && strstr(out_buf, "\r\n") != nullptr)
+        return total_len;
     }
     Sleep(1);
   }
-  return false;
+  return total_len;
+}
+
+bool read_response_ok(HANDLE handle, DWORD timeout_ms) {
+  // 为什么：读是轮询+Sleep，若占着写锁，发帧线程会被卡住几百 ms；
+  // 握手/关灯路径本就是「先 write 再 read」，同线程不会并发写读交错。
+  char buf[256] = {0};
+  size_t n = read_response_text(handle, buf, sizeof(buf), timeout_ms, "ok\r\n");
+  return n > 0 && strstr(buf, "ok\r\n") != nullptr;
 }
 
 // 关闭串口。与 WriteFile 同锁，避免 close 与短写补 CRLF 交错。

@@ -27,7 +27,8 @@ bool try_serial_ready(HANDLE *out_h) {
   }
   play_strip_scan(h);
   *out_h = h;
-  printf("serial ready on %s\n", name);
+  printf("serial ready on %s (strip: %dm, step: %d)\n", name,
+         engine_get_device_step(), engine_get_device_step());
   return true;
 }
 
@@ -37,6 +38,34 @@ bool power_on(HANDLE h) {
     return false;
   }
   return read_response_ok(h, 500);
+}
+
+static void detect_strip_length(HANDLE h) {
+  static const char kQuery[] = "get_length\r\n";
+  if (!send_one_frame(h, kQuery, (DWORD)strlen(kQuery))) {
+    printf("get_length send failed, default to 2m (step=2)\n");
+    engine_set_device_step(2);
+    return;
+  }
+
+  char buf[128] = {0};
+  size_t n = read_response_text(h, buf, sizeof(buf), 500, "\n");
+  if (n == 0) {
+    printf("get_length read timeout, default to 2m (step=2)\n");
+    engine_set_device_step(2);
+    return;
+  }
+
+  int len = parse_strip_length(buf);
+  if (is_valid_strip_length(len)) {
+    engine_set_device_step(len);
+    printf("strip length detected: %dm (%d LEDs, step=%d)\n", len, len * 10,
+           len);
+  } else {
+    engine_set_device_step(2);
+    printf("strip length unconfirmed (rx: '%s'), default to 2m (step=2)\n",
+           buf);
+  }
 }
 
 bool handshake(HANDLE h) {
@@ -54,7 +83,10 @@ bool handshake(HANDLE h) {
     return false;
   if (!send_one_frame(h, kLink, (DWORD)strlen(kLink)))
     return false;
-  return read_response_ok(h, 500);
+  if (!read_response_ok(h, 500))
+    return false;
+  detect_strip_length(h);
+  return true;
 }
 
 // 握手后自检：00FFFF 以 2 段为步幅从头到尾依次亮起（已亮保持）
@@ -72,6 +104,18 @@ static bool send_seq_frame(HANDLE h, int frame_id, int lit_through) {
   const DWORD len = (DWORD)strlen(frame);
   if (!send_one_frame(h, frame, len))
     return false;
+
+  // 接受性探针：首帧若被固件拒绝，会返回 err seg n
+  if (frame_id == 1) {
+    char probe_buf[64] = {0};
+    if (read_response_text(h, probe_buf, sizeof(probe_buf), 50, "\r\n") > 0) {
+      if (strstr(probe_buf, "err seg") != nullptr) {
+        printf("WARNING: strip firmware rejected set_rgb_pc frame! rx: %s\n",
+               probe_buf);
+      }
+    }
+  }
+
   Sleep(300); // 自检动画用 300ms 间隔（仍 ≥50ms 红线）
   return true;
 }

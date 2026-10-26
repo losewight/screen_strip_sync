@@ -3,11 +3,16 @@
 #include "segment_map.h"
 #include <cstddef>
 
-// 全局物理灯带步进（即每段灯珠数：2 米为 2，4 米为 4）。
-// 默认为 2；自检/握手时可根据 get_length 动态更新。
-// 取值范围：1..9（受 120 字节帧长与单数字符限制）。
+// 全局物理灯带规格（支持 2、3、4、5 米，对应 20、30、40、50 颗物理灯珠）。
+// 默认为 2；自检/握手时根据 get_length 动态更新。
 int engine_get_device_step();
 void engine_set_device_step(int step);
+
+// 校验是否为支持的米数（2, 3, 4, 5）
+bool is_valid_strip_length(int meters);
+
+// 解析固件返回的长度响应（支持 "2\r\n", "4\r\n", "rep_length 4\r\n" 等；未识别返回 0）
+int parse_strip_length(const char *buf);
 
 // 通用组帧生成器（生成 set_rgb_pc ASCII 控制帧）
 // 格式：set_rgb_pc %04x 00 %02x %s %d %s %d ... %s %d\r\n
