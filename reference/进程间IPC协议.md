@@ -38,8 +38,8 @@
 | `set near_black <0..64>` | map 近黑丢弃阈值；默认 15 |
 | `set blur <0..8>` | map 邻域半宽；默认 2 |
 | `set saturation <0.5..2>` | map 饱和度增益；默认 1.4 |
-| `set brightness full|linear <lo,hi>` | map 亮度模式：全亮（固定 63）或按画面明度线性缩放 |
-| `set region_brightness full|linear <lo,hi>` | 氛围亮度模式：全亮（固定 63）或按画面明度线性缩放 |
+| `set brightness full|linear <lo,hi>` | map 亮度模式：全亮（固定 63）或按画面明度线性缩放（前端 v1.1.2 暂隐藏，保留底层能力） |
+| `set region_brightness full|linear <lo,hi>` | 氛围亮度模式：全亮（固定 63）或按画面明度线性缩放（前端 v1.1.2 暂隐藏，保留底层能力） |
 | `set wall_comp 0|1` | 墙面色彩补偿开关 |
 | `set wall_color <RRGGBB|clear>` | 墙面反射底色 hex（或 clear 清除） |
 | `set subtitle_detect 0|1` | 智能忽略底部字幕（与 letterbox 串联；仅 map 路径） |

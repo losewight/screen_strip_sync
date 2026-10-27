@@ -6,7 +6,6 @@ import '../../app/theme.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../pages/region_bbox_pick_page.dart';
-import 'brightness_mode_card.dart';
 import 'scheme_card.dart';
 
 /// 屏幕氛围：整块 bbox 切 10 段；入口命令 `start_region`。
@@ -112,13 +111,6 @@ class ScreenAmbiencePanel extends ConsumerWidget {
                         ),
                     ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.text),
-                BrightnessModeCard(
-                  value: cfg.regionBrightness,
-                  enabled: canEdit,
-                  onChanged: canEdit ? config.setRegionBrightness : null,
-                  onChangeEnd: canEdit ? notifier.sendRegionBrightness : null,
                 ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(

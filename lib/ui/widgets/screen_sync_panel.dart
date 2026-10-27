@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/spacing.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
-import '../widgets/brightness_mode_card.dart';
 import '../widgets/info_hint.dart';
 import '../widgets/scheme_card.dart';
 import '../widgets/segment_map_calibrator.dart';
@@ -82,13 +81,6 @@ class ScreenSyncPanel extends ConsumerWidget {
                       const SegmentMapCalibrator(),
                     ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.text),
-                BrightnessModeCard(
-                  value: cfg.brightness,
-                  enabled: canEdit,
-                  onChanged: canEdit ? config.setBrightness : null,
-                  onChangeEnd: canEdit ? notifier.sendBrightness : null,
                 ),
                 const SizedBox(height: AppSpacing.text),
                 SchemeCard(
