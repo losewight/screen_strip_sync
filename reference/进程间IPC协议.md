@@ -38,6 +38,15 @@
 | `set near_black <0..64>` | map 近黑丢弃阈值；默认 15 |
 | `set blur <0..8>` | map 邻域半宽；默认 2 |
 | `set saturation <0.5..2>` | map 饱和度增益；默认 1.4 |
+| `set brightness full|linear <lo,hi>` | map 亮度模式：全亮（固定 63）或按画面明度线性缩放 |
+| `set region_brightness full|linear <lo,hi>` | 氛围亮度模式：全亮（固定 63）或按画面明度线性缩放 |
+| `set wall_comp 0|1` | 墙面色彩补偿开关 |
+| `set wall_color <RRGGBB|clear>` | 墙面反射底色 hex（或 clear 清除） |
+| `set subtitle_detect 0|1` | 智能忽略底部字幕（与 letterbox 串联；仅 map 路径） |
+| `set saturation_algo mean|max` | 饱和度算法（目前内部固定为 neutral） |
+| `set sample_algo mean|max` | 采样聚合算法（默认 mean） |
+| `set near_black_luma <0..64>` | 近黑亮度判定口径 |
+| `diag_mark` | 诊断日志打标，便于本地日志回溯 |
 | `set mode a\|b` | 已废弃，仅兼容旧配置 |
 | `set com COMn` | 只改配置；真正切串口需 `reconnect` |
 | `set sleep_sync 0\|1` | 休眠同步 |
@@ -72,6 +81,16 @@
 | `status ready` | 串口已就绪 |
 | `status reconnecting` / `reconnect_ok` / `reconnect_fail` | 重连过程 |
 | `status com COMn` | 当前打开的 COM |
+| `cfg brightness full|linear <lo>,<hi>` | map 亮度模式与线性范围快照 |
+| `cfg region_brightness full|linear <lo>,<hi>` | 氛围亮度模式与线性范围快照 |
+| `cfg wall_comp 0|1` | 墙面色彩补偿开关状态 |
+| `cfg wall_color <RRGGBB>` | 墙面反射底色 hex（未设置为空） |
+| `cfg subtitle_detect 0|1` | 智能忽略字幕状态 |
+| `cfg saturation_algo <algo>` | 饱和度算法快照 |
+| `cfg sample_algo <algo>` | 采样算法快照 |
+| `cfg near_black_luma <val>` | 近黑亮度口径快照 |
+| `cfg serial_configured 0|1` | 串口是否已配置并尝试连接过 |
+| `cfg last_com COMn` | 上次成功连接的 COM 口 |
 | `status engine 0\|1` | 发帧线程是否在运行 |
 | `status display …` | `engine` / `region` / `solid` / `soft_off` / `idle` |
 | `status capture_output NAME WxH L,T [friendly…]` | 当前 duplicate 的屏＋桌面矩形；友好名可选 |
@@ -94,7 +113,7 @@
 
 截图与框选只在 Flutter 完成；IPC 只传百分比等结果，不传像素流。
 
-map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻结）。相关常量写在 helper 内，**不进 IPC / JSON**；硬件行为见 [灯带串口通信协议.md §5.7](./灯带串口通信协议.md)，实现说明见 [项目注意事项与踩坑.md §4](./项目注意事项与踩坑.md)。
+map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻结）。判定为 ON 的段在最终输出前统一做一次**墙面色彩补偿**（wall_comp，按相对比例柔和阻尼微调并保持输入峰值亮度量纲），避免直视发灰或偏色。相关常量写在 helper 内，**不进 IPC / JSON**；硬件行为见 [灯带串口通信协议.md §5.7](./灯带串口通信协议.md)，实现说明见 [项目注意事项与踩坑.md §4](./项目注意事项与踩坑.md)。
 
 ---
 
@@ -120,6 +139,15 @@ map / region 在 helper 内都会经过输出端暗门（RGB 死区 + 色相冻�
 | `regionAlgo` / `regionBlur` / `regionSmooth` / `regionDark` / `regionBBox` | region |
 | `lastScene` | `engine` / `region` / `solid RRGGBB` / `off` / `idle` |
 | `lastCustomSolid` | 自定义纯色 hex，可空 |
+| `brightnessMode` / `brightnessLo` / `brightnessHi` | map 亮度模式（`full` / `linear`）与线性随动范围（0..100） |
+| `regionBrightnessMode` / `regionBrightnessLo` / `regionBrightnessHi` | 氛围亮度模式与线性随动范围 |
+| `wallCompEnabled` | 墙面色彩补偿开关（bool） |
+| `wallColor` | 墙面反射底色 hex（6 位，如 `"f5efe6"`） |
+| `letterboxDetect` | 智能忽略电影黑边开关（bool） |
+| `subtitleDetect` | 智能忽略字幕开关（bool） |
+| `serialConfigured` | 串口是否已配置（bool） |
+| `saturationAlgo` / `sampleAlgo` / `nearBlackLuma` | 内部算法模式与口径快照 |
+| `mapDefaultsRev` | 采样映射默认版本迁移标记 |
 
 缺字段用默认；解析失败整体回退且不阻塞启动。  
 串口帧长上限与 50 ms 节流**不是**配置项。  

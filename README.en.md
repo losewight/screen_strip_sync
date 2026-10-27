@@ -6,6 +6,17 @@ Windows PC **screen-to-LED** host — an **unofficial, customized upper control 
 
 Captures the display (DXGI), samples colors, and drives a USB serial LED strip from an always-on `helper.exe` tray process. The Flutter UI is optional and can be closed without stopping the lights.
 
+## Features
+
+- **Screen Sync (Ambilight)**: Sample display edges (or custom map rectangles) to follow video/game colors
+- **Screen Ambience**: Sample designated screen regions for overall atmospheric lighting
+- **Brightness Scaling**: Fixed 99% full brightness or dynamic linear scaling following screen luminance
+- **Wall Color Compensation**: Soft-damped correction based on wall paint color to avoid washed-out tints
+- **Letterbox & Subtitle Detection**: Intelligently bypasses movie black bars and bright bottom subtitle text
+- **Hardware Length Adaptation**: Automatically adapts to official 2m (20 LEDs), 3m (30 LEDs), 4m (40 LEDs), and 5m (50 LEDs) strips
+- **Solid Color / Soft Off**: One-click solid color; soft off draws black without power interruption
+- **Resident Tray**: Auto-start, sleep and display-off sync; UI closing does not interrupt lighting
+
 ## Compatibility
 
 Unofficial customized host for **米家追光氛围灯带** / **米家追光灯带 Pro** (non-official naming).  
