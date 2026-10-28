@@ -66,10 +66,13 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   const bool dwell_blocked = (dwell_n > 0) && (s->dwell > 0);
 
   s->bright_run = (L_raw >= kFastOnLevel) ? s->bright_run + 1 : 0;
+  s->relight_run = (L_raw >= kFastRelightLevel) ? s->relight_run + 1 : 0;
 
-  // —— 快速亮灯：持续强信号不等判定爬升 + 确认 + 驻留 ——
-  // 为什么：判定 EMA 从 0 爬到 kGateOn 要 3 帧，叠确认与驻留，暗→亮会拖 200～600ms
-  if (!s->on && s->bright_run >= kFastOnFrames) {
+  // —— 快速亮灯：持续强信号不等判定爬升 + 确认 ——
+  // 平时灭灯（!dwell_blocked）用 kFastOnLevel(16) 保 50ms 极速点亮；
+  // 刚灭灯驻留期内（dwell_blocked）须达 kFastRelightLevel(40) 才破锁重亮。
+  const int fast_on_run = dwell_blocked ? s->relight_run : s->bright_run;
+  if (!s->on && fast_on_run >= kFastOnFrames) {
     s->on = true;
     s->cnt = 0;
     s->flipped = true;

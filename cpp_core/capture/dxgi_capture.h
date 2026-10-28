@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "segment_map.h"
 
@@ -32,7 +32,7 @@ DxgiErr dxgi_grab_and_sample_region(UINT timeout_ms, int l, int t, int w, int h,
                                     unsigned char out_rgb[10][3]);
 
 // 采样可调参；IPC 经 engine_set_* 转发。内部 clamp。
-void dxgi_set_near_black(int v); // 0..64，默认 0
+void dxgi_set_near_black(int v); // 0..64，默认 30
 void dxgi_set_blur(int v);       // 0..8，默认 0；0=不扩邻域
 void dxgi_set_sample_algo(char algo); // 'r'=rms, 'm'=mean；默认 rms
 void dxgi_set_near_black_luma(char mode); // '6'=rec601, 'a'=avg；默认 rec601
