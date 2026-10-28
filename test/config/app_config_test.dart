@@ -101,6 +101,12 @@ void main() {
       expect(cfg.wallCompEnabled, isTrue);
       expect(cfg.wallColor, 'ffe6b4');
       expect(cfg.hasWallColor, isTrue);
+
+      final cleared = AppConfig.fromCfgLines(const [
+        'cfg wall_color clear',
+      ]);
+      expect(cleared.wallColor, '');
+      expect(cleared.hasWallColor, isFalse);
     });
 
     test('parses letterbox_detect', () {

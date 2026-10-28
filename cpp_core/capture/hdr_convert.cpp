@@ -27,12 +27,12 @@ float half_bits_to_float(std::uint16_t h) {
     if (mant == 0)
       f = 0.f;
     else
-      f = std::ldexpf((float)mant / 1024.f, -14);
+      f = std::ldexp((float)mant / 1024.f, -14);
   } else if (exp == 31) {
     // Inf / NaN：按 0，避免灯带飞掉
     return 0.f;
   } else {
-    f = std::ldexpf(1.f + (float)mant / 1024.f, (int)exp - 15);
+    f = std::ldexp(1.f + (float)mant / 1024.f, (int)exp - 15);
   }
   return sign ? -f : f;
 }
@@ -46,7 +46,7 @@ std::uint8_t lin_to_srgb_byte(float lin) {
   if (lin <= 0.0031308f)
     s = 12.92f * lin;
   else
-    s = 1.055f * std::powf(lin, 1.f / 2.4f) - 0.055f;
+    s = 1.055f * std::pow(lin, 1.f / 2.4f) - 0.055f;
   if (s < 0.f)
     s = 0.f;
   if (s > 1.f)
@@ -168,7 +168,7 @@ std::uint16_t hdr_float_to_half(float f) {
     return neg ? 0x8000u : 0;
 
   int exp;
-  float mant = std::frexpf(f, &exp); // f = mant * 2^exp, mant in [0.5,1)
+  float mant = std::frexp(f, &exp); // f = mant * 2^exp, mant in [0.5,1)
   // half：1.m * 2^(e-15)，mant_half in [1,2) → 用 frexp 的 [0.5,1) 调整
   // 1.m = mant*2 → exp' = exp-1
   exp -= 1;
@@ -180,9 +180,9 @@ std::uint16_t hdr_float_to_half(float f) {
   }
   if (exp < -14) {
     // denormal
-    const float scaled = std::ldexpf(f, 24); // mant * 2^(exp+14) * 1024 / 2? 
+    const float scaled = std::ldexp(f, 24); // mant * 2^(exp+14) * 1024 / 2? 
     // value = mant_bits/1024 * 2^-14
-    int bits = (int)(std::ldexpf(f, 14 + 10) + 0.5f);
+    int bits = (int)(std::ldexp(f, 14 + 10) + 0.5f);
     if (bits <= 0)
       return neg ? 0x8000u : 0;
     if (bits > 0x3FF)

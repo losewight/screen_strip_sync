@@ -65,8 +65,13 @@ abstract final class DiagExporter {
     buf.writeln('lastScene: ${config.lastScene}');
     buf.writeln('comPort(config): ${config.comPort}');
     buf.writeln('autoSleepSync: ${config.autoSleepSync}');
+    buf.writeln('screenOffSync: ${config.screenOffSync}');
     buf.writeln('turnOffOnShutdown: ${config.turnOffOnShutdown}');
     buf.writeln('startOnBoot: ${config.startOnBoot}');
+    buf.writeln('wallCompEnabled: ${config.wallCompEnabled}');
+    buf.writeln('wallColor: ${config.wallColor}');
+    buf.writeln('letterboxDetect: ${config.letterboxDetect}');
+    buf.writeln('subtitleDetect: ${config.subtitleDetect}');
     buf.writeln('emaAlpha: ${config.emaAlpha}');
     buf.writeln('nearBlack: ${config.nearBlack}');
     buf.writeln('blurStep: ${config.blurStep}');

@@ -227,20 +227,19 @@ static void resume_worker_body() {
     }
     if (!dxgi_ok) {
       printf("resume: dxgi give up -> soft_off (was engine/region)\n");
-        if (g_shutting_down.load()) {
-          g_awaiting_resume.store(false);
-          g_resuming.store(false);
-          return;
-        }
-        engine_stop();
-        engine_set_intent_soft_off();
-        send_solid(neu, "000000");
+      if (g_shutting_down.load()) {
         g_awaiting_resume.store(false);
-        helper_note_resources_ready();
-        ipc_push_runtime_status();
         g_resuming.store(false);
         return;
       }
+      engine_stop();
+      engine_set_intent_soft_off();
+      send_solid(neu, "000000");
+      g_awaiting_resume.store(false);
+      helper_note_resources_ready();
+      ipc_push_runtime_status();
+      g_resuming.store(false);
+      return;
     }
   }
 

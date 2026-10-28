@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/spacing.dart';
 import '../../app/theme.dart';
 import '../../config/segment_map_codec.dart';
-import '../../config/segment_sample.dart';
 import '../../state/config_state.dart';
 import '../../state/helper_state.dart';
 import '../widgets/mask_window.dart';

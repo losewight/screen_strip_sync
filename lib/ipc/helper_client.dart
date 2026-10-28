@@ -43,7 +43,7 @@ class HelperClient {
   Socket? _sock;
   Future<void>? _inFlightConnect;
   final StringBuffer _rxBuf = StringBuffer();
-  StreamSubscription<List<int>>? _socketSub;
+  StreamSubscription<String>? _socketSub;
 
   /// helper 推 `ui quit` 后置位：禁止再 Process.start，断线也不自愈。
   bool _quitting = false;
@@ -176,28 +176,21 @@ class HelperClient {
 
   void _listenSocket(Socket sock) {
     _socketSub?.cancel();
-    _socketSub = sock.listen(
-      (data) {
-        _rxBuf.write(utf8.decode(data));
-        var chunk = _rxBuf.toString();
-        var nl = chunk.indexOf('\n');
-        while (nl >= 0) {
-          final line = chunk.substring(0, nl).trimRight();
-          chunk = chunk.substring(nl + 1);
-          _onLine(line);
-          nl = chunk.indexOf('\n');
-        }
-        _rxBuf
-          ..clear()
-          ..write(chunk);
-      },
-      onError: (Object e) {
-        debugPrint('IPC socket error: $e');
-        _handleDisconnect();
-      },
-      onDone: _handleDisconnect,
-      cancelOnError: true,
-    );
+    _socketSub = sock
+        .cast<List<int>>()
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
+          (line) {
+            _onLine(line.trimRight());
+          },
+          onError: (Object e) {
+            debugPrint('IPC socket error: $e');
+            _handleDisconnect();
+          },
+          onDone: _handleDisconnect,
+          cancelOnError: true,
+        );
   }
 
   void _onLine(String line) {

@@ -513,7 +513,7 @@ bool try_dispatch_set(const char *line, HANDLE *serial, SOCKET client) {
     const char *p = line + 15;
     while (*p == ' ' || *p == '\t')
       ++p;
-    if (p[0] == '\0') {
+    if (p[0] == '\0' || strcmp(p, "clear") == 0) {
       if (!config_set_wall_color(""))
         printf("bad set wall_color: (empty)\n");
       else

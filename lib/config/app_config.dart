@@ -377,7 +377,7 @@ class AppConfig {
           final h = val.trim().toLowerCase();
           if (RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) {
             wallColor = h;
-          } else if (h.isEmpty) {
+          } else if (h.isEmpty || h == 'clear') {
             wallColor = '';
           }
         default:

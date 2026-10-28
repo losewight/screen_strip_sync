@@ -6,7 +6,12 @@ $OutDir = Join-Path $Root "dist_installer"
 $Helper = Join-Path $Root "cpp_core\build\Release\helper.exe"
 $FlutterRelease = Join-Path $Root "build\windows\x64\runner\Release"
 $Iss = Join-Path $PSScriptRoot "screen_strip_sync.iss"
-$Version = "1.1.2"
+$Pubspec = Join-Path $Root "pubspec.yaml"
+if ((Test-Path $Pubspec) -and ((Get-Content $Pubspec -Raw) -match "(?m)^version:\s*(\d+\.\d+\.\d+)")) {
+  $Version = $Matches[1]
+} else {
+  $Version = "1.1.2"
+}
 $Arch = "x64"
 $ZipName = "ScreenStripSync-$Version-windows-$Arch.zip"
 
@@ -119,8 +124,8 @@ Get-ChildItem $OutDir -File -ErrorAction SilentlyContinue | Where-Object {
 if ($Iscc) {
   $issText = [System.IO.File]::ReadAllText($Iss, [System.Text.UTF8Encoding]::new($false))
   [System.IO.File]::WriteAllText($Iss, $issText, $utf8Bom)
-  Write-Host "Compiling with $Iscc"
-  & $Iscc $Iss
+  Write-Host "Compiling with $Iscc (version $Version)"
+  & $Iscc "/DMyAppVersion=$Version" $Iss
   if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
 }
 else {

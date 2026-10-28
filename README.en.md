@@ -41,6 +41,7 @@ flutter build windows --release
 
 Run `helper.exe` (tray). UI binary: `screen_strip_sync.exe`. Keep them in the same folder for distribution.
 
+Optional version bump: `python scripts/bump_version.py <X.Y.Z>` (syncs pubspec, Dart, C++, RC, and installer scripts).  
 Optional installer: `packaging/pack.ps1` (requires Inno Setup 6).
 
 ## Reporting bugs

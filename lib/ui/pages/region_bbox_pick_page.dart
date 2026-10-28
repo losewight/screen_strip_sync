@@ -54,6 +54,8 @@ class _RegionBBoxPickPageState extends ConsumerState<RegionBBoxPickPage> {
     var h = b - t;
     if (w < 1) w = 1;
     if (h < 1) h = 1;
+    if (l >= 100) l = 99;
+    if (t >= 100) t = 99;
     if (l + w > 100) w = 100 - l;
     if (t + h > 100) h = 100 - t;
     if (w < 1) w = 1;

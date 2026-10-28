@@ -52,6 +52,8 @@ class RegionBBox {
     var t = ((top * 100) / screenH).round().clamp(0, 100);
     var w = ((width * 100) / screenW).round().clamp(1, 100);
     var h = ((height * 100) / screenH).round().clamp(1, 100);
+    if (l >= 100) l = 99;
+    if (t >= 100) t = 99;
     if (l + w > 100) w = 100 - l;
     if (t + h > 100) h = 100 - t;
     if (w < 1) w = 1;

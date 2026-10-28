@@ -128,6 +128,9 @@ flowchart LR
 ## 从源码构建
 
 ```powershell
+# 0.（发版可选）一键同步全仓版本号（pubspec / Dart / C++ / RC / 打包脚本）
+python scripts/bump_version.py 1.1.2
+
 # 1. 编译 helper
 cmake --build cpp_core/build --config Release
 
@@ -162,7 +165,8 @@ screen_strip_sync/
 │   ├── config/          # 配置读写
 │   └── shell/           # 托盘、拉起 UI
 ├── reference/           # 协议与注意事项（给第三方 / 贡献者）
-├── packaging/           # Inno 安装脚本
+├── packaging/           # Inno 安装脚本与打包脚本
+├── scripts/             # 一键改版本号与 Git 钩子脚本
 └── assets/              # 图标等
 ```
 

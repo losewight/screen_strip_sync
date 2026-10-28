@@ -212,6 +212,14 @@ mixin _HelperIpcSetters on _HelperSolidGate, _HelperStatusHandlers {
   void sendWallColor(String rrggbb) {
     if (!_client.isConnected) return;
     final h = rrggbb.trim().toLowerCase();
+    if (h.isEmpty || h == 'clear') {
+      try {
+        _sendIpc('set wall_color clear');
+      } catch (e) {
+        _patch(message: '$e');
+      }
+      return;
+    }
     if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(h)) return;
     try {
       _sendIpc('set wall_color $h');
