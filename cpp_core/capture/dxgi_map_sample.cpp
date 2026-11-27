@@ -33,6 +33,38 @@ static unsigned pixel_luma(unsigned r, unsigned g, unsigned b) {
                                          : rec601_luma(r, g, b);
 }
 
+// 20% 采样面积保底分母 + 零星亚阈值残渣归零：
+// 幸存点 ≥20% 区域时按 count 原样求均值（保留全区慢渐变）；
+// 零星噪点 <20% 区域时按 min_denom 折算，若折算后仍低于暗门起点(<4)则归零，
+// 防止极暗孤立噪点落在 1.5..3 夹层里给已亮灯段续命。
+static void finish_sampled_segment(unsigned long long acc_r,
+                                   unsigned long long acc_g,
+                                   unsigned long long acc_b, int count,
+                                   int total_pts, bool use_rms,
+                                   unsigned char out[3]) {
+  int min_denom = (total_pts + 4) / 5;
+  if (min_denom < 1)
+    min_denom = 1;
+  const int denom = (count < min_denom) ? min_denom : count;
+  if (count == 0) {
+    out[0] = out[1] = out[2] = 0;
+    return;
+  }
+  if (use_rms) {
+    const float inv = 1.f / (float)denom;
+    out[0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
+    out[1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
+    out[2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
+  } else {
+    out[0] = (unsigned char)(acc_r / (unsigned long long)denom);
+    out[1] = (unsigned char)(acc_g / (unsigned long long)denom);
+    out[2] = (unsigned char)(acc_b / (unsigned long long)denom);
+  }
+  if (count < min_denom && out[0] < 4 && out[1] < 4 && out[2] < 4) {
+    out[0] = out[1] = out[2] = 0;
+  }
+}
+
 void dxgi_set_near_black(int v) {
   if (v < 0)
     v = 0;
@@ -198,26 +230,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
           }
         }
       }
-      // 20% 采样面积保底分母：幸存点 ≥20% 区域时按 count 原样求均值；
-      // 零星噪点 <20% 区域时按 min_denom 折算，消除单像素越过 near_black 的悬崖跳变。
-      int min_denom = (total_pts + 4) / 5;
-      if (min_denom < 1)
-        min_denom = 1;
-      const int denom = (count < min_denom) ? min_denom : count;
-      if (count == 0) {
-        out_rgb[i][0] = 0;
-        out_rgb[i][1] = 0;
-        out_rgb[i][2] = 0;
-      } else if (use_rms) {
-        const float inv = 1.f / (float)denom;
-        out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
-        out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
-        out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
-      } else {
-        out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)denom);
-        out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)denom);
-        out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)denom);
-      }
+      finish_sampled_segment(acc_r, acc_g, acc_b, count, total_pts, use_rms,
+                             out_rgb[i]);
     }
   };
 
@@ -256,24 +270,8 @@ DxgiErr dxgi_grab_and_sample(UINT timeout_ms, unsigned char out_rgb[10][3],
         }
         ++count;
       }
-      int min_denom = (total_pts + 4) / 5;
-      if (min_denom < 1)
-        min_denom = 1;
-      const int denom = (count < min_denom) ? min_denom : count;
-      if (count == 0) {
-        out_rgb[i][0] = 0;
-        out_rgb[i][1] = 0;
-        out_rgb[i][2] = 0;
-      } else if (use_rms) {
-        const float inv = 1.f / (float)denom;
-        out_rgb[i][0] = (unsigned char)(sqrtf((float)acc_r * inv) + 0.5f);
-        out_rgb[i][1] = (unsigned char)(sqrtf((float)acc_g * inv) + 0.5f);
-        out_rgb[i][2] = (unsigned char)(sqrtf((float)acc_b * inv) + 0.5f);
-      } else {
-        out_rgb[i][0] = (unsigned char)(acc_r / (unsigned long long)denom);
-        out_rgb[i][1] = (unsigned char)(acc_g / (unsigned long long)denom);
-        out_rgb[i][2] = (unsigned char)(acc_b / (unsigned long long)denom);
-      }
+      finish_sampled_segment(acc_r, acc_g, acc_b, count, total_pts, use_rms,
+                             out_rgb[i]);
     }
   };
 

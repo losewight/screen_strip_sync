@@ -23,6 +23,10 @@ constexpr float kAntiFlickerEps = 0.49f;
 // → 直接 OFF（绕过判定衰减 / 确认 / 驻留）。单帧掉 0 仍走 last_nz 兜底。
 constexpr int kFastOffLitFrames = 4;
 constexpr int kFastOffZeroFrames = 2;
+// 兜底快速灭灯：即使前面因近黑边缘波动导致 lit_run < 4，连续 3 帧全 0 也直接关灯
+constexpr int kDimOffZeroFrames = 3;
+// 迟滞夹层超时灭灯：ON 期间若原始 L_raw 连续 N 帧低于 kGateOn（在 1.5..4 夹层续命），直接关断
+constexpr int kSubGateOffFrames = 12;
 // 快速亮灯：
 // - 平时灭灯（dwell==0）：原始 L 连续 FastOnFrames 帧 ≥ kFastOnLevel(16) → 直接 ON（50ms）
 // - 刚灭灯 300ms 冷却期内（dwell>0）：须连续 FastOnFrames 帧 ≥ kFastRelightLevel(40)
@@ -33,7 +37,7 @@ constexpr int kFastOnFrames = 2;
 // 低亮色相锁（A+freeze）：判定量 = 归一化前 hold 的 max(R,G,B)
 // L≥On：色相可靠，持续更新 locked；L≤Off：冻结输出 locked 直到暗门灭
 // 为什么：硬件忽略亮度、只显示色相；暗尾 uint8 粗档与偏色噪声会被放大成极光
-constexpr float kHueLockOn = 32.f;
+constexpr float kHueLockOn = 20.f;
 constexpr float kHueLockOff = 12.f;
 
 struct SegGate {
@@ -46,6 +50,7 @@ struct SegGate {
   bool on = false;
   bool inited = false;
   int cnt = 0;              // 当前方向确认计数（与 dwell 分离）
+  int sub_gate_run = 0;     // ON 期间 L_raw < kGateOn 的连续帧数
   int dwell = 0;            // 最短驻留剩余帧；独立块
   // 驻留配置：默认 = kMinDwellFrames；测试可置 0 旁路。以后可能会改常量。
   int dwell_cfg = kMinDwellFrames;

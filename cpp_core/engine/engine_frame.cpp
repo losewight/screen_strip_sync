@@ -8,9 +8,18 @@
 #include "subtitle_detect.h"
 #include "wall_comp.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+
+// 静态桌面 / 静止黑屏兜底：DXGI AcquireTimeout 表示画面未变化；
+// 若 EMA 尚未收敛或 seg_gate 仍在亮灯/收尾，用最近一次有效采样推进直到稳态。
+static unsigned char g_last_raw_rgb[10][3] = {};
+static bool g_last_raw_valid = false;
+static SyncPath g_last_raw_path = SyncPath::Map;
+static int g_timeout_settle_steps = 0;
+static constexpr int kMaxTimeoutSettleSteps = 500;
 
 // D1 诊断：原始 0↔非0 跳变 vs 暗门翻转（每 5s 打一次）
 static int g_diag_raw_edge[10] = {};
@@ -28,6 +37,9 @@ static void reset_seg_gates() {
     g_diag_raw_have[i] = false;
   }
   g_diag_last_log = 0;
+  g_last_raw_valid = false;
+  g_timeout_settle_steps = 0;
+  std::memset(g_last_raw_rgb, 0, sizeof(g_last_raw_rgb));
 }
 
 static void diag_note_raw(int i, float r, float g, float b) {
@@ -124,6 +136,32 @@ static unsigned frame_brightness(unsigned packed, const float level[10]) {
   return brt;
 }
 
+// 为什么：DXGI 超时表示桌面自上一帧后未变化；若 EMA 仍在过渡或暗门尚未收尾，
+// 需用上次采样继续推进直到状态稳定（严格 L_raw > kGateOn，防 L==4 浮点渐近死等）。
+static bool can_settle_on_timeout(SyncPath path) {
+  if (!g_ema_inited || !g_last_raw_valid || g_last_raw_path != path ||
+      g_timeout_settle_steps >= kMaxTimeoutSettleSteps) {
+    return false;
+  }
+  for (int i = 0; i < 10; ++i) {
+    const float r = (float)g_last_raw_rgb[i][0];
+    const float g = (float)g_last_raw_rgb[i][1];
+    const float b = (float)g_last_raw_rgb[i][2];
+    const float L_raw = channel_max3(r, g, b);
+    const SegGate &sg = g_seg_gate[i];
+    if (sg.on && L_raw < kGateOn)
+      return true;
+    if (!sg.on && L_raw > kGateOn)
+      return true;
+    if (sg.on && (std::fabs(g_ema_r[i] - r) > 0.2f ||
+                  std::fabs(g_ema_g[i] - g) > 0.2f ||
+                  std::fabs(g_ema_b[i] - b) > 0.2f)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // 抓屏 → EMA → 饱和度 → seg_gate。
 DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3],
                         float out_level[10]) {
@@ -135,8 +173,18 @@ DxgiErr map_sample_step(int timeout_ms, unsigned char out_rgb[10][3],
   engine_copy_map_snapshot(&custom, rects);
   DxgiErr e =
       dxgi_grab_and_sample((UINT)timeout_ms, rgb, custom ? rects : nullptr);
-  if (e != DxgiErr::Ok)
+  if (e == DxgiErr::Ok) {
+    std::memcpy(g_last_raw_rgb, rgb, sizeof(rgb));
+    g_last_raw_valid = true;
+    g_last_raw_path = SyncPath::Map;
+    g_timeout_settle_steps = 0;
+  } else if (e == DxgiErr::AcquireTimeout &&
+             can_settle_on_timeout(SyncPath::Map)) {
+    std::memcpy(rgb, g_last_raw_rgb, sizeof(rgb));
+    ++g_timeout_settle_steps;
+  } else {
     return e;
+  }
 
   const float alpha = g_alpha.load();
   const float sat = g_saturation.load();
@@ -235,8 +283,18 @@ static DxgiErr produce_colors_region(int frame_index, char *out_frame,
   DxgiErr e = dxgi_grab_and_sample_region(50, l, t, w, h, g_region_algo.load(),
                                           g_region_blur.load(),
                                           g_region_dark.load(), rgb);
-  if (e != DxgiErr::Ok)
+  if (e == DxgiErr::Ok) {
+    std::memcpy(g_last_raw_rgb, rgb, sizeof(rgb));
+    g_last_raw_valid = true;
+    g_last_raw_path = SyncPath::Region;
+    g_timeout_settle_steps = 0;
+  } else if (e == DxgiErr::AcquireTimeout &&
+             can_settle_on_timeout(SyncPath::Region)) {
+    std::memcpy(rgb, g_last_raw_rgb, sizeof(rgb));
+    ++g_timeout_settle_steps;
+  } else {
     return e;
+  }
 
   const float smooth = g_region_smooth.load();
   char colors[10][7] = {};

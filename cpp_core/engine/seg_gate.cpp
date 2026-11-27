@@ -27,6 +27,23 @@ static void normalize_hue255(float *r, float *g, float *b) {
   *b *= scale;
 }
 
+// 统一灭灯收尾：清理低亮锁色与兜底缓存，避免跨场景残色泄漏到下一轮暗场
+static void turn_gate_off(SegGate *s, int dwell_n) {
+  s->on = false;
+  s->cnt = 0;
+  s->sub_gate_run = 0;
+  s->lit_run = 0;
+  s->zero_run = 0;
+  s->lvl = (std::min)(s->lvl, kGateOff);
+  s->hue_locked = false;
+  s->locked_ok = false;
+  s->locked[0] = s->locked[1] = s->locked[2] = 0.f;
+  s->last_nz[0] = s->last_nz[1] = s->last_nz[2] = 0.f;
+  s->flipped = true;
+  if (dwell_n > 0)
+    s->dwell = dwell_n;
+}
+
 bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
                    float disp_r, float disp_g, float disp_b, float out[3]) {
   if (s == nullptr || out == nullptr)
@@ -48,12 +65,16 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   }
 
   // —— 0.49 保持（HyperHDR LedDevice；亮部 LSB 抖动）——
+  // 为什么：慢衰减接近 0 时若 hold 停在 0.51，0.49 差值窗会阻止 disp_zero 成立，
+  // 所以 disp 已落入 <0.25 近零区时必须放行归零。
   {
     const float dr = std::fabs(disp_r - s->hold[0]);
     const float dg = std::fabs(disp_g - s->hold[1]);
     const float db = std::fabs(disp_b - s->hold[2]);
     const float dmax = (std::max)(dr, (std::max)(dg, db));
-    if (dmax > kAntiFlickerEps) {
+    const bool disp_near_zero = chan_max(disp_r, disp_g, disp_b) < 0.25f &&
+                                chan_max(s->hold[0], s->hold[1], s->hold[2]) > 0.f;
+    if (dmax > kAntiFlickerEps || disp_near_zero) {
       s->hold[0] = disp_r;
       s->hold[1] = disp_g;
       s->hold[2] = disp_b;
@@ -75,6 +96,7 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   if (!s->on && fast_on_run >= kFastOnFrames) {
     s->on = true;
     s->cnt = 0;
+    s->sub_gate_run = 0;
     s->flipped = true;
     // 为什么：让判定电平跟上，避免刚开灯就被常规灭灯路径判低
     s->lvl = (std::max)(s->lvl, kGateCap);
@@ -82,15 +104,17 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
       s->dwell = dwell_n;
   }
 
-  // —— 宽迟滞 + 双向确认 ——
+  // —— 宽迟滞 + 双向确认 + 夹层超时灭灯 ——
   if (s->flipped) {
     // 本帧已由快速亮灯翻转
   } else if (!s->on) {
+    s->sub_gate_run = 0;
     if (!dwell_blocked && s->lvl >= kGateOn) {
       ++s->cnt;
       if (s->cnt >= kGateOnFrames) {
         s->on = true;
         s->cnt = 0;
+        s->sub_gate_run = 0;
         s->flipped = true;
         if (dwell_n > 0)
           s->dwell = dwell_n;
@@ -99,41 +123,44 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
       s->cnt = 0;
     }
   } else {
-    if (!dwell_blocked && s->lvl <= kGateOff) {
-      ++s->cnt;
-      if (s->cnt >= kGateOffFrames) {
-        s->on = false;
+    s->sub_gate_run = (L_raw < kGateOn) ? (s->sub_gate_run + 1) : 0;
+    if (!dwell_blocked) {
+      if (s->lvl <= kGateOff) {
+        ++s->cnt;
+        if (s->cnt >= kGateOffFrames) {
+          turn_gate_off(s, dwell_n);
+        }
+      } else {
         s->cnt = 0;
-        s->flipped = true;
-        if (dwell_n > 0)
-          s->dwell = dwell_n;
+      }
+      if (s->on && s->sub_gate_run >= kSubGateOffFrames) {
+        turn_gate_off(s, dwell_n);
       }
     } else {
       s->cnt = 0;
     }
   }
 
-  // —— 快速灭灯：持续亮过的段切黑，不走判定衰减 + 确认 + 驻留 ——
+  // —— 快速灭灯：持续亮过的段切黑 / 连续全黑兜底，不走判定慢衰减 ——
   // 为什么：last_nz 兜底只为暗区噪声；亮段硬切黑若也兜底，会在最低亮度拖约 450ms
   {
     const bool disp_zero = (unsigned)(s->hold[0] + 0.5f) == 0 &&
                            (unsigned)(s->hold[1] + 0.5f) == 0 &&
                            (unsigned)(s->hold[2] + 0.5f) == 0;
-    // 开灯前的确认帧也计入 lit_run，否则刚开灯就切黑仍会兜底
+    // ON 期间单帧掉 0 已被 last_nz 吸收，不抹掉先前累积的 lit_run；
+    // 若即使 lit_run < kFastOffLitFrames 仍连续 kDimOffZeroFrames 帧为 0，也直接关灯。
     if (!disp_zero) {
-      s->lit_run = (s->zero_run > 0) ? 1 : s->lit_run + 1;
+      const int reset_zeros = s->on ? 2 : 1;
+      s->lit_run = (s->zero_run >= reset_zeros) ? 1 : s->lit_run + 1;
       s->zero_run = 0;
     } else {
       ++s->zero_run;
-      if (!s->flipped && s->on && s->lit_run >= kFastOffLitFrames &&
-          s->zero_run >= kFastOffZeroFrames) {
-        s->on = false;
-        s->cnt = 0;
-        s->lit_run = 0;
-        s->zero_run = 0;
-        s->flipped = true;
-        if (dwell_n > 0)
-          s->dwell = dwell_n;
+      const bool should_fast_off =
+          (s->lit_run >= kFastOffLitFrames &&
+           s->zero_run >= kFastOffZeroFrames) ||
+          (s->zero_run >= kDimOffZeroFrames);
+      if (!s->flipped && s->on && should_fast_off) {
+        turn_gate_off(s, dwell_n);
       }
     }
   }
@@ -141,7 +168,17 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
   if (dwell_n > 0 && s->dwell > 0)
     --s->dwell;
 
-  // —— 低亮色相锁迟滞（归一化前的 hold L）——
+  // —— 组出 ——
+  if (!s->on) {
+    s->hue_locked = false;
+    s->locked_ok = false;
+    s->locked[0] = s->locked[1] = s->locked[2] = 0.f;
+    s->last_nz[0] = s->last_nz[1] = s->last_nz[2] = 0.f;
+    out[0] = out[1] = out[2] = 0.f;
+    return false;
+  }
+
+  // —— 低亮色相锁迟滞（仅 ON 时更新；归一化前的 hold L）——
   const float L_disp = chan_max(s->hold[0], s->hold[1], s->hold[2]);
   if (!s->hue_locked) {
     if (L_disp <= kHueLockOff)
@@ -150,18 +187,12 @@ bool seg_gate_step(SegGate *s, float gate_r, float gate_g, float gate_b,
     if (L_disp >= kHueLockOn)
       s->hue_locked = false;
   }
-  if (!s->hue_locked && L_disp > 0.f) {
+  if ((!s->hue_locked || !s->locked_ok) && L_disp > 0.f) {
     s->locked[0] = s->hold[0];
     s->locked[1] = s->hold[1];
     s->locked[2] = s->hold[2];
     normalize_hue255(&s->locked[0], &s->locked[1], &s->locked[2]);
     s->locked_ok = true;
-  }
-
-  // —— 组出 ——
-  if (!s->on) {
-    out[0] = out[1] = out[2] = 0.f;
-    return false;
   }
 
   float or_ = s->hold[0];
