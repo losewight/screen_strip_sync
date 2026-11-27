@@ -23,10 +23,12 @@ constexpr float kAntiFlickerEps = 0.49f;
 // → 直接 OFF（绕过判定衰减 / 确认 / 驻留）。单帧掉 0 仍走 last_nz 兜底。
 constexpr int kFastOffLitFrames = 4;
 constexpr int kFastOffZeroFrames = 2;
-// 快速亮灯：OFF 时原始 L 连续 FastOnFrames 帧 ≥ FastOnLevel → 直接 ON
-// （绕过判定爬升 / 确认 / 驻留）。要求连续：near_black 悬崖（0↔≥nearBlack
-// 交替）单帧亮不触发。
+// 快速亮灯：
+// - 平时灭灯（dwell==0）：原始 L 连续 FastOnFrames 帧 ≥ kFastOnLevel(16) → 直接 ON（50ms）
+// - 刚灭灯 300ms 冷却期内（dwell>0）：须连续 FastOnFrames 帧 ≥ kFastRelightLevel(40)
+//   才允许破除驻留锁立即重亮，防止 16..39 临界信号在刚灭灯后反复横跳。
 constexpr float kFastOnLevel = 16.f;
+constexpr float kFastRelightLevel = 40.f;
 constexpr int kFastOnFrames = 2;
 // 低亮色相锁（A+freeze）：判定量 = 归一化前 hold 的 max(R,G,B)
 // L≥On：色相可靠，持续更新 locked；L≤Off：冻结输出 locked 直到暗门灭
@@ -49,7 +51,8 @@ struct SegGate {
   int dwell_cfg = kMinDwellFrames;
   int lit_run = 0;          // 最近一段连续非零显示帧数（快速灭灯）
   int zero_run = 0;         // 连续零显示帧数（快速灭灯）
-  int bright_run = 0;       // 原始 L ≥ kFastOnLevel 连续帧数（快速亮灯）
+  int bright_run = 0;       // 原始 L ≥ kFastOnLevel 连续帧数（常态快速亮灯）
+  int relight_run = 0;      // 原始 L ≥ kFastRelightLevel 连续帧数（驻留期破锁重亮）
   bool flipped = false;     // 本步是否发生 ON↔OFF（诊断用）
 };
 
