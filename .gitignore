@@ -66,3 +66,6 @@ AGENT.md
 /docs/PLAN_*.md
 /docs/serial_color_analysis_report.md
 /docs/wall_comp_bug_analysis_report.md
+
+# Local sync scripts (not for public git)
+/scripts/sync_from_vps.ps1
